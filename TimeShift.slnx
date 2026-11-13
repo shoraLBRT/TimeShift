@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TimeShift.Application/TimeShift.Application.csproj" />
+    <Project Path="src/TimeShift.Domain/TimeShift.Domain.csproj" />
+    <Project Path="src/TimeShift.Host/TimeShift.Host.csproj" />
+    <Project Path="src/TimeShift.Infrastructure/TimeShift.Infrastructure.csproj" />
+    <Project Path="src/TimeShift.Telegram/TimeShift.Telegram.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TimeShift.Application.Tests/TimeShift.Application.Tests.csproj" />
+    <Project Path="tests/TimeShift.Domain.Tests/TimeShift.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\TimeShift.Domain\TimeShift.Domain.csproj" />
+  </ItemGroup>
+</Project>
