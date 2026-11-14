@@ -17,12 +17,15 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 - **Infrastructure:** EF Core with SQLite (dev) and Postgres (prod), two migration sets; segments, activities,
   undo journal, schedule blocks.
 - **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy and allow-list.
+- **LLM (not wired into the dialog yet — #6):** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
+  intent contract (`Intents`, `IntentParser`), prompt with context (`IntentPrompt`), `IntentExtractor` with one
+  retry, day/time resolution `PastTime`.
 - **Host:** `PingWorker` once a minute, `/health` with version.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
 
 ## Next
 
-[#3](https://github.com/shoraLBRT/TimeShift/issues/3) — LLM port and OpenAI-compatible adapter.
+[#5](https://github.com/shoraLBRT/TimeShift/issues/5) — test set of 30–50 phrases and eval run.
 
 ## Open questions
 
