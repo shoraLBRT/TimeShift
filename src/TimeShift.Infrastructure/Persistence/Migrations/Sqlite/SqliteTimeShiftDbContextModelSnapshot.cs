@@ -17,6 +17,89 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("TimeShift.Application.Llm.MessageLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("at");
+
+                    b.Property<int>("CompletionTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completion_tokens");
+
+                    b.Property<int>("PromptTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<string>("Response")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("llm_response");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AtUtc");
+
+                    b.ToTable("messages", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Application.Llm.PendingPeriod", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FactKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fact_key");
+
+                    b.Property<int>("IntentIndex")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("intent_index");
+
+                    b.Property<string>("Question")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("question");
+
+                    b.Property<string>("ResponseJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("response_json");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("text");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("pending_periods", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Activities.Activity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -54,6 +137,34 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .IsUnique();
 
                     b.ToTable("activities", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("minutes");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("user_facts", (string)null);
                 });
 
             modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
@@ -261,7 +372,34 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("timeline_changes", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Application.Llm.MessageLogEntry", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Application.Llm.PendingPeriod", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithOne()
+                        .HasForeignKey("TimeShift.Application.Llm.PendingPeriod", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Activities.Activity", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
                 {
                     b.HasOne("TimeShift.Domain.Users.User", null)
                         .WithMany()

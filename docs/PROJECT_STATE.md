@@ -17,7 +17,11 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 - **Infrastructure:** EF Core with SQLite (dev) and Postgres (prod), two migration sets; segments, activities,
   undo journal, schedule blocks.
 - **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy and allow-list.
-- **LLM (not wired into the dialog yet — #6):** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
+- **LLM in the dialog (`IntentApplier`, on when `Llm:ApiKey` is set):** free text → intents; periods are
+  proposed with ✅/✏️ (⚪ after 10 min or on the next message), a missing route fact is asked once and remembered
+  (`user_facts`), start/stop/quiet/facts/classify apply at once, parallel items go to the parallel track; every
+  LLM call is logged in `messages`. Edits by text (#14) answer "later".
+- **LLM building blocks:** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
   intent contract (`Intents`, `IntentParser`), prompt with context (`IntentPrompt`), `IntentExtractor` with one
   retry, day/time resolution `PastTime`.
 - **LLM eval (`tools/TimeShift.LlmEval`):** 40 phrases with expected intents, `IntentMatcher`, live run with
@@ -27,7 +31,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 
 ## Next
 
-[#6](https://github.com/shoraLBRT/TimeShift/issues/6) — apply intents: period proposal and confirm buttons.
+[#7](https://github.com/shoraLBRT/TimeShift/issues/7) — `/day` for another day.
 
 ## Open questions
 

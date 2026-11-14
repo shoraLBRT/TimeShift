@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using TimeShift.Application.Llm;
 using TimeShift.Domain.Activities;
+using TimeShift.Domain.Facts;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
 
@@ -24,6 +26,12 @@ public abstract class TimeShiftDbContext : DbContext
     public DbSet<Activity> Activities => Set<Activity>();
 
     public DbSet<TimelineChangeRecord> TimelineChanges => Set<TimelineChangeRecord>();
+
+    public DbSet<UserFact> Facts => Set<UserFact>();
+
+    public DbSet<PendingPeriod> PendingPeriods => Set<PendingPeriod>();
+
+    public DbSet<MessageLogEntry> Messages => Set<MessageLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

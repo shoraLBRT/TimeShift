@@ -13,7 +13,14 @@ public class ConversationTests
 
     private readonly TestClock _clock = new();
 
-    private ConversationService Service => new(_store, _store, new Tracking.TrackingService(_store, _store), _clock);
+    private ConversationService Service
+    {
+        get
+        {
+            var tracking = new Tracking.TrackingService(_store, _store);
+            return new(_store, _store, tracking, _store.Applier(tracking, new ScriptedLlm()), _clock);
+        }
+    }
 
     private User Me => Assert.Single(_store.Users);
 
