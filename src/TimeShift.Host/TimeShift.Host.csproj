@@ -1,4 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>22aaa1e5-c756-47e4-bcdb-93c78d8eae75</UserSecretsId>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TimeShift.Application\TimeShift.Application.csproj" />
     <ProjectReference Include="..\TimeShift.Infrastructure\TimeShift.Infrastructure.csproj" />
