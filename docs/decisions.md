@@ -191,3 +191,13 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   «закончил в 19» is a normal message, not «19 минут».
 - **New activities get an obvious category from their name** (тренировка → sport) on every path, not only `/add`.
 
+## Step 7 — classification (#11)
+
+- **Default rules live in Domain (`Classifier`)**: films/series/walks → mindful rest; Shorts/Reels/TikTok/feeds →
+  wasted.short_video; known multiplayer titles (Dota, CS, Valorant, PUBG, …) → wasted.multiplayer; plus obvious
+  work/study/sport/household/commute/family/friends words. YouTube and other games return `null` on purpose.
+- **A category is asked once per activity, before its duration** (statistics need it more than pings): YouTube —
+  rest / study / wasted; a game — single-player (rest) or multiplayer (wasted); anything else — the top-level
+  categories. The answer is stored on the activity, so «Dota 2» is asked never and «Elden Ring» once.
+- **Per-segment overrides («этот ютуб был учёбой»)** belong to text edits (#14).
+

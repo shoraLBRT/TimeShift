@@ -1,4 +1,5 @@
 using TimeShift.Application.Conversations;
+using TimeShift.Domain.Categories;
 using TimeShift.Application.Tracking;
 using TimeShift.Domain.Users;
 
@@ -8,6 +9,9 @@ namespace TimeShift.Application.Questions;
 public enum QuestionKind
 {
     ActivityDuration,
+
+    /// <summary>Категория занятия, которую не вывести из названия (YouTube, игры, неочевидное) — spec §4.2.</summary>
+    ActivityCategory,
 }
 
 /// <summary>Вопрос в очереди. Задаётся один раз; <see cref="AskedAtUtc"/> — уже задан, <see cref="ResolvedAtUtc"/> — закрыт.</summary>
@@ -81,11 +85,18 @@ public sealed partial class QuestionService(
     /// </summary>
     public async Task<BotReply?> NextAsync(User user, DateTime now, CancellationToken ct)
     {
+        // Сначала категория (от неё статистика), потом длительность (от неё пинги и продление).
         var current = await tracking.CurrentAsync(user, ct);
+        if (current?.Activity is { CategoryKey: null } uncategorized
+            && await questions.FindAsync(user.Id, QuestionKind.ActivityCategory, uncategorized.Id, ct) is null)
+        {
+            questions.Add(new PendingQuestion(user.Id, QuestionKind.ActivityCategory, uncategorized.Id, now));
+        }
+
         if (current?.Activity is { TypicalDuration: null } activity
             && await questions.FindAsync(user.Id, QuestionKind.ActivityDuration, activity.Id, ct) is null)
         {
-            questions.Add(new PendingQuestion(user.Id, QuestionKind.ActivityDuration, activity.Id, now));
+            questions.Add(new PendingQuestion(user.Id, QuestionKind.ActivityDuration, activity.Id, now.AddTicks(1)));
         }
 
         if (await questions.OpenAsync(user.Id, ct) is not null || await questions.NextAsync(user.Id, ct) is not { } next)
@@ -107,14 +118,19 @@ public sealed partial class QuestionService(
     /// <summary>Ответ текстом на заданный вопрос. <c>null</c> — не похоже на ответ, сообщение идёт дальше как обычно.</summary>
     public async Task<BotReply?> AnswerAsync(User user, string text, DateTime now, CancellationToken ct)
     {
-        if (!DurationAnswer().IsMatch(text.Trim().ToLowerInvariant())
-            || await questions.OpenAsync(user.Id, ct) is not { } open
-            || Llm.IntentApplier.ParseMinutes(text) is not { } minutes)
+        if (await questions.OpenAsync(user.Id, ct) is not { } open)
         {
             return null;
         }
 
-        return await ResolveAsync(user, open, minutes, now, ct);
+        if (open.Kind == QuestionKind.ActivityCategory)
+        {
+            return CategoryByName(text) is { } key ? await ResolveCategoryAsync(user, open, key, now, ct) : null;
+        }
+
+        return DurationAnswer().IsMatch(text.Trim().ToLowerInvariant()) && Llm.IntentApplier.ParseMinutes(text) is { } minutes
+            ? await ResolveAsync(user, open, minutes, now, ct)
+            : null;
     }
 
     /// <summary>Кнопки вопроса: <c>q:&lt;id&gt;:&lt;минуты&gt;</c>, <c>q:&lt;id&gt;:skip</c>.</summary>
@@ -135,6 +151,13 @@ public sealed partial class QuestionService(
         {
             question.Resolve(now);
             return new BotReply("Хорошо, не буду спрашивать. Поменять можно в /facts.", [], ReplacesSource: true);
+        }
+
+        if (question.Kind == QuestionKind.ActivityCategory)
+        {
+            return DefaultCategories.Find(value) is null
+                ? null
+                : (await ResolveCategoryAsync(user, question, value, now, ct)) with { ReplacesSource = true };
         }
 
         return int.TryParse(value, out var minutes) && minutes > 0
@@ -215,12 +238,63 @@ public sealed partial class QuestionService(
     [System.Text.RegularExpressions.GeneratedRegex(@"^(около |примерно |где-то |~)?((\d+([.,]\d+)?\s*(мин\w*|м|час\w*|ч)?)|(мин\w*\s+\d+)|(пол\s?часа|полтора( часа)?|час\w*))\.?$")]
     private static partial System.Text.RegularExpressions.Regex DurationAnswer();
 
+    private async Task<BotReply> ResolveCategoryAsync(User user, PendingQuestion question, string key, DateTime now, CancellationToken ct)
+    {
+        question.Resolve(now);
+        var activity = await tracking.GetActivityAsync(user, question.SubjectId, ct);
+        if (activity is null)
+        {
+            return BotReply.Plain("Это занятие уже удалено.");
+        }
+
+        activity.CategoryKey = key;
+        return BotReply.Plain($"Запомнил: «{activity.Name}» — {DefaultCategories.Find(key)!.Name}.");
+    }
+
+    /// <summary>Ответ текстом на вопрос о категории: «учёба», «отдых», «залипание».</summary>
+    private static string? CategoryByName(string text)
+    {
+        var t = text.Trim().ToLowerInvariant().Replace('ё', 'е').TrimEnd('.', '!');
+        if (t.Length < 3)
+        {
+            return null;
+        }
+
+        return DefaultCategories.All
+            .Where(c => c.ParentKey is null)
+            .FirstOrDefault(c => c.Name.ToLowerInvariant().Replace('ё', 'е').StartsWith(t[..Math.Min(4, t.Length)], StringComparison.Ordinal)
+                                 || c.Name.ToLowerInvariant().Replace('ё', 'е').Contains(t, StringComparison.Ordinal))?.Key;
+    }
+
+    private static IReadOnlyList<(string Label, string Key)> CategoryOptions(string activity) =>
+        Classifier.IsYouTube(activity)
+            ? [("Отдых", DefaultCategories.MindfulRest), ("Учёба", DefaultCategories.Study), ("Залипание", DefaultCategories.WastedYouTube)]
+            : Classifier.IsGame(activity)
+                ? [("Синглплеер — отдых", DefaultCategories.MindfulRest), ("Мультиплеер — залипание", DefaultCategories.WastedMultiplayer)]
+                : DefaultCategories.All.Where(c => c.ParentKey is null).Select(c => (c.Name, c.Key)).ToList();
+
     private async Task<BotReply?> AskAsync(User user, PendingQuestion question, CancellationToken ct)
     {
         var activity = await tracking.GetActivityAsync(user, question.SubjectId, ct);
         if (activity is null)
         {
             return null;
+        }
+
+        if (question.Kind == QuestionKind.ActivityCategory)
+        {
+            var options = CategoryOptions(activity.Name);
+            var rows = options.Select(o => new ReplyButton(o.Label, $"q:{question.Id}:{o.Key}"))
+                .Chunk(options.Count <= 3 ? 3 : 2)
+                .Select(c => (IReadOnlyList<ReplyButton>)c)
+                .ToList();
+            rows.Add([new ReplyButton("Пропустить", $"q:{question.Id}:skip")]);
+            var hint = Classifier.IsYouTube(activity.Name)
+                ? "YouTube бывает разным — каким он был сейчас? Запомню для этого занятия."
+                : Classifier.IsGame(activity.Name)
+                    ? "Это одиночная игра или сетевая? Запомню для этой игры."
+                    : "К чему отнести?";
+            return new BotReply($"❓ «{activity.Name}» — {hint}", rows);
         }
 
         var buttons = QuickMinutes
