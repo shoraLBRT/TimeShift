@@ -60,6 +60,26 @@ internal sealed class FakeSpeech : ISpeechToText
     }
 }
 
+/// <summary>Рендер-заглушка: запоминает, что просили нарисовать, и отдаёт фиктивный PNG.</summary>
+internal sealed class FakeRenderer : IDayRenderer
+{
+    public List<DayImage> Days { get; } = [];
+
+    public List<WeekImage> Weeks { get; } = [];
+
+    public byte[]? RenderDay(DayImage day)
+    {
+        Days.Add(day);
+        return [0x89, 0x50];
+    }
+
+    public byte[]? RenderWeek(WeekImage week)
+    {
+        Weeks.Add(week);
+        return [0x89, 0x50];
+    }
+}
+
 internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IActivityRepository, IUnitOfWork, INotifier,
     IFactRepository, IPendingPeriodRepository, IMessageLog, IQuestionRepository
 {
@@ -87,6 +107,8 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
     private readonly Dictionary<Guid, PendingPeriod> _pending = [];
 
     public FakeSpeech Speech { get; } = new();
+
+    public FakeRenderer Renderer { get; } = new();
 
     public Dictionary<(Guid, string), int> Facts { get; } = [];
 

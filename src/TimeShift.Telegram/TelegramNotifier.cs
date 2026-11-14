@@ -13,6 +13,12 @@ internal sealed class TelegramNotifier(ITelegramBotClient bot) : INotifier
 {
     public async Task<string?> SendAsync(User user, BotReply reply, CancellationToken cancellationToken)
     {
+        if (reply.Image is { } image)
+        {
+            await TelegramMedia.SendPhotoAsync(bot, user.TelegramChatId, null, reply, image, TelegramMarkup.From(reply), cancellationToken);
+            return null;
+        }
+
         var message = await bot.SendMessage(
             user.TelegramChatId, reply.Text, replyMarkup: (ReplyMarkup?)TelegramMarkup.From(reply), cancellationToken: cancellationToken);
         return message.MessageId.ToString(CultureInfo.InvariantCulture);

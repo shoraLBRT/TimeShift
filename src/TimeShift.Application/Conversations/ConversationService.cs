@@ -23,6 +23,7 @@ public sealed partial class ConversationService(
     Questions.QuestionService questions,
     YellowReview yellow,
     DailyReview daily,
+    IDayRenderer renderer,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");

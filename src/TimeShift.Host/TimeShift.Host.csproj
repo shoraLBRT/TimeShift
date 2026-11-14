@@ -5,6 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TimeShift.Application\TimeShift.Application.csproj" />
     <ProjectReference Include="..\TimeShift.Infrastructure\TimeShift.Infrastructure.csproj" />
+    <ProjectReference Include="..\TimeShift.Rendering\TimeShift.Rendering.csproj" />
     <ProjectReference Include="..\TimeShift.Speech\TimeShift.Speech.csproj" />
     <ProjectReference Include="..\TimeShift.Telegram\TimeShift.Telegram.csproj" />
   </ItemGroup>

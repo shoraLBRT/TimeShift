@@ -286,7 +286,10 @@ public sealed partial class ConversationService
             Policy = user.Settings.Extension,
         });
         var parallel = TimelineBuilder.BuildParallel(new TimeRange(dayStart, end), timeline.ParallelSegments, nowMinute);
-        return new BotReply(TrackingReplies.Day(pieces, parallel, tz, day, today), navigation);
+        var text = TrackingReplies.Day(pieces, parallel, tz, day, today) + "\n\n" + TrackingReplies.Totals(pieces, parallel);
+        var title = text.Split('\n')[0].Trim().TrimEnd(':');
+        var image = renderer.RenderDay(new Abstractions.DayImage(title, dayStart, dayEnd, nowMinute, tz, pieces, parallel));
+        return new BotReply(text, navigation) { Image = image };
     }
 
     private static IReadOnlyList<IReadOnlyList<ReplyButton>> DayNavigation(DateOnly day, DateOnly today)

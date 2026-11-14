@@ -80,6 +80,26 @@ public static class TrackingReplies
         return builder.ToString();
     }
 
+    /// <summary>Итоги по категориям (spec §5.7): основная дорожка — сумма = длина окна; параллельные — отдельно.</summary>
+    public static string Totals(IReadOnlyList<TimelinePiece> pieces, IReadOnlyList<TimelinePiece> parallel)
+    {
+        static string Name(string? key) => key is null ? "Без категории" : Domain.Categories.DefaultCategories.Find(key)?.Name ?? key;
+        var main = pieces.Where(p => !p.IsFuture)
+            .GroupBy(p => Domain.Categories.DefaultCategories.Find(p.CategoryKey ?? string.Empty)?.ParentKey ?? p.CategoryKey)
+            .Select(g => (Name: Name(g.Key), Total: TimeSpan.FromTicks(g.Sum(p => p.Duration.Ticks))))
+            .OrderByDescending(x => x.Total)
+            .Select(x => $"{x.Name} {Duration(x.Total)}");
+        var text = "Итого: " + string.Join(" · ", main);
+        if (parallel.Count > 0)
+        {
+            text += "\nПараллельно: " + string.Join(" · ", parallel
+                .GroupBy(p => p.Title)
+                .Select(g => $"{g.Key} {Duration(TimeSpan.FromTicks(g.Sum(p => p.Duration.Ticks)))}"));
+        }
+
+        return text;
+    }
+
     public static string Icon(SegmentStatus status) => status switch
     {
         SegmentStatus.Confirmed => "✅",

@@ -30,13 +30,14 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 - **Yellow review (`YellowReview`):** after a text/voice message or an answer button, the first unreviewed 🟡 span (≥ 15 min, last 12 h, after onboarding) is asked «Пока тебя не было…» — recent activity / wasted / describe (`/add`) / skip; each span once (`users.yellow_reviewed_until`).
 - **Classification (`Domain.Categories.Classifier`):** spec §4.2 defaults by name; YouTube, games and unknown activities get a one-time category question (buttons or a category name).
 - **Questions (`QuestionService`, `pending_questions`):** category, then unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, routes.
+- **Rendering (`TimeShift.Rendering`, SkiaSharp):** `/day` is a PNG (vertical day bar, colour = category, ✅ solid / ⚪ pale / 🟡 hatched, «now» line, parallel column) with the text and «Итого» per category as caption; Docker image installs DejaVu for Cyrillic.
 - **Speech (`TimeShift.Speech`):** voice → OGG/Opus decoded in C# (Concentus) → local whisper.cpp (Whisper.net); `Speech:ModelPath`, `Speech:AutoDownload`; off without a model.
 - **Host:** `PingWorker` once a minute, `/health` with version.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
 
 ## Next
 
-[#15](https://github.com/shoraLBRT/TimeShift/issues/15) — `/day` as an image. (#2 waits for the LLM key; voice needs a whisper model on the server).
+[#16](https://github.com/shoraLBRT/TimeShift/issues/16) — `/week` image and stats. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
 ## Open questions
 

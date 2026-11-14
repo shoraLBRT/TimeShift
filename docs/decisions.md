@@ -235,3 +235,17 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **Edits apply at once with ↩️**, like other immediate intents, instead of a separate confirmation: the reply
   shows exactly what changed. A category change applies to that segment only (the activity keeps its category).
 
+## Step 8 — images (#15)
+
+- **SkiaSharp 3.119 (not the fresh 4.x)** in a separate adapter project; port `IDayRenderer` in Application, so
+  tests use a fake and another client can render differently.
+- **The day is a vertical bar sized for a phone (720×1400)**: colour by category key (sleep and commute differ
+  within "Necessary"), ✅ solid, ⚪ pale, 🟡 hatched, future grey without labels, a red «now» line, parallel
+  activities in a narrow column. Labels only where a piece is tall enough.
+- **The text stays**: it becomes the photo caption (or a separate message when longer than 1024 characters) and
+  gains «Итого» per top-level category; parallel time is listed separately and is not part of the 24 h.
+- **◀ ▶ edit the photo in place** (`editMessageMedia`); if that fails (old message), a new photo is sent.
+- **Fonts**: the first existing of DejaVu (Docker installs `fonts-dejavu-core`), Segoe UI, Arial, then any
+  system font with Cyrillic.
+- **The Dockerfile now restores all adapter projects** (Speech had been missing since #9).
+

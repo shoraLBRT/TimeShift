@@ -9,5 +9,8 @@ public sealed record ReplyButton(string Label, string Data);
 /// </summary>
 public sealed record BotReply(string Text, IReadOnlyList<IReadOnlyList<ReplyButton>> Buttons, bool ReplacesSource = false)
 {
+    /// <summary>Картинка (PNG) — текст тогда подпись к ней (spec §5.7: /day, /week картинками).</summary>
+    public byte[]? Image { get; init; }
+
     public static BotReply Plain(string text) => new(text, []);
 }

@@ -20,7 +20,7 @@ public class IntentApplierTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, _llm), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, _llm), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _store.Renderer, _clock);
 
     private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, _llm), new DailyReview(Tracking, new YellowReview(Tracking)), _store, _store, _clock);
 

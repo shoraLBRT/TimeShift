@@ -17,7 +17,7 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _store.Renderer, _clock);
 
     private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), new DailyReview(Tracking, new YellowReview(Tracking)), _store, _store, _clock);
 
@@ -228,6 +228,11 @@ public class TrackingTests
         var day = Assert.Single(await Text("/day вчера"));
 
         Assert.StartsWith("Вчера, 13 ноября", day.Text, StringComparison.Ordinal);
+        Assert.NotNull(day.Image);
+        Assert.Contains("Итого: Залипание 15 ч · Сон 8 ч · Работа 1 ч", day.Text, StringComparison.Ordinal);
+        var drawn = _store.Renderer.Days[^1];
+        Assert.Equal("Вчера, 13 ноября", drawn.Title);
+        Assert.Equal(TimeSpan.FromHours(24), drawn.DayEndUtc - drawn.DayStartUtc);
         Assert.Contains("12:00–13:00 ✅ Работа (1 ч)", day.Text);
         Assert.Contains("13:00–00:00 🟡 Залипание", day.Text);
         Assert.Equal(["day:2026-11-12", "day:2026-11-14", "dayadd:2026-11-13"], Data([day]));
