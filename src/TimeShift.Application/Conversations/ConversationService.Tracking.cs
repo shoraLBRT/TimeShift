@@ -34,11 +34,13 @@ public sealed partial class ConversationService
             {
                 "/now" => [await NowAsync(user, now, ct)],
                 "/day" => [await DayCommandAsync(user, argument, now, ct)],
+                "/add" => argument is null ? [AskAddPast(user, null, now)] : await AddPastAsync(user, argument, null, now, ct),
                 "/quiet" => [Quiet(user, argument, now)],
                 "/undo" => [await UndoAsync(user, ct)],
                 _ => null,
             };
-            if (handled is not null)
+            // Команда сбрасывает ожидание ответа — кроме «/add» без текста: он как раз начинает ждать.
+            if (handled is not null && !(command == "/add" && argument is null))
             {
                 user.DialogState = null;
             }
@@ -47,6 +49,14 @@ public sealed partial class ConversationService
         }
 
         var state = Parse(user.DialogState);
+        if (state is { Step: Step.AddPast })
+        {
+            var defaultDay = DateOnly.TryParseExact(StateArgument(user.DialogState), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var d) ? d : (DateOnly?)null;
+            user.DialogState = null;
+            return await AddPastAsync(user, text, defaultDay, now, ct);
+        }
+
         if (state is { Step: Step.ActivityName })
         {
             user.DialogState = null;
@@ -119,6 +129,13 @@ public sealed partial class ConversationService
             user.DialogState = null;
             var segment = await tracking.StartAsync(user, activity, now, ct);
             return [TrackingReplies.Started(segment, tz) with { ReplacesSource = true }];
+        }
+
+        if (data.StartsWith("dayadd:", StringComparison.Ordinal)
+            && DateOnly.TryParseExact(data["dayadd:".Length..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var addDay))
+        {
+            return [AskAddPast(user, addDay, now)];
         }
 
         if (data.StartsWith("day:", StringComparison.Ordinal)
@@ -227,7 +244,7 @@ public sealed partial class ConversationService
             row.Add(new ReplyButton(day.AddDays(1) == today ? "Сегодня ▶" : day.AddDays(1).ToString("d.MM", System.Globalization.CultureInfo.InvariantCulture) + " ▶", $"day:{day.AddDays(1):yyyy-MM-dd}"));
         }
 
-        return [row];
+        return [row, [new ReplyButton("➕ Добавить", $"dayadd:{day:yyyy-MM-dd}")]];
     }
 
     private static BotReply Quiet(User user, string? argument, DateTime now)

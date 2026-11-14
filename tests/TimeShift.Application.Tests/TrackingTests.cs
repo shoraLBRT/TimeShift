@@ -229,12 +229,12 @@ public class TrackingTests
         Assert.StartsWith("Вчера, 13 ноября", day.Text, StringComparison.Ordinal);
         Assert.Contains("12:00–13:00 ✅ Работа (1 ч)", day.Text);
         Assert.Contains("13:00–00:00 🟡 Залипание", day.Text);
-        Assert.Equal(["day:2026-11-12", "day:2026-11-14"], Data([day]));
+        Assert.Equal(["day:2026-11-12", "day:2026-11-14", "dayadd:2026-11-13"], Data([day]));
 
         var today = Assert.Single(await Press("day:2026-11-14"));
         Assert.True(today.ReplacesSource);
         Assert.StartsWith("Сегодня, 14 ноября", today.Text, StringComparison.Ordinal);
-        Assert.Equal(["day:2026-11-13"], Data([today]));
+        Assert.Equal(["day:2026-11-13", "dayadd:2026-11-14"], Data([today]));
 
         Assert.Contains(await Text("/day 20.11"), r => r.Text.Contains("ещё не наступило", StringComparison.Ordinal));
         Assert.Contains(await Text("/day когда-то"), r => r.Text.Contains("Не понял, какой день", StringComparison.Ordinal));
@@ -253,5 +253,59 @@ public class TrackingTests
         Assert.StartsWith("Вчера, 29 марта", day, StringComparison.Ordinal);
         Assert.Contains("01:00–09:00 ⚪ Сон (7 ч)", day);
         Assert.Contains("09:00–00:00 🟡 Залипание (15 ч)", day);
+    }
+
+    [Fact]
+    public async Task Add_records_past_periods_line_by_line()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 6, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+        _clock.UtcNow = new DateTime(2026, 11, 14, 3, 0, 0, DateTimeKind.Utc); // суббота 06:00 Москва
+        await Text("Читаю");
+
+        var replies = await Text("/add вчера 19-21 Зал");
+        Assert.Contains(replies, r => r.Text.Contains("13 ноября, 19:00–21:00 Зал", StringComparison.Ordinal));
+
+        // Без аргумента — ждёт строки; без дня — последнее прошедшее; через полночь; ошибки по строкам.
+        Assert.Contains(await Text("/add"), r => r.Text.StartsWith("Что и когда было?", StringComparison.Ordinal));
+        var batch = await Text("""
+            22:30-0:30 Сериал
+            сегодня 7-8 Пробежка
+            с 11 до 2 Вечеринка
+            вс 10-12 Ничего
+            13.11 21:30-23 Пересечение
+            просто текст
+            """);
+        var ok = Assert.Single(batch, r => r.Text.StartsWith("✅", StringComparison.Ordinal)).Text;
+        Assert.Contains("13 ноября, 22:30–00:30 Сериал", ok, StringComparison.Ordinal);
+        var problems = Assert.Single(batch, r => r.Text.Contains("Поправь", StringComparison.Ordinal)).Text;
+        Assert.Contains("7-8 Пробежка» — это ещё не наступило", problems, StringComparison.Ordinal);
+        Assert.Contains("больше 12 часов", problems, StringComparison.Ordinal);
+        Assert.Contains("не нашёл время", problems, StringComparison.Ordinal);
+        Assert.Contains("8 ноября, 10:00–12:00 Ничего", ok, StringComparison.Ordinal);
+        Assert.Contains("Пересечение» — пересекается с другой строкой", problems, StringComparison.Ordinal);
+        Assert.Null(Me.DialogState);
+
+        // Начатое занятие продолжается; категория угадана; «Пересечение» пересеклось с «Зал»? нет — с сериалом.
+        Assert.Contains(Lines(), l => l.EndsWith("Читаю", StringComparison.Ordinal) && l.Contains("-…", StringComparison.Ordinal));
+        Assert.Equal("sport", _store.Activities.Single(a => a.Name == "Зал").CategoryKey);
+
+        await Text("/undo");
+        Assert.DoesNotContain(Lines(), l => l.EndsWith("Сериал", StringComparison.Ordinal));
+        Assert.Contains(Lines(), l => l.EndsWith("Зал", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Add_button_from_a_day_uses_that_day()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 10, 6, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+        _clock.UtcNow = new DateTime(2026, 11, 14, 9, 0, 0, DateTimeKind.Utc);
+
+        Assert.Contains(await Press("dayadd:2026-11-11"), r => r.Text.StartsWith("Что было 11 ноября?", StringComparison.Ordinal));
+        var replies = await Text("19-21 Английский");
+
+        Assert.Contains(replies, r => r.Text.Contains("11 ноября, 19:00–21:00 Английский", StringComparison.Ordinal));
+        Assert.Contains("day:2026-11-11", Data(replies));
     }
 }

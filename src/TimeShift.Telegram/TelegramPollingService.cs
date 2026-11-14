@@ -26,7 +26,8 @@ internal sealed partial class TelegramPollingService(
     private static readonly BotCommand[] Commands =
     [
         new() { Command = "now", Description = "Что сейчас идёт, сменить занятие" },
-        new() { Command = "day", Description = "Лента за сегодня" },
+        new() { Command = "day", Description = "Лента за сегодня (или /day вчера)" },
+        new() { Command = "add", Description = "Записать прошедшее: вчера 19-21 Зал" },
         new() { Command = "quiet", Description = "Не беспокоить пару часов" },
         new() { Command = "undo", Description = "Отменить последнюю запись" },
         new() { Command = "blocks", Description = "Шаблон недели: сон, работа, свои блоки" },
