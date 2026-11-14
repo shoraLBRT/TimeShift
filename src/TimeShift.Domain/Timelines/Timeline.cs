@@ -89,6 +89,34 @@ public sealed class Timeline
     }
 
     /// <summary>
+    /// Правка отрезка (spec §8: edit_segment): <paramref name="existing"/> убирается целиком, на его место ставится
+    /// <paramref name="replacement"/> по обычным правилам <see cref="Apply"/> (вытесняет соседей, если стал длиннее;
+    /// освободившееся время остаётся пустым — фоном). Одно изменение для <c>/undo</c>.
+    /// </summary>
+    public TimelineChange Edit(Segment existing, Segment replacement, DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(replacement);
+        var list = existing.IsParallel ? _parallel : _segments;
+        if (!list.Remove(existing))
+        {
+            throw new InvalidOperationException("Отрезка нет в ленте.");
+        }
+
+        try
+        {
+            var change = Apply([replacement], nowUtc);
+            return new TimelineChange([existing, .. change.Before], change.After);
+        }
+        catch
+        {
+            list.Add(existing);
+            list.Sort(ByStart);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// «Закончил»: закрывает открытое занятие в <paramref name="nowUtc"/>. Если оно началось не раньше «сейчас» —
     /// просто убирает его. Без открытого занятия — пустое изменение.
     /// </summary>

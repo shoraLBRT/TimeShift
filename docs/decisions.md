@@ -225,3 +225,13 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   range («2-10») and records it as the latest past occurrence.
 - **Nothing before registration is ever reviewed** (yellow, evening, morning).
 
+## Step 7 — edits by text (#14)
+
+- **An edit replaces the segment whole (`Timeline.Edit`)**: the old segment is removed and the corrected one is
+  applied by the usual rules — longer pushes neighbours aside, shorter leaves the freed time empty (background),
+  never a stale remainder of the old activity. One journal entry.
+- **The target is the latest segment matching all given clues** (day, a time inside it — the latest past
+  occurrence, a loosely matched name); without a day, yesterday evening is searched too.
+- **Edits apply at once with ↩️**, like other immediate intents, instead of a separate confirmation: the reply
+  shows exactly what changed. A category change applies to that segment only (the activity keeps its category).
+

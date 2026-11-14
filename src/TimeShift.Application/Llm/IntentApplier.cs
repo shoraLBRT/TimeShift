@@ -206,8 +206,8 @@ public sealed partial class IntentApplier(
                 return [BotReply.Plain($"🔕 Не беспокою до {TrackingReplies.Clock(until, tz)}. Снять: /quiet off")];
             }
 
-            case EditSegmentIntent:
-                return [BotReply.Plain("Править записи текстом я научусь чуть позже. Пока — /undo и запиши заново.")];
+            case EditSegmentIntent edit:
+                return [await EditAsync(user, edit, now, ct)];
 
             case UnclearIntent unclear:
                 return [await NotUnderstoodAsync(user, unclear.Question, ct)];
@@ -249,6 +249,83 @@ public sealed partial class IntentApplier(
 
         var started = await tracking.StartAsync(user, activity, now, ct, at);
         return TrackingReplies.Started(started, tz);
+    }
+
+    // ---- Правка --------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// «Тренировка была до 15:30», «тот ютуб в 14 был учёбой»: найти отрезок по дню, времени внутри него и названию
+    /// (последний подходящий), поменять границы / название / категорию и записать как ✅.
+    /// </summary>
+    private async Task<BotReply> EditAsync(User user, EditSegmentIntent edit, DateTime now, CancellationToken ct)
+    {
+        var tz = user.TimeZoneInfo;
+        var today = DateOnly.FromDateTime(LocalTime.ToLocal(now, tz));
+        var day = edit.Target.Day is { } d ? PastTime.ResolveDate(d, today) : today;
+        var dayStart = LocalTime.ToUtc(day.ToDateTime(TimeOnly.MinValue), tz);
+        var dayEnd = LocalTime.ToUtc(day.AddDays(1).ToDateTime(TimeOnly.MinValue), tz);
+
+        // Без дня ищем и во вчерашнем вечере: в 6 утра «тренировка была до 22» — про вчера.
+        var searchFrom = edit.Target.Day is null ? dayStart - TimeSpan.FromHours(12) : dayStart;
+        var timeline = await tracking.LoadAsync(user, searchFrom, ct);
+        var at = edit.Target.At is { } t ? PastTime.ResolveInstant(edit.Target.Day, t, now, tz) : null;
+        var target = timeline.Segments.Concat(timeline.ParallelSegments)
+            .Where(s => s.StartUtc < dayEnd && (s.EndUtc ?? now) > searchFrom)
+            .Where(s => at is null || (s.StartUtc <= at && at < (s.EndUtc ?? now)))
+            .Where(s => edit.Target.Activity is not { } name || SameName(name, s.Title))
+            .OrderBy(s => s.StartUtc)
+            .LastOrDefault();
+        if (target is null || (edit.Target.At is not null && at is null))
+        {
+            return BotReply.Plain("Не нашёл такой записи. Посмотри /day и напиши точнее — с временем, например «в 14 был не обед, а созвон».");
+        }
+
+        var window = (From: target.StartUtc - TimeSpan.FromHours(12), To: (target.EndUtc ?? now) + TimeSpan.FromHours(12));
+        var start = edit.NewStart is { } ns ? PastTime.ResolveInWindow(ns, window.From, window.To, tz) ?? target.StartUtc : target.StartUtc;
+        var end = edit.NewEnd is { } ne ? PastTime.ResolveInWindow(ne, start, window.To, tz) : target.EndUtc;
+        if (end is { } e && e > now)
+        {
+            return BotReply.Plain("Конец получается в будущем — так поправить нельзя.");
+        }
+
+        if (end is { } closed && closed <= start)
+        {
+            return BotReply.Plain("Начало получается позже конца — проверь время.");
+        }
+
+        var title = target.Title;
+        var activityId = target.ActivityId;
+        var category = target.CategoryKey;
+        if (edit.NewActivity is { } rename)
+        {
+            var activity = await tracking.ResolveActivityAsync(user, rename, ct);
+            (title, activityId, category) = (activity.Name, activity.Id, activity.CategoryKey ?? category);
+        }
+
+        if (edit.NewCategory is { } newCategory)
+        {
+            category = newCategory;
+        }
+
+        var replacement = new Segment(
+            TrackingService.Minute(start), end is { } en ? TrackingService.Minute(en) : null, title, SegmentStatus.Confirmed, SegmentSource.User,
+            activityId, category, target.IsOpen && end is null ? target.ElapsedBefore : default, target.IsParallel);
+        if (await tracking.EditAsync(user, target, replacement, now, ct) is null)
+        {
+            return BotReply.Plain("Эта запись уже изменилась — посмотри /day.");
+        }
+
+        var span = $"{TrackingReplies.Clock(replacement.StartUtc, tz)}–{(replacement.EndUtc is { } re ? TrackingReplies.Clock(re, tz) : "…")}";
+        var categoryNote = edit.NewCategory is { } c ? $" ({CategoryName(c)})" : string.Empty;
+        return new BotReply($"✏️ Исправил: {span} {replacement.Title}{categoryNote}.", [[new ReplyButton("↩️ Отменить", "tl:undo")]]);
+    }
+
+    private static bool SameName(string wanted, string actual)
+    {
+        static string N(string x) => x.Trim().ToLowerInvariant().Replace('ё', 'е');
+        var (w, a) = (N(wanted), N(actual));
+        return w == a || a.Contains(w, StringComparison.Ordinal) || w.Contains(a, StringComparison.Ordinal)
+               || (w.Length >= 4 && a.Length >= 4 && w[..4] == a[..4]);
     }
 
     // ---- Период --------------------------------------------------------------------------------------------

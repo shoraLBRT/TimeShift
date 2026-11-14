@@ -251,6 +251,62 @@ public class IntentApplierTests
         Assert.All(_store.Log, l => Assert.Equal(Me.Id, l.UserId));
     }
 
+    private async Task RecordAsync(int fromHour, int fromMinute, int toHour, int toMinute, string activity, string? category = null)
+    {
+        _clock.UtcNow = Msk(toHour, toMinute);
+        var cat = category is null ? string.Empty : $",\"category\":\"{category}\"";
+        await Say("…", $$"""{"intents":[{"type":"describe_period","from":"{{fromHour:00}}:{{fromMinute:00}}","to":"{{toHour:00}}:{{toMinute:00}}","items":[{"activity":"{{activity}}","rest":true{{cat}}}]}]}""");
+        await Press("per:ok");
+    }
+
+    [Fact]
+    public async Task Edits_by_text_move_boundaries_rename_and_recategorize()
+    {
+        await OnboardAsync(Msk(9));
+        await RecordAsync(12, 0, 13, 0, "Обед");
+        await RecordAsync(13, 30, 14, 30, "YouTube");
+        await RecordAsync(14, 30, 15, 0, "Тренировка", "sport");
+        _clock.UtcNow = Msk(16);
+
+        var longer = await Say("тренировка была до 15:30, а не до 15",
+            """{"intents":[{"type":"edit_segment","target":{"activity":"Тренировка"},"changes":{"end":"15:30"}}]}""");
+        Assert.Contains(longer, r => r.Text == "✏️ Исправил: 14:30–15:30 Тренировка.");
+        Assert.Contains("14:30-15:30 Тренировка Confirmed", Main());
+
+        var category = await Say("тот ютуб в 14 был учёбой",
+            """{"intents":[{"type":"edit_segment","target":{"at":"14:00","activity":"YouTube"},"changes":{"category":"study"}}]}""");
+        Assert.Contains(category, r => r.Text.Contains("YouTube (Учёба)", StringComparison.Ordinal));
+        Assert.Equal("study", _store.SegmentsOf(Me.Id).Single(x => x.Title == "YouTube").CategoryKey);
+
+        await Say("в 12 был не обед, а созвон",
+            """{"intents":[{"type":"edit_segment","target":{"at":"12:00","activity":"Обед"},"changes":{"activity":"Созвон"}}]}""");
+        Assert.Contains("12:00-13:00 Созвон Confirmed", Main());
+        Assert.Equal("work", _store.Activities.Single(a => a.Name == "Созвон").CategoryKey);
+
+        await Text("/undo");
+        Assert.Contains("12:00-13:00 Обед Confirmed", Main());
+    }
+
+    [Fact]
+    public async Task Shrinking_leaves_the_freed_time_empty_and_bad_edits_are_explained()
+    {
+        await OnboardAsync(Msk(9));
+        await RecordAsync(14, 0, 15, 0, "Тренировка");
+        _clock.UtcNow = Msk(16);
+
+        await Say("тренировалась только до 14:30",
+            """{"intents":[{"type":"edit_segment","target":{"activity":"Тренировка"},"changes":{"end":"14:30"}}]}""");
+        Assert.Equal(["14:00-14:30 Тренировка Confirmed"], Main());
+
+        var missing = await Say("в 11 был не сон",
+            """{"intents":[{"type":"edit_segment","target":{"at":"11:00"},"changes":{"activity":"Работа"}}]}""");
+        Assert.Contains(missing, r => r.Text.StartsWith("Не нашёл такой записи", StringComparison.Ordinal));
+
+        var future = await Say("тренировка до 18",
+            """{"intents":[{"type":"edit_segment","target":{"activity":"Тренировка"},"changes":{"end":"18:00"}}]}""");
+        Assert.Contains(future, r => r.Text.Contains("в будущем", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("25", 25)]
     [InlineData("минут 40", 40)]
