@@ -17,7 +17,7 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), _clock);
 
     private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store, _store, _clock);
 
@@ -343,5 +343,81 @@ public class TrackingTests
 
         Assert.Empty(Lines());
         Assert.Equal(2, _store.Speech.Calls);
+    }
+
+    private BotReply Question(IEnumerable<BotReply> replies) =>
+        Assert.Single(replies, r => r.Text.StartsWith("❓", StringComparison.Ordinal));
+
+    [Fact]
+    public async Task Unknown_duration_is_asked_once_right_after_the_reply()
+    {
+        await OnboardAsync();
+
+        var started = await Text("Тренировка");
+        Assert.Contains("«Тренировка»", Question(started).Text, StringComparison.Ordinal);
+
+        // Не ответ на вопрос — обычное сообщение; вопрос не повторяется.
+        var stopped = await Press("act:stop");
+        Assert.DoesNotContain(stopped, r => r.Text.StartsWith("❓", StringComparison.Ordinal));
+
+        var answer = await Text("около часа");
+        Assert.Contains(answer, r => r.Text.StartsWith("Запомнил: «Тренировка» обычно 1 ч", StringComparison.Ordinal));
+        Assert.Equal(TimeSpan.FromHours(1), _store.Activities.Single().TypicalDuration);
+
+        Advance(60);
+        Assert.DoesNotContain(await Text("Тренировка"), r => r.Text.StartsWith("❓", StringComparison.Ordinal));
+
+        // Первый пинг — по обычной длительности, а не через 30 минут.
+        Advance(30);
+        Assert.Equal(0, (await Pings.RunAsync(Ct)).Sent);
+        Advance(30);
+        Assert.Equal(1, (await Pings.RunAsync(Ct)).Sent);
+    }
+
+    [Fact]
+    public async Task One_question_at_a_time_buttons_and_skip()
+    {
+        await OnboardAsync();
+        var first = Question(await Text("Работа"));
+        Assert.Contains("Не знаю, по-разному", first.Buttons.SelectMany(r => r).Select(b => b.Label));
+
+        // Второе занятие без ответа на первый вопрос — новый вопрос не задаётся.
+        Advance(10);
+        Assert.DoesNotContain(await Text("Обед"), r => r.Text.StartsWith("❓", StringComparison.Ordinal));
+
+        // Ответ кнопкой — и сразу следующий вопрос из очереди.
+        var data = first.Buttons[0].Select(b => b.Data).Single(d => d.EndsWith(":90", StringComparison.Ordinal));
+        var replies = await Press(data);
+        Assert.True(replies[0].ReplacesSource);
+        Assert.Equal(TimeSpan.FromMinutes(90), _store.Activities.Single(a => a.Name == "Работа").TypicalDuration);
+        var second = Question(replies);
+        Assert.Contains("«Обед»", second.Text, StringComparison.Ordinal);
+
+        var skip = second.Buttons[1][0].Data;
+        Assert.Contains(await Press(skip), r => r.Text.Contains("не буду спрашивать", StringComparison.Ordinal));
+        Assert.Null(_store.Activities.Single(a => a.Name == "Обед").TypicalDuration);
+        Assert.Contains(await Press(skip), r => r.Text.Contains("уже закрыт", StringComparison.Ordinal));
+
+        // «закончил в 19» — не ответ «19 минут».
+        Assert.Null(await new Questions.QuestionService(_store, Tracking, _store, _store).AnswerAsync(Me, "закончил в 19", _clock.UtcNow, Ct));
+    }
+
+    [Fact]
+    public async Task Facts_lists_what_the_bot_knows_and_allows_changing_durations()
+    {
+        await OnboardAsync();
+        await Text("Тренировка");
+        await Text("90");
+        await _store.SetAsync(Me.Id, "route:зал→дом", 25, Ct);
+
+        var facts = Assert.Single(await Text("/facts"));
+
+        Assert.Contains("• Тренировка — 1 ч 30 мин, Спорт", facts.Text, StringComparison.Ordinal);
+        Assert.Contains("• Дорога зал → дом — 25 мин", facts.Text, StringComparison.Ordinal);
+        var change = Data([facts]).Single(d => d.StartsWith("fdur:", StringComparison.Ordinal));
+
+        Question(await Press(change));
+        await Text("2 часа");
+        Assert.Equal(TimeSpan.FromHours(2), _store.Activities.Single().TypicalDuration);
     }
 }

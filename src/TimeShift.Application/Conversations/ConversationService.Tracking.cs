@@ -11,6 +11,9 @@ public sealed partial class ConversationService
 {
     private const int MaxActivityNameLength = 60;
 
+    /// <summary>Длиннее — это уже не ответ на вопрос «сколько длится», а обычное сообщение.</summary>
+    private const int MaxAnswerLength = 20;
+
     /// <summary>Обрабатывает сообщение, если оно про учёт; иначе <c>null</c> — дальше идут меню и настройки.</summary>
     private async Task<IReadOnlyList<BotReply>?> TrackAsync(User user, IncomingMessage message, DateTime now, CancellationToken ct)
     {
@@ -37,6 +40,7 @@ public sealed partial class ConversationService
                 "/add" => argument is null ? [AskAddPast(user, null, now)] : await AddPastAsync(user, argument, null, now, ct),
                 "/quiet" => [Quiet(user, argument, now)],
                 "/undo" => [await UndoAsync(user, ct)],
+                "/facts" => [await questions.FactsAsync(user, ct)],
                 _ => null,
             };
             // Команда сбрасывает ожидание ответа — кроме «/add» без текста: он как раз начинает ждать.
@@ -63,6 +67,13 @@ public sealed partial class ConversationService
             return await StartByNameAsync(user, text, now, ct);
         }
 
+        // Короткий ответ на заданный вопрос («40 минут», «полчаса») — закрывает его.
+        if (state is null && text.Length <= MaxAnswerLength && !await intents.IsWaitingForFactAsync(user, ct)
+            && await questions.AnswerAsync(user, text, now, ct) is { } answered)
+        {
+            return [answered];
+        }
+
         if (state is null)
         {
             // С LLM — разбор фразы в намерения (spec §5.3); без него — короткий текст как новое занятие.
@@ -77,6 +88,17 @@ public sealed partial class ConversationService
         if (await intents.OnButtonAsync(user, data, now, ct) is { } proposal)
         {
             return proposal;
+        }
+
+        if (await questions.OnButtonAsync(user, data, now, ct) is { } answer)
+        {
+            return [answer];
+        }
+
+        if (data.StartsWith("fdur:", StringComparison.Ordinal) && Guid.TryParse(data["fdur:".Length..], out var activityId)
+            && await questions.AskDurationAgainAsync(user, activityId, now, ct) is { } ask)
+        {
+            return [ask];
         }
 
         var tz = user.TimeZoneInfo;

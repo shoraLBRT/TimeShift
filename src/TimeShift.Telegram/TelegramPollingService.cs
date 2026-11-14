@@ -30,6 +30,7 @@ internal sealed partial class TelegramPollingService(
         new() { Command = "add", Description = "Записать прошедшее: вчера 19-21 Зал" },
         new() { Command = "quiet", Description = "Не беспокоить пару часов" },
         new() { Command = "undo", Description = "Отменить последнюю запись" },
+        new() { Command = "facts", Description = "Что я знаю: длительности, маршруты, категории" },
         new() { Command = "blocks", Description = "Шаблон недели: сон, работа, свои блоки" },
         new() { Command = "settings", Description = "Пинги, продление, часовой пояс" },
         new() { Command = "help", Description = "Что я умею" },

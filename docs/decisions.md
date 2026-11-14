@@ -181,3 +181,13 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   like the LLM path. A range over 12 h without a day is refused as ambiguous («с 11 до 2» at 06:00). Lines that
   overlap each other are refused; the rest are recorded as one journal entry, so `/undo` takes them back together.
 
+## Step 7 — questions and facts (#10)
+
+- **The queue holds one kind of question for now — the typical duration of an activity.** Route facts are asked
+  by the period proposal itself (#6) and take priority: while it waits for a fact, the queue stays silent.
+- **A question is asked once per subject**, right after the bot's reply and only when no other answer is expected
+  (`DialogState` empty). Skipping («не знаю») closes it for good; `/facts` can ask again.
+- **Only a bare duration counts as an answer** («40», «минут 25», «около часа», «полтора часа», ≤ 20 chars) —
+  «закончил в 19» is a normal message, not «19 минут».
+- **New activities get an obvious category from their name** (тренировка → sport) on every path, not only `/add`.
+

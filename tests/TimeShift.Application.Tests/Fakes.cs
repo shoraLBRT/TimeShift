@@ -1,6 +1,7 @@
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Conversations;
 using TimeShift.Application.Llm;
+using TimeShift.Application.Questions;
 using TimeShift.Application.Tracking;
 using TimeShift.Domain.Activities;
 using TimeShift.Domain.Timelines;
@@ -60,8 +61,29 @@ internal sealed class FakeSpeech : ISpeechToText
 }
 
 internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IActivityRepository, IUnitOfWork, INotifier,
-    IFactRepository, IPendingPeriodRepository, IMessageLog
+    IFactRepository, IPendingPeriodRepository, IMessageLog, IQuestionRepository
 {
+    public List<PendingQuestion> QuestionList { get; } = [];
+
+    public QuestionService Questions(TrackingService tracking) => new(this, tracking, this, this);
+
+    Task<PendingQuestion?> IQuestionRepository.FindAsync(Guid userId, QuestionKind kind, Guid subjectId, CancellationToken cancellationToken) =>
+        Task.FromResult(QuestionList.FirstOrDefault(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId));
+
+    Task<PendingQuestion?> IQuestionRepository.GetAsync(Guid userId, Guid questionId, CancellationToken cancellationToken) =>
+        Task.FromResult(QuestionList.FirstOrDefault(q => q.UserId == userId && q.Id == questionId));
+
+    Task<PendingQuestion?> IQuestionRepository.OpenAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(QuestionList.FirstOrDefault(q => q.UserId == userId && q.AskedAtUtc != null && q.ResolvedAtUtc == null));
+
+    Task<PendingQuestion?> IQuestionRepository.NextAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(QuestionList.Where(q => q.UserId == userId && q.AskedAtUtc == null && q.ResolvedAtUtc == null).OrderBy(q => q.CreatedAtUtc).FirstOrDefault());
+
+    void IQuestionRepository.Add(PendingQuestion question) => QuestionList.Add(question);
+
+    Task<IReadOnlyList<Activity>> IActivityRepository.ListAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Activity>>(Activities.Where(a => a.UserId == userId).ToList());
+
     private readonly Dictionary<Guid, PendingPeriod> _pending = [];
 
     public FakeSpeech Speech { get; } = new();

@@ -54,7 +54,7 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
             return existing;
         }
 
-        var created = new Activity(user.Id, Capitalize(name));
+        var created = new Activity(user.Id, Capitalize(name), Parsing.ScheduleText.GuessCategory(name));
         activities.Add(created);
         return created;
     }

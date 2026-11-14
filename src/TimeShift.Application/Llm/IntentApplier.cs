@@ -38,6 +38,10 @@ public sealed partial class IntentApplier(
 
     public bool IsEnabled => llm.IsEnabled;
 
+    /// <summary>Разбор периода ждёт ответа о факте — его вопрос важнее очереди (spec §5.5: один вопрос за раз).</summary>
+    public async Task<bool> IsWaitingForFactAsync(User user, CancellationToken ct) =>
+        await pendings.GetAsync(user.Id, ct) is { IsWaitingForFact: true };
+
     /// <summary>Текст → намерения → действия. <c>null</c> — LLM выключен (вызывающий работает без него).</summary>
     public async Task<IReadOnlyList<BotReply>?> HandleTextAsync(User user, string text, DateTime now, CancellationToken ct)
     {

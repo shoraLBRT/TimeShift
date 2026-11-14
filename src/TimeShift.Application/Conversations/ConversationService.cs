@@ -20,6 +20,7 @@ public sealed partial class ConversationService(
     TrackingService tracking,
     Llm.IntentApplier intents,
     ISpeechToText speech,
+    Questions.QuestionService questions,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -67,6 +68,13 @@ public sealed partial class ConversationService(
             user.RegisterActivity(now);
             replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
                 ?? Dispatch(user, message);
+
+            // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
+            if (user.IsOnboarded && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
+                && await questions.NextAsync(user, now, cancellationToken) is { } question)
+            {
+                replies = [.. replies, question];
+            }
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -154,6 +162,7 @@ public sealed partial class ConversationService(
         "/add — записать прошедшее: «вчера 19-21 Зал»\n" +
         "/quiet — не беспокоить пару часов\n" +
         "/undo — отменить последнюю запись\n" +
+        "/facts — что я о тебе знаю: длительности, маршруты, категории\n" +
         "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
         "/settings — пинги, продление занятий, часовой пояс\n\n" +
         "Разбирать фразы вроде «час тренировался, потом поехал домой» и голосовые я научусь чуть позже.");

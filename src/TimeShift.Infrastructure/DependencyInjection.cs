@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IFactRepository, FactRepository>();
         services.AddScoped<IPendingPeriodRepository, PendingPeriodRepository>();
         services.AddScoped<IMessageLog, MessageLog>();
+        services.AddScoped<Application.Questions.IQuestionRepository, QuestionRepository>();
         services.AddSingleton<IClock, SystemClock>();
 
         // LLM (секция Llm): без ключа провайдер зарегистрирован, но выключен — бот работает без него.
