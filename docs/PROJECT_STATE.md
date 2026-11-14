@@ -13,7 +13,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
   period resolution (§3.5), breaks inside an activity and parallel activities (§3.6), `Timeline.Apply/Stop/
   Continue/Undo`, ping rule `PingSchedule`.
 - **Application:** client-neutral dialog `ConversationService` (onboarding, `/blocks`, `/settings`, `/now`,
-  `/day` as text, `/quiet`, `/undo`, short free text = new activity), `TrackingService`, `PingService`.
+  `/day [вчера|сб|13.11]` as text with ◀ ▶ and the parallel track, `/quiet`, `/undo`, short free text = new activity), `TrackingService`, `PingService`.
 - **Infrastructure:** EF Core with SQLite (dev) and Postgres (prod), two migration sets; segments, activities,
   undo journal, schedule blocks.
 - **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy and allow-list.
@@ -31,7 +31,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 
 ## Next
 
-[#7](https://github.com/shoraLBRT/TimeShift/issues/7) — `/day` for another day.
+[#8](https://github.com/shoraLBRT/TimeShift/issues/8) — `/add` without LLM.
 
 ## Open questions
 

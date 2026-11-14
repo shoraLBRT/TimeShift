@@ -213,4 +213,45 @@ public class TrackingTests
         await Press("quiet:off");
         Assert.Null(Me.QuietUntilUtc);
     }
+
+    [Fact]
+    public async Task Day_for_yesterday_shows_the_whole_day_and_navigates()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 9, 0, 0, DateTimeKind.Utc); // пятница 12:00 Москва
+        await OnboardAsync();
+        await Text("Работа");
+        Advance(60);
+        await Press("act:stop");
+
+        _clock.UtcNow = new DateTime(2026, 11, 14, 7, 0, 0, DateTimeKind.Utc); // суббота 10:00
+        var day = Assert.Single(await Text("/day вчера"));
+
+        Assert.StartsWith("Вчера, 13 ноября", day.Text, StringComparison.Ordinal);
+        Assert.Contains("12:00–13:00 ✅ Работа (1 ч)", day.Text);
+        Assert.Contains("13:00–00:00 🟡 Залипание", day.Text);
+        Assert.Equal(["day:2026-11-12", "day:2026-11-14"], Data([day]));
+
+        var today = Assert.Single(await Press("day:2026-11-14"));
+        Assert.True(today.ReplacesSource);
+        Assert.StartsWith("Сегодня, 14 ноября", today.Text, StringComparison.Ordinal);
+        Assert.Equal(["day:2026-11-13"], Data([today]));
+
+        Assert.Contains(await Text("/day 20.11"), r => r.Text.Contains("ещё не наступило", StringComparison.Ordinal));
+        Assert.Contains(await Text("/day когда-то"), r => r.Text.Contains("Не понял, какой день", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Day_with_a_clock_change_has_23_hours()
+    {
+        _clock.UtcNow = new DateTime(2026, 3, 30, 10, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+        await Press("edit:tz");
+        await Text("Europe/Berlin");
+
+        var day = Assert.Single(await Text("/day 29.03")).Text;
+
+        Assert.StartsWith("Вчера, 29 марта", day, StringComparison.Ordinal);
+        Assert.Contains("01:00–09:00 ⚪ Сон (7 ч)", day);
+        Assert.Contains("09:00–00:00 🟡 Залипание (15 ч)", day);
+    }
 }
