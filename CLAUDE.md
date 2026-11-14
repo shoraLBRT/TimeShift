@@ -3,6 +3,13 @@
 Telegram bot for tracking lived time. The spec (Russian) is `docs/spec.md` — read it before changing
 behaviour; data model is §7, architecture §9.
 
+## Backlog and state
+
+- Backlog: GitHub issues in milestone **MVP** (epic #20); the order of work is `docs/ROADMAP.md`.
+- State file: `docs/PROJECT_STATE.md` — what exists, what is next, open questions. Update it in every PR.
+- Decisions taken where the spec leaves room: `docs/decisions.md`.
+- PRs follow habze: conventional PR title (type from the issue label), squash-merge only.
+
 ## Commands
 
 ```sh
