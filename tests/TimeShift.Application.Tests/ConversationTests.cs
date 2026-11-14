@@ -18,7 +18,7 @@ public class ConversationTests
         get
         {
             var tracking = new Tracking.TrackingService(_store, _store);
-            return new(_store, _store, tracking, _store.Applier(tracking, new ScriptedLlm()), _clock);
+            return new(_store, _store, tracking, _store.Applier(tracking, new ScriptedLlm()), _store.Speech, _clock);
         }
     }
 
@@ -213,6 +213,6 @@ public class ConversationTests
 
         var replies = await Service.HandleAsync(new IncomingMessage(ChatId, "Тест"), TestContext.Current.CancellationToken);
 
-        Assert.Contains(replies, r => r.Text.Contains("только текст"));
+        Assert.Contains(replies, r => r.Text.Contains("Фото и файлы"));
     }
 }
