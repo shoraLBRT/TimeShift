@@ -37,10 +37,34 @@ internal sealed class ScriptedLlm(bool enabled = false) : ILlmProvider
     }
 }
 
+/// <summary>Распознавание по сценарию: отдаёт заданный текст; <see cref="Enabled"/> = false — выключено.</summary>
+internal sealed class FakeSpeech : ISpeechToText
+{
+    public bool Enabled { get; set; } = true;
+
+    public string Text { get; set; } = string.Empty;
+
+    public Exception? Failure { get; set; }
+
+    public int Calls { get; private set; }
+
+    public bool IsEnabled => Enabled;
+
+    public TimeSpan MaxDuration => TimeSpan.FromMinutes(2);
+
+    public Task<string> TranscribeAsync(Stream oggOpus, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Failure is not null ? throw Failure : Task.FromResult(Text);
+    }
+}
+
 internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IActivityRepository, IUnitOfWork, INotifier,
     IFactRepository, IPendingPeriodRepository, IMessageLog
 {
     private readonly Dictionary<Guid, PendingPeriod> _pending = [];
+
+    public FakeSpeech Speech { get; } = new();
 
     public Dictionary<(Guid, string), int> Facts { get; } = [];
 

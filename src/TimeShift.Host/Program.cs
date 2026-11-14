@@ -16,6 +16,7 @@ builder.Services.AddScoped<TimeShift.Application.Llm.IntentApplier>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddScoped<PingService>();
 builder.Services.AddTelegramAdapter(builder.Configuration);
+TimeShift.Speech.DependencyInjection.AddSpeech(builder.Services, builder.Configuration);
 if (builder.Services.Any(d => d.ServiceType == typeof(TimeShift.Application.Abstractions.INotifier)))
 {
     builder.Services.AddHostedService<PingWorker>();

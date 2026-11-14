@@ -1,3 +1,4 @@
+using TimeShift.Application.Abstractions;
 using TimeShift.Application.Conversations;
 using TimeShift.Application.Pings;
 using TimeShift.Application.Tracking;
@@ -16,7 +17,7 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _clock);
 
     private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store, _store, _clock);
 
@@ -307,5 +308,40 @@ public class TrackingTests
 
         Assert.Contains(replies, r => r.Text.Contains("11 ноября, 19:00–21:00 Английский", StringComparison.Ordinal));
         Assert.Contains("day:2026-11-11", Data(replies));
+    }
+
+    [Fact]
+    public async Task Voice_is_transcribed_and_handled_like_text()
+    {
+        await OnboardAsync();
+        _store.Speech.Text = "Тренировка";
+
+        var replies = await Conversation.HandleAsync(IncomingMessage.FromVoice(ChatId, "Тест", [1, 2, 3], TimeSpan.FromSeconds(3)), Ct);
+
+        Assert.Equal("🎙 «Тренировка»", replies[0].Text);
+        Assert.Contains(replies, r => r.Text.Contains("Записал: «Тренировка»", StringComparison.Ordinal));
+        Assert.Equal(["09:00-… Тренировка"], Lines());
+    }
+
+    [Fact]
+    public async Task Voice_problems_are_explained_without_touching_the_timeline()
+    {
+        await OnboardAsync();
+        async Task<string> Voice(int seconds) =>
+            Assert.Single(await Conversation.HandleAsync(IncomingMessage.FromVoice(ChatId, "Тест", [1], TimeSpan.FromSeconds(seconds)), Ct)).Text;
+
+        _store.Speech.Text = "   ";
+        Assert.Contains("Не расслышал", await Voice(2), StringComparison.Ordinal);
+
+        Assert.Contains("длиннее 2 мин", await Voice(150), StringComparison.Ordinal);
+
+        _store.Speech.Failure = new SpeechException("boom");
+        Assert.Contains("Не получилось распознать", await Voice(2), StringComparison.Ordinal);
+
+        _store.Speech.Enabled = false;
+        Assert.Contains("не включены", await Voice(2), StringComparison.Ordinal);
+
+        Assert.Empty(Lines());
+        Assert.Equal(2, _store.Speech.Calls);
     }
 }

@@ -90,6 +90,11 @@ internal sealed partial class TelegramPollingService(
                 return;
             }
 
+            if (update.Message?.Voice is { } voice)
+            {
+                incoming = incoming with { Voice = await DownloadAsync(client, voice.FileId, cancellationToken) };
+            }
+
             IReadOnlyList<BotReply> replies;
             await using (var scope = scopes.CreateAsyncScope())
             {
@@ -110,6 +115,13 @@ internal sealed partial class TelegramPollingService(
     {
         switch (update)
         {
+            case { Message: { Voice: { } voice } message }:
+                return (message.Chat, message.From, new IncomingMessage(message.Chat.Id, Name(message.From, message.Chat))
+                {
+                    Voice = [], // скачивается в HandleUpdateAsync — здесь только признак
+                    VoiceDuration = TimeSpan.FromSeconds(voice.Duration),
+                }, null);
+
             case { Message: { } message }:
                 return (message.Chat, message.From, new IncomingMessage(message.Chat.Id, Name(message.From, message.Chat), message.Text), null);
 
@@ -119,6 +131,14 @@ internal sealed partial class TelegramPollingService(
             default:
                 return (null, null, null, null);
         }
+    }
+
+    private static async Task<byte[]> DownloadAsync(ITelegramBotClient client, string fileId, CancellationToken cancellationToken)
+    {
+        var file = await client.GetFile(fileId, cancellationToken);
+        using var buffer = new MemoryStream();
+        await client.DownloadFile(file.FilePath!, buffer, cancellationToken);
+        return buffer.ToArray();
     }
 
     private static string Name(User? from, Chat chat) =>

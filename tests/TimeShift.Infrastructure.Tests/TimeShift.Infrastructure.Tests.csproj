@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TimeShift.Infrastructure\TimeShift.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\TimeShift.Speech\TimeShift.Speech.csproj" />
     <ProjectReference Include="..\..\tools\TimeShift.LlmEval\TimeShift.LlmEval.csproj" />
   </ItemGroup>
 

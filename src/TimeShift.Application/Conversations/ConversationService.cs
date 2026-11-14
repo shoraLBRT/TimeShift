@@ -19,6 +19,7 @@ public sealed partial class ConversationService(
     IUnitOfWork unitOfWork,
     TrackingService tracking,
     Llm.IntentApplier intents,
+    ISpeechToText speech,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -37,6 +38,19 @@ public sealed partial class ConversationService(
     public async Task<IReadOnlyList<BotReply>> HandleAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
+        if (message.Voice is { } voice)
+        {
+            // Голос → текст, дальше как обычное сообщение; распознанное показываем, чтобы было видно ошибки.
+            var (text, problem) = await TranscribeAsync(voice, message.VoiceDuration, cancellationToken);
+            if (text is null)
+            {
+                return [BotReply.Plain(problem!)];
+            }
+
+            var handled = await HandleAsync(message with { Text = text, Voice = null }, cancellationToken);
+            return [BotReply.Plain($"🎙 «{text}»"), .. handled];
+        }
+
         var now = clock.UtcNow;
         var user = await users.FindByTelegramChatIdAsync(message.ChatId, cancellationToken);
         IReadOnlyList<BotReply> replies;
@@ -59,6 +73,32 @@ public sealed partial class ConversationService(
         return replies;
     }
 
+    private async Task<(string? Text, string? Problem)> TranscribeAsync(byte[] voice, TimeSpan duration, CancellationToken ct)
+    {
+        if (!speech.IsEnabled)
+        {
+            return (null, "Голосовые пока не включены на сервере — напиши текстом, пожалуйста.");
+        }
+
+        if (duration > speech.MaxDuration)
+        {
+            return (null, $"Голосовое длиннее {TrackingReplies.Duration(speech.MaxDuration)} — раздели на части или напиши текстом.");
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(voice, writable: false);
+            var text = await speech.TranscribeAsync(stream, ct);
+            return string.IsNullOrWhiteSpace(text)
+                ? (null, "Не расслышал 🤔 Повтори или напиши текстом.")
+                : (text, null);
+        }
+        catch (SpeechException)
+        {
+            return (null, "Не получилось распознать голосовое — напиши текстом, пожалуйста.");
+        }
+    }
+
     private static IReadOnlyList<BotReply> Dispatch(User user, IncomingMessage message)
     {
         if (message.ButtonData is { } data)
@@ -68,7 +108,7 @@ public sealed partial class ConversationService(
 
         if (message.Text is null)
         {
-            return [BotReply.Plain("Пока я понимаю только текст и кнопки — голосовые научусь разбирать позже.")];
+            return [BotReply.Plain("Я понимаю текст, голосовые и кнопки. Фото и файлы пока не разбираю.")];
         }
 
         var text = message.Text.Trim();
