@@ -4,7 +4,8 @@ Telegram-бот для учёта прожитого времени: бот пи
 (текстом или голосом), из ответов собирается лента дня без дыр. Полное ТЗ — [docs/spec.md](docs/spec.md).
 
 Сейчас готов только каркас решения: слои, БД (пользователь и его настройки), `/health`,
-Docker. Логики ленты, Telegram-бота, LLM и распознавания речи пока нет.
+Docker. Готовы ядро ленты (Domain) и Telegram-бот с онбордингом, `/blocks` и `/settings`; пингов, LLM и
+распознавания речи пока нет.
 
 ## Структура
 
@@ -13,7 +14,7 @@ src/
   TimeShift.Domain          сущности и правила, без внешних зависимостей
   TimeShift.Application     сценарии и интерфейсы (IClock, далее ILlmProvider, INotifier, ...)
   TimeShift.Infrastructure  EF Core: SQLite (разработка) / PostgreSQL (прод)
-  TimeShift.Telegram        адаптер Telegram (пока только регистрация в DI)
+  TimeShift.Telegram        адаптер Telegram: long polling, кнопки → ConversationService (Application)
   TimeShift.Host            ASP.NET Core: REST API, фоновые сервисы, Telegram в одном процессе
 tests/
   TimeShift.Domain.Tests
@@ -45,7 +46,8 @@ curl http://localhost:5138/health   # {"status":"ok"}
 применяются при старте (`Database:MigrateOnStartup`).
 
 Без токена Telegram-адаптер выключен (в логе будет предупреждение). Токен задаётся через
-`Telegram:BotToken` — например, переменной окружения `Telegram__BotToken`.
+`Telegram:BotToken`: локально — user-secrets (`dotnet user-secrets set "Telegram:BotToken" "<token>" --project src/TimeShift.Host`),
+на сервере — переменной окружения `Telegram__BotToken`.
 
 ## Конфигурация
 
@@ -55,6 +57,8 @@ curl http://localhost:5138/health   # {"status":"ok"}
 | `ConnectionStrings:Default` | строка подключения |
 | `Database:MigrateOnStartup` | применять миграции при старте (`true` в Development и в compose) |
 | `Telegram:BotToken` | токен бота; пусто — Telegram выключен |
+| `Telegram:Proxy` | прокси до api.telegram.org (`socks5://127.0.0.1:1080`, `http://…`); пусто — напрямую |
+| `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом; пусто — всем |
 
 ## Docker Compose
 

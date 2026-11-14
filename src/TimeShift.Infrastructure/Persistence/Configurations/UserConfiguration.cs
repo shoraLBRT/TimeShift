@@ -17,6 +17,9 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.DisplayName).HasColumnName("display_name").HasMaxLength(200).IsRequired();
         builder.Property(u => u.TimeZone).HasColumnName("timezone").HasMaxLength(64).IsRequired();
         builder.Property(u => u.CreatedAtUtc).HasColumnName("created_at");
+        builder.Property(u => u.IsOnboarded).HasColumnName("is_onboarded");
+        builder.Property(u => u.DialogState).HasColumnName("dialog_state").HasMaxLength(64);
+        builder.Ignore(u => u.TimeZoneInfo);
 
         builder.OwnsOne(u => u.Settings, settings =>
         {
@@ -31,7 +34,11 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
             settings.Property(s => s.PingDuringBlocks).HasColumnName("ping_during_blocks");
             settings.Property(s => s.EveningReviewOffsetMin).HasColumnName("evening_review_offset_min");
             settings.Property(s => s.RoundingMin).HasColumnName("rounding_min");
+            settings.Ignore(s => s.Extension);
         });
         builder.Navigation(u => u.Settings).IsRequired();
+
+        builder.HasMany(u => u.Blocks).WithOne().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(u => u.Blocks).UsePropertyAccessMode(PropertyAccessMode.Field).AutoInclude();
     }
 }

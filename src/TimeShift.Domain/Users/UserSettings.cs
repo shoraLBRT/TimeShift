@@ -1,3 +1,5 @@
+using TimeShift.Domain.Timelines;
+
 namespace TimeShift.Domain.Users;
 
 /// <summary>Настройки пользователя (spec §6, §7: user_settings). Один к одному с <see cref="User"/>.</summary>
@@ -14,8 +16,8 @@ public class UserSettings
 
     public int PingIntervalMin { get; set; } = DefaultPingIntervalMin;
 
-    /// <summary>Множитель нормального продления открытого занятия (spec §3.3).</summary>
-    public double NormFactor { get; set; } = DefaultNormFactor;
+    /// <summary>Множитель нормального продления открытого занятия (spec §3.3); <c>null</c> — без ограничения (∞).</summary>
+    public double? NormFactor { get; set; } = DefaultNormFactor;
 
     /// <summary>Множитель максимального продления; <c>null</c> — без ограничения (∞).</summary>
     public double? MaxFactor { get; set; } = DefaultMaxFactor;
@@ -27,4 +29,28 @@ public class UserSettings
     public int EveningReviewOffsetMin { get; set; } = DefaultEveningReviewOffsetMin;
 
     public int RoundingMin { get; set; } = DefaultRoundingMin;
+
+    /// <summary>Режим продления как политика ленты; ∞ хранится как <c>null</c>.</summary>
+    public ExtensionPolicy Extension
+    {
+        get
+        {
+            var norm = NormFactor ?? double.PositiveInfinity;
+            var max = MaxFactor ?? double.PositiveInfinity;
+            return (norm, max) switch
+            {
+                (1.0, 1.0) => ExtensionPolicy.UpToTypical,
+                (DefaultNormFactor, DefaultMaxFactor) => ExtensionPolicy.Default,
+                _ when double.IsPositiveInfinity(norm) => ExtensionPolicy.Infinite,
+                _ => ExtensionPolicy.Custom(norm, max),
+            };
+        }
+
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            NormFactor = double.IsPositiveInfinity(value.NormFactor) ? null : value.NormFactor;
+            MaxFactor = double.IsPositiveInfinity(value.MaxFactor) ? null : value.MaxFactor;
+        }
+    }
 }

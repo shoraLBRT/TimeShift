@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TimeShift.Application.Conversations;
 using TimeShift.Infrastructure;
 using TimeShift.Infrastructure.Persistence;
 using TimeShift.Telegram;
@@ -6,6 +7,7 @@ using TimeShift.Telegram;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<ConversationService>();
 builder.Services.AddTelegramAdapter(builder.Configuration);
 
 var app = builder.Build();

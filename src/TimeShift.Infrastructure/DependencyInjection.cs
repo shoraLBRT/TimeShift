@@ -43,6 +43,7 @@ public static class DependencyInjection
                 break;
         }
 
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddSingleton<IClock, SystemClock>();
         return services;
     }

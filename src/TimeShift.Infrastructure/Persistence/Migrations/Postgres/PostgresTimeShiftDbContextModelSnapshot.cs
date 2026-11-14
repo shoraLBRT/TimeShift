@@ -22,6 +22,56 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActivityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("activity_id");
+
+                    b.Property<string>("CategoryKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("category_key");
+
+                    b.Property<int>("Days")
+                        .HasColumnType("integer")
+                        .HasColumnName("days_of_week");
+
+                    b.Property<TimeOnly>("End")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<TimeOnly>("Start")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("schedule_blocks", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -32,11 +82,20 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DialogState")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("dialog_state");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("display_name");
+
+                    b.Property<bool>("IsOnboarded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_onboarded");
 
                     b.Property<long>("TelegramChatId")
                         .HasColumnType("bigint")
@@ -54,6 +113,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany("Blocks")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
@@ -76,7 +144,7 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                                 .HasColumnType("integer")
                                 .HasColumnName("max_unanswered_pings");
 
-                            b1.Property<double>("NormFactor")
+                            b1.Property<double?>("NormFactor")
                                 .HasColumnType("double precision")
                                 .HasColumnName("norm_factor");
 
@@ -102,6 +170,11 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
 
                     b.Navigation("Settings")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
+                {
+                    b.Navigation("Blocks");
                 });
 #pragma warning restore 612, 618
         }

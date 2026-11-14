@@ -59,8 +59,11 @@ public sealed class WeekTemplate
         return result;
     }
 
-    private static void EnsureNoOverlaps(IReadOnlyList<ScheduleBlock> blocks)
+    /// <summary>Первая пара пересекающихся блоков (с учётом полуночи и конца недели) или <c>null</c>.</summary>
+    public static (ScheduleBlock First, ScheduleBlock Second)? FindOverlap(IReadOnlyList<ScheduleBlock> blocks)
     {
+        ArgumentNullException.ThrowIfNull(blocks);
+
         // Каждое вхождение — интервал на «кольце» недели в тиках; переход через конец недели режем на два.
         var intervals = new List<(long Start, long End, int Block)>();
         for (var i = 0; i < blocks.Count; i++)
@@ -87,10 +90,18 @@ public sealed class WeekTemplate
         {
             if (intervals[i].Start < intervals[i - 1].End)
             {
-                throw new ArgumentException(
-                    $"Блоки шаблона пересекаются: {blocks[intervals[i - 1].Block]} и {blocks[intervals[i].Block]}.",
-                    nameof(blocks));
+                return (blocks[intervals[i - 1].Block], blocks[intervals[i].Block]);
             }
+        }
+
+        return null;
+    }
+
+    private static void EnsureNoOverlaps(IReadOnlyList<ScheduleBlock> blocks)
+    {
+        if (FindOverlap(blocks) is var (first, second))
+        {
+            throw new ArgumentException($"Блоки шаблона пересекаются: {first} и {second}.", nameof(blocks));
         }
     }
 }

@@ -18,7 +18,8 @@ public sealed class ScheduleBlock
         IEnumerable<DayOfWeek> days,
         TimeOnly start,
         TimeOnly end,
-        Guid? activityId = null)
+        Guid? activityId = null,
+        Guid? id = null)
     {
         if (!Enum.IsDefined(kind))
         {
@@ -38,6 +39,7 @@ public sealed class ScheduleBlock
             throw new ArgumentException("Начало и конец блока совпадают.", nameof(end));
         }
 
+        Id = id ?? Guid.NewGuid();
         Kind = kind;
         Title = title;
         CategoryKey = categoryKey;
@@ -46,6 +48,15 @@ public sealed class ScheduleBlock
         End = end;
         ActivityId = activityId;
     }
+
+    // Для EF Core.
+    private ScheduleBlock()
+    {
+        Title = string.Empty;
+        Days = new HashSet<DayOfWeek>();
+    }
+
+    public Guid Id { get; }
 
     public ScheduleBlockKind Kind { get; }
 
@@ -70,6 +81,18 @@ public sealed class ScheduleBlock
     /// <summary>Блок «Сон» с категорией <c>sleep</c>.</summary>
     public static ScheduleBlock Sleep(IEnumerable<DayOfWeek> days, TimeOnly start, TimeOnly end) =>
         new(ScheduleBlockKind.Sleep, SleepTitle, DefaultCategories.Sleep, days, start, end);
+
+    /// <summary>
+    /// Дни начала сна для ночей перед буднями (<paramref name="beforeWeekend"/> = false: подъём пн–пт) или перед
+    /// выходными (подъём сб–вс). Отбой с 12:00 считается вечерним — блок начинается накануне дня подъёма.
+    /// </summary>
+    public static IReadOnlyList<DayOfWeek> SleepDays(TimeOnly bedtime, bool beforeWeekend)
+    {
+        var wakeDays = beforeWeekend ? DaysOfWeek.Weekend : DaysOfWeek.Weekdays;
+        return bedtime.Hour >= 12
+            ? wakeDays.Select(d => (DayOfWeek)(((int)d + 6) % 7)).ToList()
+            : wakeDays;
+    }
 
     public override string ToString() =>
         $"{Kind} '{Title}' {Start:HH\\:mm}-{End:HH\\:mm} [{string.Join(",", Days.Order())}]";

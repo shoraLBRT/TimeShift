@@ -82,3 +82,26 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   segments). This is how "start a new activity" works.
 - **Adjacent identical stored segments are not merged** — the builder merges for display; storage keeps what was
   said.
+
+## Step 3 — Telegram adapter, onboarding, /blocks, /settings
+
+- **The dialog lives in Application (`ConversationService`), not in the Telegram adapter.** The adapter turns an
+  update into `IncomingMessage` (text or button data) and `BotReply` (text, button rows, "replace the pressed
+  message") back into Telegram calls. A future iOS client reuses the same service.
+- **What the bot waits for is `User.DialogState`, an opaque string owned by Application** (`O:Step` during
+  onboarding, `E:Step` for an edit started from a menu — after it the bot returns to that menu). Domain keeps only
+  `IsOnboarded`.
+- **Blocks are parsed deterministically until the LLM exists (step 5)**: «Работа пн-пт 9-18», «пн, ср, пт»,
+  «по субботам», «будни», «каждый день», «с 9 до 18». The parser stays as a fallback afterwards. A block is added
+  at once with a "↩️ Убрать" button instead of a separate confirm step — fewer taps, same safety.
+- **Category of a block is guessed from its title** (работа → work, учёба/пары → study, тренировка/зал → sport);
+  otherwise left empty and asked later (step 7).
+- **Sleep days:** a bedtime at or after 12:00 starts on the evening before the wake-up day. "Weekdays" are nights
+  before Mon–Fri (so 23:00 sleep starts Sun–Thu), "weekend" nights are before Sat–Sun.
+- **Block conflicts are refused with the conflicting block named**, never auto-trimmed.
+- **∞ in extension settings is stored as `null`** for both factors (`UserSettings.Extension` maps to
+  `ExtensionPolicy`), because SQLite and Postgres disagree on storing infinity.
+- **Long polling, not a webhook:** works behind NAT and from a home PC; a webhook can come with the VPS deploy.
+  `Telegram:Proxy` covers networks where api.telegram.org is reachable only through a local proxy.
+- **Only private chats are served**; `Telegram:AllowedChatIds` can close the bot to everyone else.
+

@@ -17,6 +17,56 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActivityId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("activity_id");
+
+                    b.Property<string>("CategoryKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category_key");
+
+                    b.Property<int>("Days")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("days_of_week");
+
+                    b.Property<TimeOnly>("End")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("end_time");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<TimeOnly>("Start")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_time");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("schedule_blocks", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -27,11 +77,20 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DialogState")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dialog_state");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT")
                         .HasColumnName("display_name");
+
+                    b.Property<bool>("IsOnboarded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_onboarded");
 
                     b.Property<long>("TelegramChatId")
                         .HasColumnType("INTEGER")
@@ -49,6 +108,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany("Blocks")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
@@ -71,7 +139,7 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("max_unanswered_pings");
 
-                            b1.Property<double>("NormFactor")
+                            b1.Property<double?>("NormFactor")
                                 .HasColumnType("REAL")
                                 .HasColumnName("norm_factor");
 
@@ -97,6 +165,11 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
 
                     b.Navigation("Settings")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
+                {
+                    b.Navigation("Blocks");
                 });
 #pragma warning restore 612, 618
         }
