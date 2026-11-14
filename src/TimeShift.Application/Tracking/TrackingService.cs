@@ -125,6 +125,22 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
         return change;
     }
 
+    /// <summary>Заменяет отрезок исправленным (правка текстом) — одним изменением журнала.</summary>
+    public async Task<TimelineChange?> EditAsync(User user, Segment existing, Segment replacement, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var from = (existing.StartUtc < replacement.StartUtc ? existing.StartUtc : replacement.StartUtc) - RecentWindow;
+        var timeline = await timelines.LoadAsync(user.Id, from, cancellationToken);
+        var stored = timeline.Segments.Concat(timeline.ParallelSegments).FirstOrDefault(s => s.Id == existing.Id);
+        if (stored is null)
+        {
+            return null;
+        }
+
+        var change = timeline.Edit(stored, replacement, Minute(nowUtc));
+        timelines.Record(user.Id, change, nowUtc);
+        return change;
+    }
+
     /// <summary>Откатывает последнее изменение ленты. <c>false</c> — откатывать нечего или лента с тех пор поменялась.</summary>
     public async Task<UndoResult> UndoAsync(User user, CancellationToken cancellationToken)
     {

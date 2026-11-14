@@ -193,4 +193,23 @@ public class TimelineApplyTests
 
         Assert.Throws<InvalidOperationException>(() => timeline.Undo(first));
     }
+
+    [Fact]
+    public void Edit_replaces_a_segment_whole_and_can_be_undone()
+    {
+        var original = new[] { Seg(10, 12, "A"), Seg(12, 14, "B"), Seg(14, 15, "C") };
+        var timeline = new Timeline(original);
+
+        // Сократить B: освободившееся время пустое, а не остаток B.
+        var shrink = timeline.Edit(timeline.Segments[1], Seg(12, 13, "B"), Now);
+        Assert.Equal(["10:00-12:00 A Confirmed", "12:00-13:00 B Confirmed", "14:00-15:00 C Confirmed"], Lines(timeline));
+        timeline.Undo(shrink);
+        Assert.Equal(original, timeline.Segments);
+
+        // Удлинить B: вытесняет соседа.
+        timeline.Edit(timeline.Segments[1], Seg(12, 0, 14, 30, "B2"), Now);
+        Assert.Equal(["10:00-12:00 A Confirmed", "12:00-14:30 B2 Confirmed", "14:30-15:00 C Confirmed"], Lines(timeline));
+
+        Assert.Throws<InvalidOperationException>(() => timeline.Edit(Seg(1, 2, "нет"), Seg(1, 2, "x"), Now));
+    }
 }

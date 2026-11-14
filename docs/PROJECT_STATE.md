@@ -20,7 +20,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 - **LLM in the dialog (`IntentApplier`, on when `Llm:ApiKey` is set):** free text → intents; periods are
   proposed with ✅/✏️ (⚪ after 10 min or on the next message), a missing route fact is asked once and remembered
   (`user_facts`), start/stop/quiet/facts/classify apply at once, parallel items go to the parallel track; every
-  LLM call is logged in `messages`. Edits by text (#14) answer "later".
+  LLM call is logged in `messages`. `edit_segment` finds the segment by day / time inside / name and changes boundaries, name or category (`Timeline.Edit`).
 - **LLM building blocks:** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
   intent contract (`Intents`, `IntentParser`), prompt with context (`IntentPrompt`), `IntentExtractor` with one
   retry, day/time resolution `PastTime`.
@@ -36,7 +36,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 
 ## Next
 
-[#14](https://github.com/shoraLBRT/TimeShift/issues/14) — edit segments by text. (#2 waits for the LLM key; voice needs a whisper model on the server).
+[#15](https://github.com/shoraLBRT/TimeShift/issues/15) — `/day` as an image. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
 ## Open questions
 
