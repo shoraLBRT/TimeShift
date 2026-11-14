@@ -15,6 +15,7 @@ public sealed record PingRunResult(int Sent, IReadOnlyList<(Guid UserId, Excepti
 public sealed class PingService(
     IUserRepository users,
     TrackingService tracking,
+    Llm.IntentApplier intents,
     INotifier notifier,
     IUnitOfWork unitOfWork,
     IClock clock)
@@ -59,6 +60,12 @@ public sealed class PingService(
 
     private async Task<bool> PingIfDueAsync(User user, DateTime now, CancellationToken cancellationToken)
     {
+        // Предложение периода без ответа — записать как ⚪ (spec §3.5 п. 7).
+        if (await intents.FinalizeExpiredAsync(user, now, cancellationToken))
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         var current = await tracking.CurrentAsync(user, cancellationToken);
         if (NextDue(user, current, now) is not { } due || due > now)
         {

@@ -18,6 +18,7 @@ public sealed partial class ConversationService(
     IUserRepository users,
     IUnitOfWork unitOfWork,
     TrackingService tracking,
+    Llm.IntentApplier intents,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");

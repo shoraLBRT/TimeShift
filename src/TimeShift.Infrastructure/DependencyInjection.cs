@@ -47,6 +47,9 @@ public static class DependencyInjection
         services.AddScoped<ITimelineRepository, TimelineRepository>();
         services.AddScoped<IActivityRepository, ActivityRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IFactRepository, FactRepository>();
+        services.AddScoped<IPendingPeriodRepository, PendingPeriodRepository>();
+        services.AddScoped<IMessageLog, MessageLog>();
         services.AddSingleton<IClock, SystemClock>();
 
         // LLM (секция Llm): без ключа провайдер зарегистрирован, но выключен — бот работает без него.

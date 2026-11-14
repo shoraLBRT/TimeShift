@@ -16,9 +16,9 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _clock);
 
-    private PingService Pings => new(_store, Tracking, _store, _store, _clock);
+    private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store, _store, _clock);
 
     private User Me => Assert.Single(_store.Users);
 

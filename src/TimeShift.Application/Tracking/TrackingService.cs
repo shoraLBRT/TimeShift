@@ -59,10 +59,13 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
         return created;
     }
 
-    /// <summary>Начинает занятие с <paramref name="nowUtc"/>; открытое до этого — закрывается.</summary>
-    public async Task<Segment> StartAsync(User user, Activity activity, DateTime nowUtc, CancellationToken cancellationToken)
+    /// <summary>
+    /// Начинает занятие с <paramref name="startUtc"/> (по умолчанию — сейчас); открытое до этого — закрывается.
+    /// </summary>
+    public async Task<Segment> StartAsync(
+        User user, Activity activity, DateTime nowUtc, CancellationToken cancellationToken, DateTime? startUtc = null)
     {
-        var now = Minute(nowUtc);
+        var now = Minute(startUtc is { } s && s < nowUtc ? s : nowUtc);
         var timeline = await timelines.LoadAsync(user.Id, now - RecentWindow, cancellationToken);
         var segment = new Segment(now, null, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, activity.CategoryKey);
         var change = timeline.Apply([segment], now);
@@ -70,10 +73,10 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
         return segment;
     }
 
-    /// <summary>«Закончил». Возвращает закрытый отрезок или <c>null</c>, если открытого не было.</summary>
-    public async Task<Segment?> StopAsync(User user, DateTime nowUtc, CancellationToken cancellationToken)
+    /// <summary>«Закончил» (в <paramref name="atUtc"/>, по умолчанию — сейчас). <c>null</c> — открытого не было.</summary>
+    public async Task<Segment?> StopAsync(User user, DateTime nowUtc, CancellationToken cancellationToken, DateTime? atUtc = null)
     {
-        var now = Minute(nowUtc);
+        var now = Minute(atUtc is { } a && a < nowUtc ? a : nowUtc);
         var timeline = await timelines.LoadAsync(user.Id, now - RecentWindow, cancellationToken);
         if (timeline.OpenSegment is null)
         {
@@ -102,6 +105,24 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
         }
 
         return timeline.OpenSegment;
+    }
+
+    /// <summary>
+    /// Записывает готовые отрезки (разобранный период, параллельные занятия) как одно изменение журнала.
+    /// Открытое занятие продолжается после них, если они кончились раньше «сейчас» (spec §3.6).
+    /// </summary>
+    public async Task<TimelineChange> ApplyAsync(User user, IReadOnlyList<Segment> segments, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        if (segments.Count == 0)
+        {
+            return new TimelineChange([], []);
+        }
+
+        var from = segments.Min(s => s.StartUtc) - RecentWindow;
+        var timeline = await timelines.LoadAsync(user.Id, from, cancellationToken);
+        var change = timeline.Apply(segments, Minute(nowUtc));
+        timelines.Record(user.Id, change, nowUtc);
+        return change;
     }
 
     /// <summary>Откатывает последнее изменение ленты. <c>false</c> — откатывать нечего или лента с тех пор поменялась.</summary>

@@ -1,5 +1,7 @@
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Conversations;
+using TimeShift.Application.Llm;
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Activities;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -15,8 +17,69 @@ internal sealed class TestClock : IClock
 }
 
 /// <summary>Всё хранилище в памяти: пользователи, лента с журналом, занятия, отправленные пинги.</summary>
-internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IActivityRepository, IUnitOfWork, INotifier
+/// <summary>LLM по сценарию: отдаёт ответы по очереди (последний повторяется). По умолчанию выключен.</summary>
+internal sealed class ScriptedLlm(bool enabled = false) : ILlmProvider
 {
+    private readonly Queue<string> _queue = new();
+    private string? _last;
+
+    public List<LlmRequest> Requests { get; } = [];
+
+    public bool IsEnabled => enabled;
+
+    public void Enqueue(string response) => _queue.Enqueue(response);
+
+    public Task<LlmResponse> CompleteJsonAsync(LlmRequest request, CancellationToken cancellationToken)
+    {
+        Requests.Add(request);
+        _last = _queue.Count > 0 ? _queue.Dequeue() : _last ?? throw new LlmException("нет ответа", false);
+        return Task.FromResult(new LlmResponse(_last, 100, 20));
+    }
+}
+
+internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IActivityRepository, IUnitOfWork, INotifier,
+    IFactRepository, IPendingPeriodRepository, IMessageLog
+{
+    private readonly Dictionary<Guid, PendingPeriod> _pending = [];
+
+    public Dictionary<(Guid, string), int> Facts { get; } = [];
+
+    public List<MessageLogEntry> Log { get; } = [];
+
+    public PendingPeriod? PendingOf(Guid userId) => _pending.GetValueOrDefault(userId);
+
+    public IntentApplier Applier(TrackingService tracking, ILlmProvider llm) =>
+        new(llm, new IntentExtractor(llm), tracking, this, this, this, this);
+
+    // IFactRepository
+    Task<IReadOnlyDictionary<string, int>> IFactRepository.GetAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<string, int>>(Facts.Where(f => f.Key.Item1 == userId).ToDictionary(f => f.Key.Item2, f => f.Value));
+
+    public Task SetAsync(Guid userId, string key, int minutes, CancellationToken cancellationToken)
+    {
+        Facts[(userId, key)] = minutes;
+        return Task.CompletedTask;
+    }
+
+    // IPendingPeriodRepository
+    Task<PendingPeriod?> IPendingPeriodRepository.GetAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(_pending.GetValueOrDefault(userId));
+
+    public Task SetAsync(PendingPeriod pending, CancellationToken cancellationToken)
+    {
+        _pending[pending.UserId] = pending;
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        _pending.Remove(userId);
+        return Task.CompletedTask;
+    }
+
+    // IMessageLog
+    public void Add(MessageLogEntry entry) => Log.Add(entry);
+
     private readonly Dictionary<Guid, List<Segment>> _segments = [];
     private readonly Dictionary<Guid, List<StoredTimelineChange>> _journal = [];
     private int _messageId;

@@ -47,10 +47,16 @@ public sealed partial class ConversationService
         }
 
         var state = Parse(user.DialogState);
-        if (state is { Step: Step.ActivityName } || state is null)
+        if (state is { Step: Step.ActivityName })
         {
             user.DialogState = null;
             return await StartByNameAsync(user, text, now, ct);
+        }
+
+        if (state is null)
+        {
+            // С LLM — разбор фразы в намерения (spec §5.3); без него — короткий текст как новое занятие.
+            return await intents.HandleTextAsync(user, text, now, ct) ?? await StartByNameAsync(user, text, now, ct);
         }
 
         return null;
@@ -58,6 +64,11 @@ public sealed partial class ConversationService
 
     private async Task<IReadOnlyList<BotReply>?> OnTrackingButtonAsync(User user, string data, DateTime now, CancellationToken ct)
     {
+        if (await intents.OnButtonAsync(user, data, now, ct) is { } proposal)
+        {
+            return proposal;
+        }
+
         var tz = user.TimeZoneInfo;
         switch (data)
         {

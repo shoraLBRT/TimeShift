@@ -153,3 +153,22 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   if a good model keeps answering them differently.
 - **A part of day fills a missing bound**: «вчера с 18 … весь вечер» → 18:00–24:00 (found by the eval set).
 
+## Step 5 — applying intents (#6)
+
+- **A described period is a proposal until confirmed.** The whole model answer is stored (`pending_periods`)
+  and the layout is recomputed on ✅ with the original "now" — same result, plus any fact learned meanwhile.
+  No answer for 10 minutes, or a new message, records it as ⚪ (spec §3.5 p. 7); ✏️ discards it.
+- **A missing route fact is the only clarification kept as state**: the bot asks one question, passes it to the
+  model as the last bot question, stores the answer as a fact and re-proposes. Other clarifications
+  (too many items without duration, overflow, ranges outside the window, a future period) are explained in
+  one message and nothing is kept — the user rephrases.
+- **"Since the last known moment"** (a period without a start) = start of the open activity, else the end of
+  the last segment within 24 h, else the bot asks "from when?".
+- **Activities are created only on commit**, so a rejected proposal leaves no stray activities; a category from
+  the model fills an activity's empty category but never overrides one.
+- **Parallel items**: with own times — by them; otherwise over the neighbouring main item (previous, or the next
+  one if the parallel item is first), from its start for the stated minutes or its whole length. An open
+  parallel activity ("обедаю за компом") is a closed ⚪ segment of the typical duration, 30 min if unknown.
+- **When the LLM is unavailable or answers twice off-contract**, the bot says so and offers the recent-activity
+  buttons; with no key the old behaviour stays (short text = new activity).
+

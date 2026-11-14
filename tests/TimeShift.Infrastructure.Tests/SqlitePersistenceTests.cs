@@ -98,6 +98,52 @@ public sealed class SqlitePersistenceTests : IAsyncLifetime
         $"{s.StartUtc:HH:mm}-{(s.EndUtc is { } e ? e.ToString("HH:mm") : "…")} {s.Title}";
 
     [Fact]
+    public async Task Facts_pending_periods_and_message_log_round_trip()
+    {
+        var userId = await CreateUserAsync();
+
+        // Факт: добавить, затем заменить в другом scope.
+        await InScopeAsync(sp => sp.GetRequiredService<IFactRepository>().SetAsync(userId, "route:зал→дом", 20, Ct));
+        await InScopeAsync(sp => sp.GetRequiredService<IFactRepository>().SetAsync(userId, "route:зал→дом", 25, Ct));
+        var facts = await InScopeAsync(sp => sp.GetRequiredService<IFactRepository>().GetAsync(userId, Ct));
+        Assert.Equal(25, facts["route:зал→дом"]);
+
+        // Отложенный период: задать, заменить в той же единице работы, прочитать, удалить.
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<IPendingPeriodRepository>();
+            await repo.SetAsync(new Application.Llm.PendingPeriod(userId, Utc(9), "первый", "{}", 0, "route:зал→дом", "Сколько?"), Ct);
+            await repo.SetAsync(new Application.Llm.PendingPeriod(userId, Utc(10), "второй", "{}", 0, null, null), Ct);
+        });
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<IPendingPeriodRepository>();
+            var pending = await repo.GetAsync(userId, Ct);
+            Assert.Equal("второй", pending!.Text);
+            Assert.False(pending.IsWaitingForFact);
+            Assert.Equal(DateTimeKind.Utc, pending.CreatedAtUtc.Kind);
+
+            // Удалить и сразу положить новый — тоже в одной единице работы.
+            await repo.RemoveAsync(userId, Ct);
+            Assert.Null(await repo.GetAsync(userId, Ct));
+            await repo.SetAsync(new Application.Llm.PendingPeriod(userId, Utc(11), "третий", "{}", 0, null, null), Ct);
+        });
+        var last = await InScopeAsync(sp => sp.GetRequiredService<IPendingPeriodRepository>().GetAsync(userId, Ct));
+        Assert.Equal("третий", last!.Text);
+
+        await InScopeAsync(sp =>
+        {
+            sp.GetRequiredService<IMessageLog>().Add(new Application.Llm.MessageLogEntry
+            {
+                UserId = userId, AtUtc = Utc(12), Text = "работаю", Status = "Ok", Response = "{}", PromptTokens = 10, CompletionTokens = 2,
+            });
+            return Task.CompletedTask;
+        });
+        var logged = await InScopeAsync(sp => sp.GetRequiredService<TimeShiftDbContext>().Messages.CountAsync(Ct));
+        Assert.Equal(1, logged);
+    }
+
+    [Fact]
     public async Task User_aggregate_round_trips_with_blocks_settings_and_utc_times()
     {
         await CreateUserAsync();
