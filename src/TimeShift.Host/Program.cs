@@ -34,6 +34,12 @@ if (!app.Services.GetRequiredService<TelegramOptions>().IsEnabled)
     app.Logger.LogWarning("Telegram adapter is disabled: Telegram:BotToken is not set");
 }
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+var version = typeof(Program).Assembly
+    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+    .FirstOrDefault()?.InformationalVersion ?? "unknown";
+app.Logger.LogInformation("TimeShift {Version}", version);
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok", version }));
 
 app.Run();
