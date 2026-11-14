@@ -49,16 +49,31 @@ public static class TrackingReplies
         : $"⏹ «{segment.Title}» убрал — оно только началось.";
 
     /// <summary>Лента дня текстом (spec §5.7: /day; картинка — шаг 8).</summary>
-    public static string Day(IReadOnlyList<TimelinePiece> pieces, TimeZoneInfo timeZone, DateTime nowUtc)
+    public static string Day(
+        IReadOnlyList<TimelinePiece> pieces, IReadOnlyList<TimelinePiece> parallel, TimeZoneInfo timeZone, DateOnly day, DateOnly today)
     {
+        var ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+        var name = day == today ? "Сегодня" : day == today.AddDays(-1) ? "Вчера" : day.ToString("dddd", ru);
         var builder = new StringBuilder();
-        builder.Append("Сегодня, ").Append(LocalTime.ToLocal(nowUtc, timeZone).ToString("d MMMM", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))).AppendLine(":").AppendLine();
+        builder.Append(char.ToUpper(name[0], ru)).Append(name[1..]).Append(", ").Append(day.ToString("d MMMM", ru)).AppendLine(":").AppendLine();
         foreach (var piece in pieces)
         {
             builder
                 .Append(Clock(piece.StartUtc, timeZone)).Append('–').Append(Clock(piece.EndUtc, timeZone)).Append(' ')
                 .Append(Icon(piece.Status)).Append(' ').Append(piece.Title)
                 .Append(" (").Append(Duration(piece.Duration)).AppendLine(")");
+        }
+
+        if (parallel.Count > 0)
+        {
+            builder.AppendLine().AppendLine("Параллельно:");
+            foreach (var piece in parallel)
+            {
+                builder
+                    .Append("↳ ").Append(Clock(piece.StartUtc, timeZone)).Append('–').Append(Clock(piece.EndUtc, timeZone)).Append(' ')
+                    .Append(Icon(piece.Status)).Append(' ').Append(piece.Title)
+                    .Append(" (").Append(Duration(piece.Duration)).AppendLine(")");
+            }
         }
 
         builder.AppendLine().Append("✅ подтверждено · ⚪ предполагаю · 🟡 под вопросом");

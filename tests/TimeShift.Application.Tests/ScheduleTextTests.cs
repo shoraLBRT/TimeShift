@@ -65,4 +65,33 @@ public class ScheduleTextTests
     {
         Assert.Equal(category, ScheduleText.GuessCategory(title));
     }
+
+    [Theory]
+    [InlineData("", "2026-11-14")]
+    [InlineData("сегодня", "2026-11-14")]
+    [InlineData("вчера", "2026-11-13")]
+    [InlineData("позавчера", "2026-11-12")]
+    [InlineData("сб", "2026-11-14")]
+    [InlineData("в пятницу", "2026-11-13")]
+    [InlineData("понедельник", "2026-11-09")]
+    [InlineData("вс", "2026-11-08")]
+    [InlineData("13.11", "2026-11-13")]
+    [InlineData("1.1.2026", "2026-01-01")]
+    [InlineData("31.12", "2025-12-31")]
+    public void Parses_day_arguments(string text, string expected)
+    {
+        var today = new DateOnly(2026, 11, 14); // суббота
+        Assert.True(DayArgument.TryParse(text, today, out var day, out var error), error);
+        Assert.Equal(DateOnly.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), day);
+    }
+
+    [Theory]
+    [InlineData("завтра")]
+    [InlineData("15.11")]
+    [InlineData("32.11")]
+    public void Rejects_future_and_unknown_days(string text)
+    {
+        Assert.False(DayArgument.TryParse(text, new DateOnly(2026, 11, 14), out _, out var error));
+        Assert.NotNull(error);
+    }
 }

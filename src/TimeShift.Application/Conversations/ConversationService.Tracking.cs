@@ -33,7 +33,7 @@ public sealed partial class ConversationService
             IReadOnlyList<BotReply>? handled = command switch
             {
                 "/now" => [await NowAsync(user, now, ct)],
-                "/day" => [await DayAsync(user, now, ct)],
+                "/day" => [await DayCommandAsync(user, argument, now, ct)],
                 "/quiet" => [Quiet(user, argument, now)],
                 "/undo" => [await UndoAsync(user, ct)],
                 _ => null,
@@ -121,6 +121,13 @@ public sealed partial class ConversationService
             return [TrackingReplies.Started(segment, tz) with { ReplacesSource = true }];
         }
 
+        if (data.StartsWith("day:", StringComparison.Ordinal)
+            && DateOnly.TryParseExact(data["day:".Length..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var day))
+        {
+            return [await DayAsync(user, day, now, ct) with { ReplacesSource = true }];
+        }
+
         if (data.StartsWith("quiet:", StringComparison.Ordinal))
         {
             return [Quiet(user, data["quiet:".Length..], now) with { ReplacesSource = true }];
@@ -174,15 +181,27 @@ public sealed partial class ConversationService
         return new BotReply("Сейчас нет начатого занятия. Чем занят?", TrackingReplies.Choices(recent, null), ReplacesSource: true);
     }
 
-    private async Task<BotReply> DayAsync(User user, DateTime now, CancellationToken ct)
+    private async Task<BotReply> DayCommandAsync(User user, string? argument, DateTime now, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(LocalTime.ToLocal(now, user.TimeZoneInfo));
+        return Parsing.DayArgument.TryParse(argument ?? string.Empty, today, out var day, out var error)
+            ? await DayAsync(user, day, now, ct)
+            : BotReply.Plain(error!);
+    }
+
+    /// <summary>Лента дня (spec §5.7: /day [дата]): прошедший день целиком, сегодня — до «сейчас»; ◀ ▶ — соседние дни.</summary>
+    private async Task<BotReply> DayAsync(User user, DateOnly day, DateTime now, CancellationToken ct)
     {
         var tz = user.TimeZoneInfo;
-        var localNow = LocalTime.ToLocal(now, tz);
-        var dayStart = LocalTime.ToUtc(localNow.Date, tz);
-        var end = TrackingService.Minute(now);
+        var today = DateOnly.FromDateTime(LocalTime.ToLocal(now, tz));
+        var dayStart = LocalTime.ToUtc(day.ToDateTime(TimeOnly.MinValue), tz);
+        var dayEnd = LocalTime.ToUtc(day.AddDays(1).ToDateTime(TimeOnly.MinValue), tz);
+        var nowMinute = TrackingService.Minute(now);
+        var end = dayEnd < nowMinute ? dayEnd : nowMinute;
+        var navigation = DayNavigation(day, today);
         if (end <= dayStart)
         {
-            return BotReply.Plain("День только начался.");
+            return new BotReply("День только начался.", navigation);
         }
 
         var timeline = await tracking.LoadAsync(user, dayStart, ct);
@@ -190,13 +209,25 @@ public sealed partial class ConversationService
         var pieces = TimelineBuilder.Build(new TimelineRequest
         {
             Window = new TimeRange(dayStart, end),
-            NowUtc = end,
+            NowUtc = nowMinute,
             Template = user.Template(),
             Segments = timeline.Segments.Where(s => !s.IsOpen).ToList(),
             OpenActivity = open?.ToOpenActivity(),
             Policy = user.Settings.Extension,
         });
-        return BotReply.Plain(TrackingReplies.Day(pieces, tz, now));
+        var parallel = TimelineBuilder.BuildParallel(new TimeRange(dayStart, end), timeline.ParallelSegments, nowMinute);
+        return new BotReply(TrackingReplies.Day(pieces, parallel, tz, day, today), navigation);
+    }
+
+    private static IReadOnlyList<IReadOnlyList<ReplyButton>> DayNavigation(DateOnly day, DateOnly today)
+    {
+        var row = new List<ReplyButton> { new("◀ " + day.AddDays(-1).ToString("d.MM", System.Globalization.CultureInfo.InvariantCulture), $"day:{day.AddDays(-1):yyyy-MM-dd}") };
+        if (day < today)
+        {
+            row.Add(new ReplyButton(day.AddDays(1) == today ? "Сегодня ▶" : day.AddDays(1).ToString("d.MM", System.Globalization.CultureInfo.InvariantCulture) + " ▶", $"day:{day.AddDays(1):yyyy-MM-dd}"));
+        }
+
+        return [row];
     }
 
     private static BotReply Quiet(User user, string? argument, DateTime now)
