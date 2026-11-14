@@ -70,9 +70,12 @@ public static class PastTime
         DayRef? day, TimeOnly? from, TimeOnly? to, PartOfDay? part, DateTime nowUtc, TimeZoneInfo timeZone)
     {
         var today = Today(nowUtc, timeZone);
-        if (from is null && to is null && part is { } p)
+        // Часть суток дополняет недостающие границы: «вчера с 18 … весь вечер» — с 18 до конца вечера.
+        if (part is { } p)
         {
-            (from, to) = Bounds(p);
+            var (partStart, partEnd) = Bounds(p);
+            from ??= partStart;
+            to ??= partEnd;
         }
 
         // Ничего не названо: «вчера» — весь тот день, иначе — с последнего известного до сейчас.

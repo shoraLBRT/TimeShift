@@ -64,6 +64,22 @@ curl http://localhost:5138/health   # {"status":"ok"}
 | `Llm:Model` | модель, например `deepseek-chat`, `qwen-flash`, `claude-haiku-5-5` |
 | `Llm:TimeoutSeconds`, `Llm:MaxTokens`, `Llm:Temperature`, `Llm:JsonMode` | тонкая настройка (30 с, 800, 0, true) |
 
+## Оценка LLM на тестовом наборе
+
+Набор фраз с ожидаемыми намерениями — `tools/TimeShift.LlmEval/cases.json` (spec §8). Офлайн он проверяется
+в `dotnet test`. Живой прогон тратит деньги (~40 запросов) и берёт ключ из секретов Host:
+
+```sh
+dotnet user-secrets set "Llm:ApiKey" "<ключ>" --project src/TimeShift.Host
+dotnet user-secrets set "Llm:BaseUrl" "https://api.proxyapi.ru/openai/v1" --project src/TimeShift.Host
+dotnet user-secrets set "Llm:Model" "deepseek-chat" --project src/TimeShift.Host
+dotnet run --project tools/TimeShift.LlmEval -- --price-in 0.14 --price-out 0.28 --record
+```
+
+Печатает точность (цель ≥ 90%), задержку, токены и цену; `--record` сохраняет ответы модели в
+`tools/TimeShift.LlmEval/recorded/<модель>.json` — дальше `dotnet test` проверяет их без сети. `--only id1,id2` —
+прогнать отдельные кейсы.
+
 ## Docker Compose
 
 ```sh
