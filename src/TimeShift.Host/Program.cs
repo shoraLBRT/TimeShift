@@ -13,6 +13,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<TrackingService>();
 builder.Services.AddScoped<TimeShift.Application.Llm.IntentExtractor>();
 builder.Services.AddScoped<TimeShift.Application.Llm.IntentApplier>();
+builder.Services.AddScoped<TimeShift.Application.Questions.QuestionService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddScoped<PingService>();
 builder.Services.AddTelegramAdapter(builder.Configuration);

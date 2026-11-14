@@ -35,5 +35,8 @@ internal sealed class ActivityRepository(TimeShiftDbContext db) : IActivityRepos
         return ids.Select(id => activities.FirstOrDefault(a => a.Id == id)).OfType<Activity>().ToList();
     }
 
+    public async Task<IReadOnlyList<Activity>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
+        await db.Activities.Where(a => a.UserId == userId).ToListAsync(cancellationToken);
+
     public void Add(Activity activity) => db.Activities.Add(activity);
 }

@@ -12,5 +12,7 @@ public interface IActivityRepository
     /// <summary>Последние занятия по времени начала отрезков, без повторов.</summary>
     Task<IReadOnlyList<Activity>> RecentAsync(Guid userId, int count, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Activity>> ListAsync(Guid userId, CancellationToken cancellationToken);
+
     void Add(Activity activity);
 }

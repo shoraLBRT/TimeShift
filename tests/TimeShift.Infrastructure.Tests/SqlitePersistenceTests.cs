@@ -144,6 +144,42 @@ public sealed class SqlitePersistenceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Question_queue_round_trips()
+    {
+        var userId = await CreateUserAsync();
+        var subject = Guid.NewGuid();
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<Application.Questions.IQuestionRepository>();
+            repo.Add(new Application.Questions.PendingQuestion(userId, Application.Questions.QuestionKind.ActivityDuration, subject, Utc(9)));
+
+            // Добавленный в этой же единице работы уже виден.
+            Assert.NotNull(await repo.NextAsync(userId, Ct));
+        });
+
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<Application.Questions.IQuestionRepository>();
+            var next = await repo.NextAsync(userId, Ct);
+            next!.MarkAsked(Utc(10));
+        });
+
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<Application.Questions.IQuestionRepository>();
+            Assert.Null(await repo.NextAsync(userId, Ct));
+            var open = await repo.OpenAsync(userId, Ct);
+            Assert.Equal(Utc(10), open!.AskedAtUtc);
+            open.Resolve(Utc(11));
+        });
+
+        var found = await InScopeAsync(sp => sp.GetRequiredService<Application.Questions.IQuestionRepository>()
+            .FindAsync(userId, Application.Questions.QuestionKind.ActivityDuration, subject, Ct));
+        Assert.Equal(Utc(11), found!.ResolvedAtUtc);
+        Assert.Null(await InScopeAsync(sp => sp.GetRequiredService<Application.Questions.IQuestionRepository>().OpenAsync(userId, Ct)));
+    }
+
+    [Fact]
     public async Task User_aggregate_round_trips_with_blocks_settings_and_utc_times()
     {
         await CreateUserAsync();

@@ -26,13 +26,14 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
   retry, day/time resolution `PastTime`.
 - **LLM eval (`tools/TimeShift.LlmEval`):** 40 phrases with expected intents, `IntentMatcher`, live run with
   accuracy/latency/cost and `--record`; offline checks in `dotnet test`. No live run yet (no key, #2).
+- **Questions (`QuestionService`, `pending_questions`):** unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, routes.
 - **Speech (`TimeShift.Speech`):** voice → OGG/Opus decoded in C# (Concentus) → local whisper.cpp (Whisper.net); `Speech:ModelPath`, `Speech:AutoDownload`; off without a model.
 - **Host:** `PingWorker` once a minute, `/health` with version.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
 
 ## Next
 
-[#10](https://github.com/shoraLBRT/TimeShift/issues/10) — question queue and facts (#2 waits for the LLM key; voice needs a whisper model on the server).
+[#11](https://github.com/shoraLBRT/TimeShift/issues/11) — classification rules (was #10: question queue and facts — done) (#2 waits for the LLM key; voice needs a whisper model on the server).
 
 ## Open questions
 

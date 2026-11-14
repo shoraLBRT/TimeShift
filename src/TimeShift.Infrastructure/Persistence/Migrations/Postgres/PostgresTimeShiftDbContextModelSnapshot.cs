@@ -105,6 +105,45 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                     b.ToTable("pending_periods", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Application.Questions.PendingQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("AskedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("asked_at");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid>("SubjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subject_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Kind", "SubjectId");
+
+                    b.ToTable("pending_questions", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Activities.Activity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -391,6 +430,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                     b.HasOne("TimeShift.Domain.Users.User", null)
                         .WithOne()
                         .HasForeignKey("TimeShift.Application.Llm.PendingPeriod", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Application.Questions.PendingQuestion", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

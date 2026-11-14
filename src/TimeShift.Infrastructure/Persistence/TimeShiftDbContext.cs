@@ -33,6 +33,8 @@ public abstract class TimeShiftDbContext : DbContext
 
     public DbSet<MessageLogEntry> Messages => Set<MessageLogEntry>();
 
+    public DbSet<Application.Questions.PendingQuestion> Questions => Set<Application.Questions.PendingQuestion>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TimeShiftDbContext).Assembly);
