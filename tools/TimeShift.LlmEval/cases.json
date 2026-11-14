@@ -1,0 +1,135 @@
+{
+  // Тестовый набор фраз (spec §8, issue #5). Москва, суббота 14 ноября 2026.
+  // В названиях занятий варианты через «|». Поля, которых нет в expected, у модели тоже должны отсутствовать
+  // (день, время) — кроме category: она сверяется, только если указана.
+  "knownActivities": ["Работа", "Тренировка", "Дорога", "YouTube", "Сериал", "Обед", "Чтение", "Английский"],
+  "cases": [
+    // --- Начать занятие ---
+    { "id": "start-01", "text": "работаю", "now": "2026-11-14T10:00",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Работа" } ] } },
+    { "id": "start-02", "text": "пошёл на тренировку", "now": "2026-11-14T18:30",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Тренировка", "category": "sport" } ] } },
+    { "id": "start-03", "text": "сажусь за английский", "now": "2026-11-14T11:00",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Английский" } ] } },
+    { "id": "start-04", "text": "еду домой", "now": "2026-11-14T20:10", "open": { "activity": "Тренировка", "since": "18:30" },
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Дорога" } ] } },
+    { "id": "start-05", "text": "с 14 смотрю сериал", "now": "2026-11-14T15:20",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Сериал", "at": "14:00" } ] } },
+    { "id": "start-06", "text": "готовлю ужин", "now": "2026-11-14T19:00",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Готовка|Ужин|Готовлю ужин" } ] } },
+    { "id": "start-07", "text": "листаю тикток", "now": "2026-11-14T23:10",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "TikTok|Тикток", "category": "wasted.short_video" } ] } },
+    { "id": "start-08", "text": "в 9 начал работать", "now": "2026-11-14T10:30",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Работа", "at": "09:00" } ] } },
+
+    // --- Закончить ---
+    { "id": "stop-01", "text": "закончил", "now": "2026-11-14T19:30", "open": { "activity": "Тренировка", "since": "18:30" },
+      "expected": { "intents": [ { "type": "stop_activity" } ] } },
+    { "id": "stop-02", "text": "закончил в 15:30", "now": "2026-11-14T16:00", "open": { "activity": "Работа", "since": "10:00" },
+      "expected": { "intents": [ { "type": "stop_activity", "at": "15:30" } ] } },
+    { "id": "stop-03", "text": "всё, хватит работать на сегодня", "now": "2026-11-14T18:00", "open": { "activity": "Работа", "since": "10:00" },
+      "expected": { "intents": [ { "type": "stop_activity" } ] } },
+
+    // --- Период «сейчас» (spec §3.4, §3.5) ---
+    { "id": "period-01", "text": "тренировался только час, потом поехал домой, дома смотрел ютуб", "now": "2026-11-14T17:00",
+      "open": { "activity": "Тренировка", "since": "14:00" },
+      "expected": { "intents": [ { "type": "describe_period", "items": [
+        { "activity": "Тренировка", "minutes": 60 },
+        { "activity": "Дорога", "route": { "from": "зал", "to": "дом" } },
+        { "activity": "YouTube", "rest": true } ] } ] } },
+    { "id": "period-02", "text": "последние два часа читал", "now": "2026-11-14T21:00",
+      "expected": { "intents": [ { "type": "describe_period", "items": [ { "activity": "Чтение", "minutes": 120 } ] } ] } },
+    { "id": "period-03", "text": "с 12 до 13 обедал, потом снова работал", "now": "2026-11-14T15:00", "open": { "activity": "Работа", "since": "09:00" },
+      "expected": { "intents": [ { "type": "describe_period", "from": "12:00", "items": [
+        { "activity": "Обед", "start": "12:00", "end": "13:00" },
+        { "activity": "Работа", "rest": true } ] } ] } },
+    { "id": "period-04", "text": "полчаса гулял, потом минут 40 залипал в телефон", "now": "2026-11-14T16:30",
+      "expected": { "intents": [ { "type": "describe_period", "items": [
+        { "activity": "Прогулка", "minutes": 30 },
+        { "activity": "Телефон|Соцсети|Залипание", "minutes": 40 } ] } ] } },
+    { "id": "period-05", "text": "до 15 работал, потом ничего не делал", "now": "2026-11-14T16:00", "open": { "activity": "Работа", "since": "10:00" },
+      "expected": { "intents": [ { "type": "describe_period", "items": [
+        { "activity": "Работа", "start": "10:00", "end": "15:00" },
+        { "activity": "Ничего|Залипание|Отдых", "rest": true } ] } ] },
+      "note": "«до 15» с открытой работой с 10:00 — модель может дать start/end; альтернатива — to: 15:00. Спорный кейс." },
+    { "id": "period-06", "text": "с утра убирался, потом ходил в магазин", "now": "2026-11-14T13:00",
+      "expected": { "intents": [ { "type": "describe_period", "part_of_day": "morning", "items": [
+        { "activity": "Уборка", "category": "household" },
+        { "activity": "Магазин|Покупки", "category": "household" } ] } ] } },
+
+    // --- Задним числом (spec §5.6) ---
+    { "id": "past-01", "text": "вчера с 19 до 21 был в зале", "now": "2026-11-14T06:00",
+      "expected": { "intents": [ { "type": "describe_period", "day": "yesterday", "from": "19:00", "to": "21:00",
+        "items": [ { "activity": "Тренировка|Зал", "rest": true } ] } ] } },
+    { "id": "past-02", "text": "вечером смотрел сериал часа два, потом читал", "now": "2026-11-14T06:00",
+      "expected": { "intents": [ { "type": "describe_period", "part_of_day": "evening", "items": [
+        { "activity": "Сериал", "minutes": 120 },
+        { "activity": "Чтение", "rest": true } ] } ] } },
+    { "id": "past-03", "text": "в пятницу с 10 до 18 работал", "now": "2026-11-14T09:00",
+      "expected": { "intents": [ { "type": "describe_period", "day": "friday", "from": "10:00", "to": "18:00",
+        "items": [ { "activity": "Работа", "rest": true } ] } ] } },
+    { "id": "past-04", "text": "позавчера вечером был у родителей", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "describe_period", "day": "day_before_yesterday", "part_of_day": "evening",
+        "items": [ { "activity": "Родители|Семья", "category": "family", "rest": true } ] } ] } },
+    { "id": "past-05", "text": "ночью до 3 играл в доту", "now": "2026-11-14T09:30",
+      "expected": { "intents": [ { "type": "describe_period", "to": "03:00", "items": [
+        { "activity": "Dota 2|Дота", "category": "wasted.multiplayer", "rest": true } ] } ] } },
+    { "id": "past-06", "text": "13.11 с 20 до 23 был с друзьями в баре", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "describe_period", "day": "2026-11-13", "from": "20:00", "to": "23:00",
+        "items": [ { "activity": "Друзья|Бар", "category": "friends", "rest": true } ] } ] } },
+    { "id": "past-07", "text": "вчера лёг в час", "now": "2026-11-14T09:00",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Сон", "category": "sleep", "at": "01:00" } ] },
+      "note": "«вчера лёг в час» — в час ночи сегодня; день модель не должна выдумывать." },
+    { "id": "past-08", "text": "вчера с 18 до 19 ехал с работы, дальше весь вечер сериал", "now": "2026-11-14T07:00",
+      "expected": { "intents": [ { "type": "describe_period", "day": "yesterday", "from": "18:00", "part_of_day": "evening", "items": [
+        { "activity": "Дорога", "start": "18:00", "end": "19:00" },
+        { "activity": "Сериал", "rest": true } ] } ] },
+      "note": "Спорный кейс: from + part_of_day одновременно." },
+
+    // --- Параллельные (spec §3.6) ---
+    { "id": "par-01", "text": "обедаю за компом, работаю дальше", "now": "2026-11-14T13:00", "open": { "activity": "Работа", "since": "09:00" },
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Обед", "parallel": true } ] } },
+    { "id": "par-02", "text": "ел и смотрел ютуб минут 30", "now": "2026-11-14T20:00",
+      "expected": { "intents": [ { "type": "describe_period", "items": [
+        { "activity": "YouTube", "minutes": 30 },
+        { "activity": "Еда|Ужин|Обед", "minutes": 30, "parallel": true } ] } ] } },
+    { "id": "par-03", "text": "слушаю подкаст по дороге", "now": "2026-11-14T08:30", "open": { "activity": "Дорога", "since": "08:10" },
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Подкаст", "parallel": true } ] } },
+
+    // --- Ответы и факты ---
+    { "id": "answer-01", "text": "минут 25", "now": "2026-11-14T17:05", "question": "Сколько обычно едешь из зала домой?",
+      "expected": { "intents": [ { "type": "answer", "value": "25" } ] } },
+    { "id": "answer-02", "text": "да", "now": "2026-11-14T09:10", "question": "Спал как обычно, 1:00–9:00?",
+      "expected": { "intents": [ { "type": "answer", "value": "да" } ] } },
+    { "id": "fact-01", "text": "тренировка у меня обычно полтора часа", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "set_fact", "activity": "Тренировка", "minutes": 90 } ] } },
+    { "id": "fact-02", "text": "от дома до работы минут 40", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "set_fact", "route": { "from": "дом", "to": "работа" }, "minutes": 40 } ] } },
+    { "id": "classify-01", "text": "дота — это залипание", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "classify", "activity": "Dota 2|Дота", "category": "wasted.multiplayer" } ] } },
+    { "id": "classify-02", "text": "ютуб про программирование считай учёбой", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "classify", "activity": "YouTube", "category": "study" } ] } },
+
+    // --- Тихие часы ---
+    { "id": "quiet-01", "text": "не беспокой пару часов", "now": "2026-11-14T14:00",
+      "expected": { "intents": [ { "type": "quiet", "minutes": 120 } ] } },
+    { "id": "quiet-02", "text": "не пиши до 18", "now": "2026-11-14T14:00",
+      "expected": { "intents": [ { "type": "quiet", "until": "18:00" } ] } },
+    { "id": "quiet-03", "text": "я на совещании, час не трогай", "now": "2026-11-14T11:00",
+      "expected": { "intents": [ { "type": "start_activity", "activity": "Совещание|Работа", "category": "work" }, { "type": "quiet", "minutes": 60 } ] } },
+
+    // --- Правки ---
+    { "id": "edit-01", "text": "тренировка была до 15:30, а не до 15", "now": "2026-11-14T16:00",
+      "expected": { "intents": [ { "type": "edit_segment", "target": { "activity": "Тренировка" }, "changes": { "end": "15:30" } } ] } },
+    { "id": "edit-02", "text": "нет, тот ютуб в 14 был учёбой", "now": "2026-11-14T16:00",
+      "expected": { "intents": [ { "type": "edit_segment", "target": { "at": "14:00", "activity": "YouTube" }, "changes": { "category": "study" } } ] } },
+    { "id": "edit-03", "text": "в 12 был не обед, а созвон", "now": "2026-11-14T16:00",
+      "expected": { "intents": [ { "type": "edit_segment", "target": { "at": "12:00", "activity": "Обед" }, "changes": { "activity": "Созвон" } } ] } },
+
+    // --- Непонятное ---
+    { "id": "unclear-01", "text": "ну такое", "now": "2026-11-14T16:00",
+      "expected": { "intents": [ { "type": "unclear", "question": "?" } ] } },
+    { "id": "unclear-02", "text": "это было до того, как", "now": "2026-11-14T16:00",
+      "expected": { "intents": [ { "type": "unclear", "question": "?" } ] } }
+  ]
+}

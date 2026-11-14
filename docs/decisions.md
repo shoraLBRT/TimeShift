@@ -147,4 +147,9 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   applying it (#6) decides what that is. A past day with only a start is an error (`MissingEnd`).
 - **The prompt's own examples are a test**: each must pass `IntentParser`, so the contract and the prompt
   cannot drift apart.
+- **The eval compares strictly what shapes the timeline** (types and order, day, times, minutes, the way a
+  duration is given, `parallel`) and loosely the names (case, «ё», alternatives `A|B`, prefix). Category is
+  checked only when the case states it. Two cases are marked disputable in `note` — fix the case, not the bar,
+  if a good model keeps answering them differently.
+- **A part of day fills a missing bound**: «вчера с 18 … весь вечер» → 18:00–24:00 (found by the eval set).
 

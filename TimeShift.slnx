@@ -6,6 +6,9 @@
     <Project Path="src/TimeShift.Infrastructure/TimeShift.Infrastructure.csproj" />
     <Project Path="src/TimeShift.Telegram/TimeShift.Telegram.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/TimeShift.LlmEval/TimeShift.LlmEval.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TimeShift.Application.Tests/TimeShift.Application.Tests.csproj" />
     <Project Path="tests/TimeShift.Domain.Tests/TimeShift.Domain.Tests.csproj" />

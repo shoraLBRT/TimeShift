@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <InternalsVisibleTo Include="TimeShift.Infrastructure.Tests" />
+    <InternalsVisibleTo Include="TimeShift.LlmEval" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TimeShift.Application\TimeShift.Application.csproj" />

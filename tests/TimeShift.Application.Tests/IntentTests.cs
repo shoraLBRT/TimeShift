@@ -151,6 +151,9 @@ public class PastTimeTests
         Assert.Equal(((DateTime?)null, SixAm), Window(new DayRef.Weekday(DayOfWeek.Saturday), null, null));
         Assert.Equal((Msk(1, 9), Msk(1, 10)), Window(new DayRef.Date(new DateOnly(2026, 11, 1)), 9, 10));
 
+        // Часть суток дополняет недостающую границу: «вчера с 19 … весь вечер» — 19–24.
+        Assert.Equal((Msk(13, 19), Msk(14, 0)), Window(new DayRef.DaysAgo(1), 19, null, PartOfDay.Evening));
+
         // «вчера» без часов — весь вчерашний день.
         Assert.Equal((Msk(13, 0), Msk(14, 0)), Window(new DayRef.DaysAgo(1), null, null));
     }

@@ -20,12 +20,14 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 - **LLM (not wired into the dialog yet — #6):** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
   intent contract (`Intents`, `IntentParser`), prompt with context (`IntentPrompt`), `IntentExtractor` with one
   retry, day/time resolution `PastTime`.
+- **LLM eval (`tools/TimeShift.LlmEval`):** 40 phrases with expected intents, `IntentMatcher`, live run with
+  accuracy/latency/cost and `--record`; offline checks in `dotnet test`. No live run yet (no key, #2).
 - **Host:** `PingWorker` once a minute, `/health` with version.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
 
 ## Next
 
-[#5](https://github.com/shoraLBRT/TimeShift/issues/5) — test set of 30–50 phrases and eval run.
+[#6](https://github.com/shoraLBRT/TimeShift/issues/6) — apply intents: period proposal and confirm buttons.
 
 ## Open questions
 
