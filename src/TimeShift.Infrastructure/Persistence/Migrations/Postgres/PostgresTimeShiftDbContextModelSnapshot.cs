@@ -377,6 +377,10 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("integer")
                         .HasColumnName("unanswered_pings");
 
+                    b.Property<DateTime?>("YellowReviewedUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("yellow_reviewed_until");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TelegramChatId")

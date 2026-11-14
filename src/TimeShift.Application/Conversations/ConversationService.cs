@@ -21,6 +21,7 @@ public sealed partial class ConversationService(
     Llm.IntentApplier intents,
     ISpeechToText speech,
     Questions.QuestionService questions,
+    YellowReview yellow,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -70,8 +71,20 @@ public sealed partial class ConversationService(
                 ?? Dispatch(user, message);
 
             // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
-            if (user.IsOnboarded && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
-                && await questions.NextAsync(user, now, cancellationToken) is { } question)
+            // Время до начала работы с ботом не разбираем — точка отсчёта 🟡 — первое сообщение после онбординга.
+            if (user.IsOnboarded && user.YellowReviewedUntilUtc is null)
+            {
+                user.MarkYellowReviewed(now);
+            }
+
+            // После обычного сообщения или кнопки (не команды): сначала разобрать 🟡 «пока тебя не было» (spec §5.4),
+            // иначе — очередь вопросов.
+            var answersBot = message.ButtonData is { } pressed
+                ? pressed.StartsWith("act:", StringComparison.Ordinal) || pressed.StartsWith("per:", StringComparison.Ordinal)
+                  || pressed.StartsWith("q:", StringComparison.Ordinal)
+                : message.Text?.TrimStart().StartsWith('/') != true;
+            if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
+                && (await yellow.NextAsync(user, now, cancellationToken) ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
             {
                 replies = [.. replies, question];
             }

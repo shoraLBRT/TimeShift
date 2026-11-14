@@ -18,7 +18,7 @@ public class ConversationTests
         get
         {
             var tracking = new Tracking.TrackingService(_store, _store);
-            return new(_store, _store, tracking, _store.Applier(tracking, new ScriptedLlm()), _store.Speech, _store.Questions(tracking), _clock);
+            return new(_store, _store, tracking, _store.Applier(tracking, new ScriptedLlm()), _store.Speech, _store.Questions(tracking), new Tracking.YellowReview(tracking), _clock);
         }
     }
 

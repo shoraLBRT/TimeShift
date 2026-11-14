@@ -201,3 +201,14 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   categories. The answer is stored on the activity, so «Dota 2» is asked never and «Elden Ring» once.
 - **Per-segment overrides («этот ютуб был учёбой»)** belong to text edits (#14).
 
+## Step 7 — resolving yellow right away (#12)
+
+- **The bot asks about the first 🟡 span of ≥ 15 min in the last 12 hours that it has not offered yet**,
+  appended to its reply; adjacent questionable pieces (extension overrun + background) are one span. A single
+  marker `yellow_reviewed_until` moves forward when a span is offered, so each span is asked once whatever the
+  answer; leftovers are for the evening review (#13).
+- **Time before onboarding is never asked about**: the first message after onboarding sets the marker.
+- **Questions (yellow first, then the queue) follow only messages that answer the bot** — text, voice, and the
+  act:/per:/q: buttons — not commands or menu/navigation buttons, so `/day` and `/settings` stay clean.
+- **"Describe" reuses `/add` for that day**; a filled span is one journal entry (`/undo`).
+
