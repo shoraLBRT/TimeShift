@@ -172,3 +172,12 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **When the LLM is unavailable or answers twice off-contract**, the bot says so and offers the recent-activity
   buttons; with no key the old behaviour stays (short text = new activity).
 
+## Step 5a — past entries (#7, #8)
+
+- **`/day` without the ➕/🟡 extras of spec §5.6 at first**: ➕ came with `/add`; 🟡 resolving is #12/#13.
+- **A date like `20.11` within a month ahead is the future (refused), further ahead — last year** (`31.12` in
+  November is last December).
+- **`/add` line format is `[day] time title`** (or `title time`); without a day — the latest past occurrence,
+  like the LLM path. A range over 12 h without a day is refused as ambiguous («с 11 до 2» at 06:00). Lines that
+  overlap each other are refused; the rest are recorded as one journal entry, so `/undo` takes them back together.
+

@@ -33,6 +33,26 @@ public static partial class ScheduleText
 
     private static readonly HashSet<string> StopWords = ["по", "в", "во", "и", "каждую", "каждое", "у", "меня"];
 
+    /// <summary>Первый диапазон времени внутри текста: что до него и что после (для «вчера 19-21 Зал»).</summary>
+    public static bool TryFindTimeRange(string text, out TimeOnly start, out TimeOnly end, out string before, out string after)
+    {
+        start = end = default;
+        before = after = string.Empty;
+        var lowered = text.ToLowerInvariant().Replace('–', '-').Replace('—', '-');
+        var match = TimeRangeRegex().Match(lowered);
+        if (!match.Success
+            || !TryTime(match.Groups["h1"].Value, match.Groups["m1"].Value, out start)
+            || !TryTime(match.Groups["h2"].Value, match.Groups["m2"].Value, out end)
+            || start == end)
+        {
+            return false;
+        }
+
+        before = text[..match.Index].Trim(' ', ',', '.', ':');
+        after = text[(match.Index + match.Length)..].Trim(' ', ',', '.', ':', '-');
+        return true;
+    }
+
     /// <summary>Диапазон времени «9-18», «23:30–7:30», «с 9 до 18» (весь текст — только диапазон).</summary>
     public static bool TryParseTimeRange(string text, out TimeOnly start, out TimeOnly end)
     {

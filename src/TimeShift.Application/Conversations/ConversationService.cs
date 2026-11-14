@@ -110,7 +110,8 @@ public sealed partial class ConversationService(
         $"Раз в {user.Settings.PingIntervalMin} мин я спрашиваю, чем ты занят, — ответь кнопкой. Можно и самому " +
         "написать занятие («Работаю», «Тренировка») — запишу его с этого момента.\n\n" +
         "/now — что сейчас идёт, сменить занятие\n" +
-        "/day — лента за сегодня\n" +
+        "/day — лента за сегодня (/day вчера, /day 13.11 — другой день)\n" +
+        "/add — записать прошедшее: «вчера 19-21 Зал»\n" +
         "/quiet — не беспокоить пару часов\n" +
         "/undo — отменить последнюю запись\n" +
         "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
@@ -648,17 +649,26 @@ public sealed partial class ConversationService(
         Extension,
         CustomExtension,
         ActivityName,
+        AddPast,
     }
 
     private static string State(Mode mode, Step step) => $"{(mode == Mode.Onboarding ? 'O' : 'E')}:{step}";
 
     private static (Mode Mode, Step Step)? Parse(string? state)
     {
-        if (state is not { Length: > 2 } || state[1] != ':' || !Enum.TryParse<Step>(state[2..], out var step))
+        var stepName = state is { Length: > 2 } ? state[2..].Split(':')[0] : string.Empty;
+        if (state is not { Length: > 2 } || state[1] != ':' || !Enum.TryParse<Step>(stepName, out var step))
         {
             return null;
         }
 
         return (state[0] == 'O' ? Mode.Onboarding : Mode.Edit, step);
+    }
+
+    /// <summary>Аргумент состояния после шага: <c>E:AddPast:2026-11-13</c> → <c>2026-11-13</c>.</summary>
+    private static string? StateArgument(string? state)
+    {
+        var parts = state?.Split(':', 3);
+        return parts is { Length: 3 } ? parts[2] : null;
     }
 }
