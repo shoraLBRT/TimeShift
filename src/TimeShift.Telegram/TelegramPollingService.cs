@@ -152,6 +152,15 @@ internal sealed partial class TelegramPollingService(
         foreach (var reply in replies)
         {
             var markup = TelegramMarkup.From(reply);
+            if (reply.Image is { } image)
+            {
+                // Картинка заменяет исходную только если та тоже картинка (◀ ▶ в /day); иначе — новое сообщение.
+                var replacePhoto = reply.ReplacesSource && source?.Photo is not null && !sourceHandled;
+                sourceHandled |= replacePhoto;
+                await TelegramMedia.SendPhotoAsync(client, chatId, replacePhoto ? source : null, reply, image, markup, cancellationToken);
+                continue;
+            }
+
             if (reply.ReplacesSource && source is not null && !sourceHandled)
             {
                 sourceHandled = true;
