@@ -130,3 +130,21 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **The ping loop runs once a minute in Host (`PingWorker`)** and only when a client (`INotifier`) is registered;
   a failure for one user does not stop the others.
 
+## Step 5 — LLM intents (#3, #4)
+
+- **One OpenAI-compatible adapter covers ruble aggregators and providers**; the model is a config value.
+  Without `Llm:ApiKey` the provider is disabled and the bot keeps working with buttons and short text.
+- **The wire format is `{"intents":[...]}` with snake_case types from spec §8**; times are local `"HH:mm"`, days
+  are `today` / `yesterday` / `day_before_yesterday` / an English weekday / `YYYY-MM-DD`. The model never
+  computes dates or durations.
+- **Validation is strict except for categories**: an unknown type, a missing field or a bad time is an error
+  (sent back to the model on the one retry); an unknown category is dropped silently and asked later.
+- **Days and times are resolved by code (`PastTime`) with one rule: without a day, take the latest past
+  occurrence.** At 06:00 «с 19 до 21» and «вечером» mean yesterday, «ночью» the night that just ended; a range
+  whose end is not after its start crosses midnight; an end in the future is cut to now; a start in the future is
+  an error (plans are iteration 3). Parts of day: morning 06–12, afternoon 12–18, evening 18–24, night 00–06.
+- **A period with no start (`до 15`, or nothing named) has `StartUtc = null`** — "since the last known moment";
+  applying it (#6) decides what that is. A past day with only a start is an error (`MissingEnd`).
+- **The prompt's own examples are a test**: each must pass `IntentParser`, so the contract and the prompt
+  cannot drift apart.
+
