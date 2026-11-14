@@ -2,12 +2,12 @@ using TimeShift.Domain.Users;
 
 namespace TimeShift.Application.Abstractions;
 
-/// <summary>Хранилище пользователей (агрегат: настройки + шаблон недели). Одна единица работы на сообщение.</summary>
+/// <summary>Хранилище пользователей (агрегат: настройки + шаблон недели + состояние пингов).</summary>
 public interface IUserRepository
 {
     Task<User?> FindByTelegramChatIdAsync(long chatId, CancellationToken cancellationToken);
 
-    void Add(User user);
+    Task<IReadOnlyList<User>> ListOnboardedAsync(CancellationToken cancellationToken);
 
-    Task SaveChangesAsync(CancellationToken cancellationToken);
+    void Add(User user);
 }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Parsing;
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -13,7 +14,11 @@ namespace TimeShift.Application.Conversations;
 /// Что бот ждёт в ответ, хранится в <see cref="User.DialogState"/> как <c>O:Step</c> (онбординг) или <c>E:Step</c>
 /// (правка из меню — после неё бот возвращает в меню).
 /// </summary>
-public sealed class ConversationService(IUserRepository users, IClock clock)
+public sealed partial class ConversationService(
+    IUserRepository users,
+    IUnitOfWork unitOfWork,
+    TrackingService tracking,
+    IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
 
@@ -31,21 +36,25 @@ public sealed class ConversationService(IUserRepository users, IClock clock)
     public async Task<IReadOnlyList<BotReply>> HandleAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
+        var now = clock.UtcNow;
         var user = await users.FindByTelegramChatIdAsync(message.ChatId, cancellationToken);
         IReadOnlyList<BotReply> replies;
         if (user is null)
         {
             var name = string.IsNullOrWhiteSpace(message.DisplayName) ? "друг" : message.DisplayName.Trim();
-            user = new User(message.ChatId, name, User.DefaultTimeZone, clock.UtcNow);
+            user = new User(message.ChatId, name, User.DefaultTimeZone, now);
             users.Add(user);
+            user.RegisterActivity(now);
             replies = StartOnboarding(user);
         }
         else
         {
-            replies = Dispatch(user, message);
+            user.RegisterActivity(now);
+            replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
+                ?? Dispatch(user, message);
         }
 
-        await users.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return replies;
     }
 
@@ -97,10 +106,15 @@ public sealed class ConversationService(IUserRepository users, IClock clock)
 
     private static BotReply Help(User user) => BotReply.Plain(
         $"Привет, {user.DisplayName}! Я TimeShift — помогаю понять, куда уходит время.\n\n" +
-        "Сейчас я умею настраиваться:\n" +
+        $"Раз в {user.Settings.PingIntervalMin} мин я спрашиваю, чем ты занят, — ответь кнопкой. Можно и самому " +
+        "написать занятие («Работаю», «Тренировка») — запишу его с этого момента.\n\n" +
+        "/now — что сейчас идёт, сменить занятие\n" +
+        "/day — лента за сегодня\n" +
+        "/quiet — не беспокоить пару часов\n" +
+        "/undo — отменить последнюю запись\n" +
         "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
         "/settings — пинги, продление занятий, часовой пояс\n\n" +
-        "Записывать, чем ты занят, и спрашивать об этом я научусь на следующих шагах.");
+        "Разбирать фразы вроде «час тренировался, потом поехал домой» и голосовые я научусь чуть позже.");
 
     // ---- Онбординг --------------------------------------------------------------------------------------------
 
@@ -153,6 +167,7 @@ public sealed class ConversationService(IUserRepository users, IClock clock)
             ExtensionButtons(null, onboarding: true)),
         Step.CustomExtension => BotReply.Plain(
             "Напиши два числа: множитель нормы и предела, например «1.2 2.5». «∞» — без ограничения."),
+        Step.ActivityName => BotReply.Plain("Чем занят? Напиши коротко, например «Готовлю ужин»."),
         _ => throw new ArgumentOutOfRangeException(nameof(step)),
     };
 
@@ -194,8 +209,9 @@ public sealed class ConversationService(IUserRepository users, IClock clock)
         user.CompleteOnboarding();
         replies.Add(BotReply.Plain(
             "Готово! Твой шаблон недели:\n\n" + TemplateText(user) + "\n\n" +
-            "Поменять можно в любой момент: /blocks — блоки, /settings — пинги и продление.\n" +
-            "Записывать и спрашивать, чем ты занят, я начну на следующих шагах — сейчас идёт разработка."));
+            "Поменять можно в любой момент: /blocks — блоки, /settings — пинги и продление.\n\n" +
+            $"Теперь раз в {user.Settings.PingIntervalMin} мин я буду спрашивать, чем ты занят. Можно и самому " +
+            "написать занятие, например «Работаю», — запишу с этого момента. /help — все команды."));
         return replies;
     }
 
@@ -630,6 +646,7 @@ public sealed class ConversationService(IUserRepository users, IClock clock)
         PingInterval,
         Extension,
         CustomExtension,
+        ActivityName,
     }
 
     private static string State(Mode mode, Step step) => $"{(mode == Mode.Onboarding ? 'O' : 'E')}:{step}";

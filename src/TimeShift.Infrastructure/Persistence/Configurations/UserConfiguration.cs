@@ -20,6 +20,11 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.IsOnboarded).HasColumnName("is_onboarded");
         builder.Property(u => u.DialogState).HasColumnName("dialog_state").HasMaxLength(64);
         builder.Ignore(u => u.TimeZoneInfo);
+        builder.Property(u => u.LastSeenAtUtc).HasColumnName("last_seen_at");
+        builder.Property(u => u.LastPingAtUtc).HasColumnName("last_ping_at");
+        builder.Property(u => u.LastPingMessageRef).HasColumnName("last_ping_message_ref").HasMaxLength(64);
+        builder.Property(u => u.UnansweredPings).HasColumnName("unanswered_pings");
+        builder.Property(u => u.QuietUntilUtc).HasColumnName("quiet_until");
 
         builder.OwnsOne(u => u.Settings, settings =>
         {

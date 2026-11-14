@@ -1,4 +1,3 @@
-using TimeShift.Application.Abstractions;
 using TimeShift.Application.Conversations;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
@@ -10,11 +9,13 @@ public class ConversationTests
 {
     private const long ChatId = 100;
 
-    private readonly FakeUsers _users = new();
+    private readonly InMemoryStore _store = new();
 
-    private ConversationService Service => new(_users, new FixedClock());
+    private readonly TestClock _clock = new();
 
-    private User Me => _users.Single;
+    private ConversationService Service => new(_store, _store, new Tracking.TrackingService(_store, _store), _clock);
+
+    private User Me => Assert.Single(_store.Users);
 
     private Task<IReadOnlyList<BotReply>> Text(string text) =>
         Service.HandleAsync(IncomingMessage.FromText(ChatId, "Тест", text), TestContext.Current.CancellationToken);
@@ -89,7 +90,7 @@ public class ConversationTests
     {
         var replies = await Text("привет");
 
-        Assert.Single(_users.All);
+        Assert.Single(_store.Users);
         Assert.Contains("tz:Europe/Moscow", ButtonData(replies));
     }
 
@@ -206,24 +207,5 @@ public class ConversationTests
         var replies = await Service.HandleAsync(new IncomingMessage(ChatId, "Тест"), TestContext.Current.CancellationToken);
 
         Assert.Contains(replies, r => r.Text.Contains("только текст"));
-    }
-
-    private sealed class FixedClock : IClock
-    {
-        public DateTime UtcNow => new(2026, 11, 14, 12, 0, 0, DateTimeKind.Utc);
-    }
-
-    private sealed class FakeUsers : IUserRepository
-    {
-        public List<User> All { get; } = [];
-
-        public User Single => Assert.Single(All);
-
-        public Task<User?> FindByTelegramChatIdAsync(long chatId, CancellationToken cancellationToken) =>
-            Task.FromResult(All.FirstOrDefault(u => u.TelegramChatId == chatId));
-
-        public void Add(User user) => All.Add(user);
-
-        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

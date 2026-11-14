@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using TimeShift.Domain.Activities;
+using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
 
 namespace TimeShift.Infrastructure.Persistence;
@@ -16,10 +19,31 @@ public abstract class TimeShiftDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Segment> Segments => Set<Segment>();
+
+    public DbSet<Activity> Activities => Set<Activity>();
+
+    public DbSet<TimelineChangeRecord> TimelineChanges => Set<TimelineChangeRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TimeShiftDbContext).Assembly);
     }
+
+    /// <summary>Всё время — UTC (CLAUDE.md); SQLite не хранит Kind, поэтому при чтении помечаем явно.</summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcConverter>();
+    }
+
+    private sealed class UtcConverter() : ValueConverter<DateTime, DateTime>(
+        v => v.ToUniversalTime(),
+        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class NullableUtcConverter() : ValueConverter<DateTime?, DateTime?>(
+        v => v.HasValue ? v.Value.ToUniversalTime() : v,
+        v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
 }
 
 public sealed class SqliteTimeShiftDbContext(DbContextOptions<SqliteTimeShiftDbContext> options)

@@ -17,6 +17,45 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("TimeShift.Domain.Activities.Activity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CategoryKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category_key");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<TimeSpan?>("TypicalDuration")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("typical_duration");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("activities", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -67,6 +106,66 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("schedule_blocks", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Domain.Timelines.Segment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActivityId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("activity_id");
+
+                    b.Property<string>("CategoryKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category_key");
+
+                    b.Property<TimeSpan>("ElapsedBefore")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("elapsed_before");
+
+                    b.Property<DateTime?>("EndUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("end_utc");
+
+                    b.Property<bool>("IsParallel")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_parallel");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "StartUtc");
+
+                    b.ToTable("segments", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -92,6 +191,23 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_onboarded");
 
+                    b.Property<DateTime?>("LastPingAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_ping_at");
+
+                    b.Property<string>("LastPingMessageRef")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_ping_message_ref");
+
+                    b.Property<DateTime?>("LastSeenAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<DateTime?>("QuietUntilUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("quiet_until");
+
                     b.Property<long>("TelegramChatId")
                         .HasColumnType("INTEGER")
                         .HasColumnName("telegram_chat_id");
@@ -102,6 +218,10 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("timezone");
 
+                    b.Property<int>("UnansweredPings")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("unanswered_pings");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TelegramChatId")
@@ -110,10 +230,59 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Infrastructure.Persistence.TimelineChangeRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("after_json");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("at");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("before_json");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AtUtc");
+
+                    b.ToTable("timeline_changes", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Activities.Activity", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
                 {
                     b.HasOne("TimeShift.Domain.Users.User", null)
                         .WithMany("Blocks")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Timelines.Segment", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -164,6 +333,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         });
 
                     b.Navigation("Settings")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Infrastructure.Persistence.TimelineChangeRecord", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

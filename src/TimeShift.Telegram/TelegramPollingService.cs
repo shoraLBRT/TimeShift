@@ -25,6 +25,10 @@ internal sealed partial class TelegramPollingService(
 
     private static readonly BotCommand[] Commands =
     [
+        new() { Command = "now", Description = "Что сейчас идёт, сменить занятие" },
+        new() { Command = "day", Description = "Лента за сегодня" },
+        new() { Command = "quiet", Description = "Не беспокоить пару часов" },
+        new() { Command = "undo", Description = "Отменить последнюю запись" },
         new() { Command = "blocks", Description = "Шаблон недели: сон, работа, свои блоки" },
         new() { Command = "settings", Description = "Пинги, продление, часовой пояс" },
         new() { Command = "help", Description = "Что я умею" },
@@ -125,7 +129,7 @@ internal sealed partial class TelegramPollingService(
         var sourceHandled = false;
         foreach (var reply in replies)
         {
-            var markup = Markup(reply);
+            var markup = TelegramMarkup.From(reply);
             if (reply.ReplacesSource && source is not null && !sourceHandled)
             {
                 sourceHandled = true;
@@ -157,11 +161,6 @@ internal sealed partial class TelegramPollingService(
             }
         }
     }
-
-    private static InlineKeyboardMarkup? Markup(BotReply reply) =>
-        reply.Buttons.Count == 0
-            ? null
-            : new InlineKeyboardMarkup(reply.Buttons.Select(row => row.Select(b => InlineKeyboardButton.WithCallbackData(b.Label, b.Data))));
 
     private Task HandleErrorAsync(ITelegramBotClient client, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
     {

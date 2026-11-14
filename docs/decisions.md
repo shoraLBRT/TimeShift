@@ -105,3 +105,28 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   `Telegram:Proxy` covers networks where api.telegram.org is reachable only through a local proxy.
 - **Only private chats are served**; `Telegram:AllowedChatIds` can close the bot to everyone else.
 
+## Step 4 — pings and recording activities
+
+- **When to ping is a pure Domain rule (`PingSchedule.NextDue`)**: an interval after the later of the last ping
+  and the last user message; during an open activity not before `T − ElapsedBefore` from its start; never in the
+  past (an overdue ping is checked against `now`); pushed to the end of sleep, quiet hours and — unless
+  `PingDuringBlocks` — fixed/custom blocks. `MaxUnansweredPings` unanswered in a row → pause until the user writes.
+- **Ping state lives on `User`** (`LastSeenAtUtc`, `LastPingAtUtc`, `LastPingMessageRef`, `UnansweredPings`)
+  instead of a `pings` table: the rule needs only these, and the history adds nothing yet. Same for quiet hours:
+  one `QuietUntilUtc` instead of `quiet_periods` — `/quiet` is always "from now for N hours".
+- **"Всё ещё …" materializes the time so far**: the open segment is closed at `now` (confirmed) and reopened from
+  `now` with `ElapsedBefore` — the same mechanism as a break (spec §3.6), so extension and the next ping count the
+  total. The display merges the adjacent pieces.
+- **"То же самое" is shown only during an open activity** (as "▶️ Да, …"). Without one, "the same" would mean
+  "continue the background", which is not an answer worth a button; recent activities are offered instead.
+- **Until the LLM exists, any short free text (≤ 60 chars) starts an activity with that name from now**; longer
+  text gets an explanation. Every start reply carries "↩️ Отменить" — `/undo` reverts the last journal entry.
+- **Activities are matched by name case-insensitively and ignoring «ё»** (unique per user). Typical duration and
+  category stay empty for new activities until step 7 asks for them.
+- **Times are cut to the minute.** Display and rounding to the grid (spec §3.5) come later.
+- **The journal for `/undo` keeps the last 50 changes per user** as JSON (`timeline_changes`); undo refuses when
+  the segments of the change are no longer in the timeline.
+- **All `DateTime` columns are read back as UTC** (EF convention) — SQLite does not store `Kind`.
+- **The ping loop runs once a minute in Host (`PingWorker`)** and only when a client (`INotifier`) is registered;
+  a failure for one user does not stop the others.
+

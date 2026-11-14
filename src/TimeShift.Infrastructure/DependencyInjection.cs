@@ -44,6 +44,9 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ITimelineRepository, TimelineRepository>();
+        services.AddScoped<IActivityRepository, ActivityRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IClock, SystemClock>();
         return services;
     }

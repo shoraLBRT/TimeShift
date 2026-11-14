@@ -17,7 +17,8 @@ public sealed record Segment
         Guid? activityId = null,
         string? categoryKey = null,
         TimeSpan elapsedBefore = default,
-        bool isParallel = false)
+        bool isParallel = false,
+        Guid? id = null)
     {
         Utc.Ensure(startUtc, nameof(startUtc));
         if (endUtc is { } end)
@@ -55,6 +56,7 @@ public sealed record Segment
             throw new ArgumentException("Параллельное занятие должно быть закрытым отрезком.", nameof(isParallel));
         }
 
+        Id = id ?? Guid.NewGuid();
         StartUtc = startUtc;
         EndUtc = endUtc;
         Title = title;
@@ -65,6 +67,15 @@ public sealed record Segment
         ElapsedBefore = elapsedBefore;
         IsParallel = isParallel;
     }
+
+    // Для EF Core.
+    private Segment()
+    {
+        Title = string.Empty;
+    }
+
+    /// <summary>Идентичность строки в хранилище. Новые границы (<see cref="WithRange"/>) — новый отрезок, новый Id.</summary>
+    public Guid Id { get; }
 
     public DateTime StartUtc { get; }
 

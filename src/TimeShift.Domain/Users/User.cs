@@ -58,6 +58,50 @@ public class User
     /// </summary>
     public string? DialogState { get; set; }
 
+    /// <summary>Когда пользователь последний раз писал или нажимал кнопку.</summary>
+    public DateTime? LastSeenAtUtc { get; private set; }
+
+    /// <summary>Когда ушёл последний пинг (spec §5.2).</summary>
+    public DateTime? LastPingAtUtc { get; private set; }
+
+    /// <summary>Ссылка клиента на сообщение последнего пинга — чтобы удалить его, если не ответили.</summary>
+    public string? LastPingMessageRef { get; private set; }
+
+    /// <summary>Сколько пингов подряд остались без ответа; на <c>MaxUnansweredPings</c> пинги встают на паузу.</summary>
+    public int UnansweredPings { get; private set; }
+
+    /// <summary>Ручные тихие часы (spec §5.6: /quiet): не пинговать до этого момента.</summary>
+    public DateTime? QuietUntilUtc { get; private set; }
+
+    /// <summary>Пользователь что-то написал: пинги считаются отвеченными, пауза снимается.</summary>
+    public void RegisterActivity(DateTime atUtc)
+    {
+        Utc.Ensure(atUtc, nameof(atUtc));
+        LastSeenAtUtc = atUtc;
+        UnansweredPings = 0;
+    }
+
+    /// <summary>Пинг отправлен. Возвращает ссылку на предыдущий неотвеченный пинг — его нужно удалить.</summary>
+    public string? RegisterPing(DateTime atUtc, string? messageRef)
+    {
+        Utc.Ensure(atUtc, nameof(atUtc));
+        var previous = UnansweredPings > 0 ? LastPingMessageRef : null;
+        LastPingAtUtc = atUtc;
+        LastPingMessageRef = messageRef;
+        UnansweredPings++;
+        return previous;
+    }
+
+    public void SetQuietUntil(DateTime? untilUtc)
+    {
+        if (untilUtc is { } until)
+        {
+            Utc.Ensure(until, nameof(untilUtc));
+        }
+
+        QuietUntilUtc = untilUtc;
+    }
+
     /// <summary>Блоки шаблона недели.</summary>
     public IReadOnlyList<ScheduleBlock> Blocks => _blocks;
 

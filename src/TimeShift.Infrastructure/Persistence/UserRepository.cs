@@ -9,7 +9,8 @@ internal sealed class UserRepository(TimeShiftDbContext db) : IUserRepository
     public Task<User?> FindByTelegramChatIdAsync(long chatId, CancellationToken cancellationToken) =>
         db.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId, cancellationToken);
 
-    public void Add(User user) => db.Users.Add(user);
+    public async Task<IReadOnlyList<User>> ListOnboardedAsync(CancellationToken cancellationToken) =>
+        await db.Users.Where(u => u.IsOnboarded).ToListAsync(cancellationToken);
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
+    public void Add(User user) => db.Users.Add(user);
 }

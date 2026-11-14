@@ -88,6 +88,46 @@ public sealed class Timeline
         return new TimelineChange(before, after);
     }
 
+    /// <summary>
+    /// «Закончил»: закрывает открытое занятие в <paramref name="nowUtc"/>. Если оно началось не раньше «сейчас» —
+    /// просто убирает его. Без открытого занятия — пустое изменение.
+    /// </summary>
+    public TimelineChange Stop(DateTime nowUtc)
+    {
+        Utc.Ensure(nowUtc, nameof(nowUtc));
+        if (OpenSegment is not { } open)
+        {
+            return new TimelineChange([], []);
+        }
+
+        List<Segment> after = open.StartUtc < nowUtc ? [open.WithRange(open.StartUtc, nowUtc)] : [];
+        return Replace(open, after);
+    }
+
+    /// <summary>
+    /// «Всё ещё занят этим»: время до <paramref name="nowUtc"/> становится подтверждённым фактом, занятие остаётся
+    /// открытым с <paramref name="nowUtc"/> и помнит, сколько уже длится (<see cref="Segment.ElapsedBefore"/>), —
+    /// продление дальше считается от суммы.
+    /// </summary>
+    public TimelineChange Continue(DateTime nowUtc)
+    {
+        Utc.Ensure(nowUtc, nameof(nowUtc));
+        if (OpenSegment is not { } open || open.StartUtc >= nowUtc)
+        {
+            return new TimelineChange([], []);
+        }
+
+        var elapsed = open.ElapsedBefore + (nowUtc - open.StartUtc);
+        return Replace(open, [open.WithRange(open.StartUtc, nowUtc), open.ResumedAt(nowUtc, elapsed)]);
+    }
+
+    private TimelineChange Replace(Segment existing, List<Segment> after)
+    {
+        var main = _segments.Where(s => !ReferenceEquals(s, existing)).Concat(after);
+        _segments = Normalize(main, nameof(existing));
+        return new TimelineChange([existing], after);
+    }
+
     /// <summary>Откатывает изменение: убирает <see cref="TimelineChange.After"/>, возвращает <see cref="TimelineChange.Before"/>.</summary>
     public void Undo(TimelineChange change)
     {

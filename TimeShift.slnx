@@ -9,5 +9,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/TimeShift.Application.Tests/TimeShift.Application.Tests.csproj" />
     <Project Path="tests/TimeShift.Domain.Tests/TimeShift.Domain.Tests.csproj" />
+    <Project Path="tests/TimeShift.Infrastructure.Tests/TimeShift.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>
