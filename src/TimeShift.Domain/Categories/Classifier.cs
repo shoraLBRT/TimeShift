@@ -23,6 +23,7 @@ public static class Classifier
         var t = $" {name.Trim().ToLowerInvariant().Replace('ё', 'е')} ";
         return t switch
         {
+            _ when t.Contains("залип") || t.Contains("ничего не делал") || t.Contains("валял") => DefaultCategories.Wasted,
             _ when Has(t, Multiplayer) => DefaultCategories.WastedMultiplayer,
             _ when Has(t, ShortVideo) => DefaultCategories.WastedShortVideo,
             _ when IsYouTube(name) => null,

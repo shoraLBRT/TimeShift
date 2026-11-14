@@ -95,6 +95,16 @@ public sealed partial class ConversationService
             return [answer];
         }
 
+        if (await yellow.OnButtonAsync(user, data, now, ct) is { } review)
+        {
+            if (review.DescribeDay is { } describe)
+            {
+                user.DialogState = $"E:{Step.AddPast}:{describe:yyyy-MM-dd}";
+            }
+
+            return review.Replies;
+        }
+
         if (data.StartsWith("fdur:", StringComparison.Ordinal) && Guid.TryParse(data["fdur:".Length..], out var activityId)
             && await questions.AskDurationAgainAsync(user, activityId, now, ct) is { } ask)
         {

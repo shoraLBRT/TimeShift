@@ -73,6 +73,18 @@ public class User
     /// <summary>Ручные тихие часы (spec §5.7: /quiet): не пинговать до этого момента.</summary>
     public DateTime? QuietUntilUtc { get; private set; }
 
+    /// <summary>До какого момента участки 🟡 уже предлагались к разбору (spec §5.4) — чтобы не спрашивать дважды.</summary>
+    public DateTime? YellowReviewedUntilUtc { get; private set; }
+
+    public void MarkYellowReviewed(DateTime untilUtc)
+    {
+        Utc.Ensure(untilUtc, nameof(untilUtc));
+        if (YellowReviewedUntilUtc is null || untilUtc > YellowReviewedUntilUtc)
+        {
+            YellowReviewedUntilUtc = untilUtc;
+        }
+    }
+
     /// <summary>Пользователь что-то написал: пинги считаются отвеченными, пауза снимается.</summary>
     public void RegisterActivity(DateTime atUtc)
     {

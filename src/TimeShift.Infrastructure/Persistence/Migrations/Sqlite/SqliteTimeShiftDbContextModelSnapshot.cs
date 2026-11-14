@@ -372,6 +372,10 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("INTEGER")
                         .HasColumnName("unanswered_pings");
 
+                    b.Property<DateTime?>("YellowReviewedUntilUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("yellow_reviewed_until");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TelegramChatId")

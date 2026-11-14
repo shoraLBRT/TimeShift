@@ -17,7 +17,7 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), _clock);
 
     private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store, _store, _clock);
 
@@ -452,5 +452,74 @@ public class TrackingTests
         Advance(30);
         Assert.DoesNotContain(await Text("Сериал"), r => r.Text.Contains("К чему", StringComparison.Ordinal));
         Assert.Equal("rest", _store.Activities.Single(a => a.Name == "Сериал").CategoryKey);
+    }
+
+    private BotReply Yellow(IEnumerable<BotReply> replies) =>
+        Assert.Single(replies, r => r.Text.StartsWith("🟡 Пока тебя не было", StringComparison.Ordinal));
+
+    /// <summary>Работа 12:00–12:30, потом два часа тишины, потом «Читаю» в 14:30 (Москва).</summary>
+    private async Task<IReadOnlyList<BotReply>> GapAsync()
+    {
+        await OnboardAsync();
+        await Text("Работа");
+        Advance(30);
+        await Press("act:stop");
+        Advance(120);
+        return await Text("Читаю");
+    }
+
+    [Fact]
+    public async Task Gap_is_asked_right_after_the_user_writes_and_filled_by_a_button()
+    {
+        var question = Yellow(await GapAsync());
+        Assert.Contains("12:30–14:30 (2 ч)", question.Text, StringComparison.Ordinal);
+        var labels = question.Buttons.SelectMany(r => r).Select(b => b.Label).ToList();
+        Assert.Contains("Работа", labels);
+        Assert.Contains("Залипание, так и было", labels);
+        Assert.Contains("✏️ Опишу", labels);
+
+        var work = question.Buttons.SelectMany(r => r).Single(b => b.Label == "Работа").Data;
+        var filled = await Press(work);
+
+        Assert.Contains(filled, r => r.Text == "✅ 12:30–14:30 — Работа." && r.ReplacesSource);
+        Assert.Contains("09:30-11:30 Работа", Lines());
+
+        // Участок разобран — больше не спрашивается.
+        Advance(5);
+        Assert.DoesNotContain(await Text("Читаю дальше"), r => r.Text.StartsWith("🟡", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Gap_can_be_confirmed_as_wasted_described_or_skipped()
+    {
+        var question = Yellow(await GapAsync());
+        var buttons = question.Buttons.SelectMany(r => r).ToDictionary(b => b.Label, b => b.Data);
+
+        await Press(buttons["Залипание, так и было"]);
+        Assert.Equal("wasted", _store.Activities.Single(a => a.Name == "Залипание").CategoryKey);
+        await Text("/undo");
+
+        // «Опишу» — строки как в /add на тот день.
+        var describe = await Press(buttons["✏️ Опишу"]);
+        Assert.Contains(describe, r => r.Text.Contains("Напиши, что было в 12:30–14:30", StringComparison.Ordinal));
+        await Text("12:30-13:30 Магазин");
+        Assert.Contains("09:30-10:30 Магазин", Lines());
+
+        Assert.Contains(await Press(buttons["Пропустить"]), r => r.Text.Contains("оставляю под вопросом", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Time_before_onboarding_and_short_gaps_are_not_asked()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 14, 9, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+
+        // Утро до онбординга — 🟡 по фону, но о нём не спрашиваем.
+        Assert.DoesNotContain(await Text("Работа"), r => r.Text.StartsWith("🟡", StringComparison.Ordinal));
+
+        Advance(30);
+        await Press("act:stop");
+        Advance(10);
+        Assert.DoesNotContain(await Text("Обед"), r => r.Text.StartsWith("🟡", StringComparison.Ordinal));
     }
 }
