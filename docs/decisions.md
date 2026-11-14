@@ -212,3 +212,16 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   act:/per:/q: buttons — not commands or menu/navigation buttons, so `/day` and `/settings` stay clean.
 - **"Describe" reuses `/add` for that day**; a filled span is one journal entry (`/undo`).
 
+## Step 7 — evening review and morning question (#13)
+
+- **The evening review covers the "review day" — the local date of now − 6 h**, so a review at 00:30 before a
+  01:00 sleep sums up the day that just ended. It is sent by the ping loop from «sleep − offset» until 30 minutes
+  after the template sleep starts (later the user is asleep), or appended when a sleep activity is started; once
+  per review day, not during quiet hours, and it does not count as an unanswered ping.
+- **«⚪ Остальное верно» materializes the day's ⚪ pieces as ✅ user segments** (template blocks, extensions of
+  finished activities), excluding the extension of an activity that is still running. One journal entry.
+- **The morning question is asked once a day**, on the first answering message after a template sleep that ended
+  within 12 h, and only if the night is not already recorded and started after registration. «Нет» asks for the
+  range («2-10») and records it as the latest past occurrence.
+- **Nothing before registration is ever reviewed** (yellow, evening, morning).
+

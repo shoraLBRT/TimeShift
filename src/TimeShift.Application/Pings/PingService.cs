@@ -16,6 +16,7 @@ public sealed class PingService(
     IUserRepository users,
     TrackingService tracking,
     Llm.IntentApplier intents,
+    DailyReview daily,
     INotifier notifier,
     IUnitOfWork unitOfWork,
     IClock clock)
@@ -64,6 +65,14 @@ public sealed class PingService(
         if (await intents.FinalizeExpiredAsync(user, now, cancellationToken))
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        // Вечерний разбор — за N минут до сна по шаблону (spec §5.4), не в тихие часы.
+        if (daily.IsEveningDue(user, now) && !(user.QuietUntilUtc > now))
+        {
+            await notifier.SendAsync(user, await daily.EveningAsync(user, now, cancellationToken), cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         var current = await tracking.CurrentAsync(user, cancellationToken);

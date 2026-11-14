@@ -17,9 +17,9 @@ public class TrackingTests
 
     private TrackingService Tracking => new(_store, _store);
 
-    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), _clock);
+    private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _clock);
 
-    private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store, _store, _clock);
+    private PingService Pings => new(_store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), new DailyReview(Tracking, new YellowReview(Tracking)), _store, _store, _clock);
 
     private User Me => Assert.Single(_store.Users);
 
@@ -521,5 +521,84 @@ public class TrackingTests
         await Press("act:stop");
         Advance(10);
         Assert.DoesNotContain(await Text("Обед"), r => r.Text.StartsWith("🟡", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Evening_review_comes_before_sleep_once_and_lists_yellow()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 12, 6, 0, 0, DateTimeKind.Utc); // регистрация накануне
+        await OnboardAsync();
+        _clock.UtcNow = new DateTime(2026, 11, 13, 6, 0, 0, DateTimeKind.Utc); // пятница 09:00 Москва
+        await Press("mo:yes");
+        await Text("Работа");
+        Advance(8 * 60);
+        await Press("act:stop");                                                   // работа 09:00–17:00
+
+        _clock.UtcNow = new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc);   // 00:30, сон в 01:00, разбор за 30 мин
+        Assert.Equal(1, (await Pings.RunAsync(Ct)).Sent);
+        var evening = _store.Sent[^1].Reply;
+        Assert.StartsWith("🌙 Итоги дня.", evening.Text, StringComparison.Ordinal);
+        Assert.Contains("Сегодня, 13 ноября", evening.Text, StringComparison.Ordinal);
+        Assert.Contains("🟡 Осталось разобрать: 00:00–01:00, 17:00–00:30", evening.Text, StringComparison.Ordinal);
+        Assert.Contains("ev:yellow", Data([evening]));
+
+        // Раз в день.
+        Advance(5);
+        await Pings.RunAsync(Ct);
+        Assert.DoesNotContain(_store.Sent.Skip(1), s => s.Reply.Text.StartsWith("🌙", StringComparison.Ordinal));
+
+        var yellow = Yellow(await Press("ev:yellow"));
+        Assert.Contains("00:00–01:00", yellow.Text, StringComparison.Ordinal);
+
+        // Сон ночью 13-го уже подтверждён утром — ⚪ не осталось, кнопки «Остальное верно» нет.
+        Assert.DoesNotContain("ev:ok", Data([evening]));
+        Assert.Contains("22:00-06:00 Сон", Lines());
+    }
+
+    [Fact]
+    public async Task Going_to_sleep_by_text_triggers_the_evening_review()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 12, 6, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+        _clock.UtcNow = new DateTime(2026, 11, 13, 20, 0, 0, DateTimeKind.Utc);    // 23:00 13-го — раньше разбора по шаблону
+
+        var replies = await Text("Сон");
+
+        var evening = Assert.Single(replies, r => r.Text.StartsWith("🌙 Итоги дня.", StringComparison.Ordinal));
+        Assert.DoesNotContain(await Text("Сон"), r => r.Text.StartsWith("🌙", StringComparison.Ordinal));
+
+        // «Остальное верно»: ⚪ дня (сон по шаблону ночью 13-го) становится ✅.
+        Assert.Contains("ev:ok", Data([evening]));
+        Assert.Contains(await Press("ev:ok"), r => r.Text.StartsWith("✅ Подтвердил 1 ⚪", StringComparison.Ordinal));
+        Assert.Contains("22:00-06:00 Сон", Lines());
+    }
+
+    [Fact]
+    public async Task Morning_asks_about_last_night_once()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 6, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+
+        // Первая ночь после регистрации, утро: 10:00 Москва.
+        _clock.UtcNow = new DateTime(2026, 11, 14, 7, 0, 0, DateTimeKind.Utc);
+        var morning = Assert.Single(await Text("Работа"), r => r.Text.StartsWith("☀️", StringComparison.Ordinal));
+        Assert.Contains("Спал как обычно, 01:00–09:00?", morning.Text, StringComparison.Ordinal);
+
+        await Press("mo:yes");
+        Assert.Contains("22:00-06:00 Сон", Lines());
+        Assert.DoesNotContain(await Text("Обед"), r => r.Text.StartsWith("☀️", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Morning_correction_records_actual_sleep()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 6, 0, 0, DateTimeKind.Utc);
+        await OnboardAsync();
+        _clock.UtcNow = new DateTime(2026, 11, 14, 7, 30, 0, DateTimeKind.Utc);    // 10:30
+
+        await Text("Работа");
+        Assert.Contains(await Press("mo:no"), r => r.Text.StartsWith("Во сколько лёг и встал?", StringComparison.Ordinal));
+        Assert.Contains(await Text("2-10"), r => r.Text.StartsWith("✅ Сон 02:00–10:00 (8 ч)", StringComparison.Ordinal));
+        Assert.Contains("23:00-07:00 Сон", Lines());
     }
 }

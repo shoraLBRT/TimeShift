@@ -22,6 +22,7 @@ public sealed partial class ConversationService(
     ISpeechToText speech,
     Questions.QuestionService questions,
     YellowReview yellow,
+    DailyReview daily,
     IClock clock)
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -84,7 +85,10 @@ public sealed partial class ConversationService(
                   || pressed.StartsWith("q:", StringComparison.Ordinal)
                 : message.Text?.TrimStart().StartsWith('/') != true;
             if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
-                && (await yellow.NextAsync(user, now, cancellationToken) ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
+                && (await daily.MorningAsync(user, now, cancellationToken)
+                    ?? await EveningOnSleepAsync(user, now, cancellationToken)
+                    ?? await yellow.NextAsync(user, now, cancellationToken)
+                    ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
             {
                 replies = [.. replies, question];
             }
@@ -92,6 +96,14 @@ public sealed partial class ConversationService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return replies;
+    }
+
+    /// <summary>«Ложусь спать» (начат сон) — вечерний разбор, если сегодня его ещё не было (spec §5.4).</summary>
+    private async Task<BotReply?> EveningOnSleepAsync(User user, DateTime now, CancellationToken ct)
+    {
+        var current = await tracking.CurrentAsync(user, ct);
+        var isSleep = (current?.Activity?.CategoryKey ?? current?.Segment.CategoryKey) == Domain.Categories.DefaultCategories.Sleep;
+        return isSleep && user.LastEveningReview != DailyReview.ReviewDay(user, now) ? await daily.EveningAsync(user, now, ct) : null;
     }
 
     private async Task<(string? Text, string? Problem)> TranscribeAsync(byte[] voice, TimeSpan duration, CancellationToken ct)
@@ -712,6 +724,7 @@ public sealed partial class ConversationService(
         CustomExtension,
         ActivityName,
         AddPast,
+        SleepFix,
     }
 
     private static string State(Mode mode, Step step) => $"{(mode == Mode.Onboarding ? 'O' : 'E')}:{step}";

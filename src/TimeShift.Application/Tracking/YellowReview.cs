@@ -23,12 +23,17 @@ public sealed class YellowReview(TrackingService tracking)
     private const string WastedTitle = "Залипание";
 
     /// <summary>Вопрос о следующем неразобранном участке или <c>null</c>.</summary>
-    public async Task<BotReply?> NextAsync(User user, DateTime now, CancellationToken ct)
+    /// <param name="after">Задан — искать после этого момента, не глядя на отметку «уже предлагали» (вечерний разбор и
+    /// цепочка после ответа); иначе — после отметки, за последние 12 часов.</param>
+    public async Task<BotReply?> NextAsync(User user, DateTime now, CancellationToken ct, DateTime? after = null)
     {
-        if (await FirstGapAsync(user, now, ct) is not { } gap)
+        var gaps = await GapsAsync(user, now, after, ct);
+        if (gaps.Count == 0)
         {
             return null;
         }
+
+        var gap = gaps[0];
 
         user.MarkYellowReviewed(gap.EndUtc);
         var tz = user.TimeZoneInfo;
@@ -96,7 +101,7 @@ public sealed class YellowReview(TrackingService tracking)
         {
             new($"✅ {span} — {activity.Name}.", [[new ReplyButton("↩️ Отменить", "tl:undo")]], ReplacesSource: true),
         };
-        if (await NextAsync(user, now, ct) is { } next)
+        if (await NextAsync(user, now, ct, after: range.EndUtc) is { } next)
         {
             replies.Add(next);
         }
@@ -104,19 +109,36 @@ public sealed class YellowReview(TrackingService tracking)
         return (replies, null);
     }
 
-    /// <summary>Первый участок 🟡 (≥ 15 мин) после уже разобранного, в пределах 12 часов и в прошлом.</summary>
-    private async Task<TimeRange?> FirstGapAsync(User user, DateTime now, CancellationToken ct)
+    /// <summary>Участки 🟡 (≥ 15 мин) в прошлом: после <paramref name="after"/> (не раньше 36 часов назад) или после отметки.</summary>
+    public async Task<IReadOnlyList<TimeRange>> GapsAsync(User user, DateTime now, DateTime? after, CancellationToken ct)
     {
         var end = TrackingService.Minute(now);
-        var from = end - Lookback;
-        if (user.YellowReviewedUntilUtc is { } reviewed && reviewed > from)
+        DateTime from;
+        if (after is { } a)
         {
-            from = reviewed;
+            // Вечерний день может быть длиннее суток (разбор в 00:30) — берём с запасом.
+            var cap = end - TimeSpan.FromHours(36);
+            from = a > cap ? TrackingService.Minute(a) : cap;
+        }
+        else
+        {
+            from = end - Lookback;
+            if (user.YellowReviewedUntilUtc is { } reviewed && reviewed > from)
+            {
+                from = reviewed;
+            }
         }
 
+        // До регистрации ничего не разбираем.
+        if (from < user.CreatedAtUtc)
+        {
+            from = TrackingService.Minute(user.CreatedAtUtc);
+        }
+
+        var gaps = new List<TimeRange>();
         if (end - from < MinimumGap)
         {
-            return null;
+            return gaps;
         }
 
         var timeline = await tracking.LoadAsync(user, from, ct);
@@ -146,14 +168,14 @@ public sealed class YellowReview(TrackingService tracking)
                 var stop = piece?.StartUtc ?? end;
                 if (stop - s >= MinimumGap)
                 {
-                    return new TimeRange(s, stop);
+                    gaps.Add(new TimeRange(s, stop));
                 }
 
                 start = null;
             }
         }
 
-        return null;
+        return gaps;
     }
 
     private static long Minutes(DateTime utc) => utc.Ticks / TimeSpan.TicksPerMinute;

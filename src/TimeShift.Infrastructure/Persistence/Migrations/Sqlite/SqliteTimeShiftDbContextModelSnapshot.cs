@@ -341,6 +341,14 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_onboarded");
 
+                    b.Property<DateOnly?>("LastEveningReview")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_evening_review");
+
+                    b.Property<DateOnly?>("LastMorningCheck")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_morning_check");
+
                     b.Property<DateTime?>("LastPingAtUtc")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_ping_at");
