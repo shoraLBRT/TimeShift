@@ -127,21 +127,7 @@ public static partial class ScheduleText
     }
 
     /// <summary>Категория по названию блока, если она очевидна; иначе <c>null</c> (спросим позже).</summary>
-    public static string? GuessCategory(string title)
-    {
-        var t = title.ToLowerInvariant();
-        return t switch
-        {
-            _ when t.Contains("работ") || t.Contains("смена") || t.Contains("офис") => DefaultCategories.Work,
-            _ when t.Contains("учёб") || t.Contains("учеб") || t.Contains("пары") || t.Contains("универ")
-                   || t.Contains("школ") || t.Contains("курс") || t.Contains("лекци") => DefaultCategories.Study,
-            _ when t.Contains("трениров") || t.Contains("спорт") || t.Contains("зал") || t.Contains("бег")
-                   || t.Contains("йог") || t.Contains("бассейн") || t.Contains("футбол") => DefaultCategories.Sport,
-            _ when t.Contains("дорог") || t.Contains("езд") => DefaultCategories.Commute,
-            _ when t.Contains("проект") => DefaultCategories.Projects,
-            _ => null,
-        };
-    }
+    public static string? GuessCategory(string title) => Classifier.Guess(title);
 
     /// <summary>«каждый день», «пн–пт», «вс–чт», «сб, вс», «пн, ср, пт».</summary>
     public static string FormatDays(IEnumerable<DayOfWeek> days)

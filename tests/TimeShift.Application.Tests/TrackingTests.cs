@@ -420,4 +420,37 @@ public class TrackingTests
         await Text("2 часа");
         Assert.Equal(TimeSpan.FromHours(2), _store.Activities.Single().TypicalDuration);
     }
+
+    [Fact]
+    public async Task YouTube_games_and_unknown_activities_are_asked_for_a_category_first()
+    {
+        await OnboardAsync();
+
+        var youtube = Question(await Text("Ютуб"));
+        Assert.Contains("YouTube бывает разным", youtube.Text, StringComparison.Ordinal);
+        Assert.Equal(["Отдых", "Учёба", "Залипание"], youtube.Buttons[0].Select(b => b.Label));
+
+        // Ответ — и следом вопрос о длительности того же занятия.
+        var answered = await Press(youtube.Buttons[0][1].Data);
+        Assert.Contains(answered, r => r.Text == "Запомнил: «Ютуб» — Учёба.");
+        Assert.Contains("Сколько обычно длится «Ютуб»", Question(answered).Text, StringComparison.Ordinal);
+        await Text("полчаса");
+
+        Advance(30);
+        var game = Question(await Text("Играю в Elden Ring"));
+        Assert.Equal(["Синглплеер — отдых", "Мультиплеер — залипание"], game.Buttons[0].Select(b => b.Label));
+        await Press(game.Buttons[0][0].Data);
+        Assert.Equal("rest", _store.Activities.Single(a => a.Name == "Играю в Elden Ring").CategoryKey);
+        await Text("2 часа");
+
+        Advance(30);
+        var guitar = Question(await Text("Гитара"));
+        Assert.Contains("К чему отнести?", guitar.Text, StringComparison.Ordinal);
+        Assert.Contains(await Text("отдых"), r => r.Text == "Запомнил: «Гитара» — Осознанный отдых.");
+
+        // Очевидное не спрашивается.
+        Advance(30);
+        Assert.DoesNotContain(await Text("Сериал"), r => r.Text.Contains("К чему", StringComparison.Ordinal));
+        Assert.Equal("rest", _store.Activities.Single(a => a.Name == "Сериал").CategoryKey);
+    }
 }
