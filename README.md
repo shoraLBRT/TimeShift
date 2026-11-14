@@ -59,6 +59,10 @@ curl http://localhost:5138/health   # {"status":"ok"}
 | `Telegram:BotToken` | токен бота; пусто — Telegram выключен |
 | `Telegram:Proxy` | прокси до api.telegram.org (`socks5://127.0.0.1:1080`, `http://…`); пусто — напрямую |
 | `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом; пусто — всем |
+| `Llm:BaseUrl` | OpenAI-совместимый API (агрегатор: ProxyAPI, AITunnel, Polza, или провайдер напрямую) |
+| `Llm:ApiKey` | ключ; пусто — LLM выключен, бот работает кнопками и коротким текстом |
+| `Llm:Model` | модель, например `deepseek-chat`, `qwen-flash`, `claude-haiku-5-5` |
+| `Llm:TimeoutSeconds`, `Llm:MaxTokens`, `Llm:Temperature`, `Llm:JsonMode` | тонкая настройка (30 с, 800, 0, true) |
 
 ## Docker Compose
 

@@ -48,6 +48,16 @@ public static class DependencyInjection
         services.AddScoped<IActivityRepository, ActivityRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IClock, SystemClock>();
+
+        // LLM (секция Llm): без ключа провайдер зарегистрирован, но выключен — бот работает без него.
+        var llm = Llm.LlmOptions.From(configuration);
+        services.AddSingleton(llm);
+        services.AddSingleton<ILlmProvider>(_ => new Llm.OpenAiCompatibleLlmProvider(
+            new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+            {
+                Timeout = Timeout.InfiniteTimeSpan,
+            },
+            llm));
         return services;
     }
 }
