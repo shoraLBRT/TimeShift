@@ -1,5 +1,7 @@
 <Project>
   <PropertyGroup>
+    <!-- habze: the single version source; release-please updates it in its Release PR, never edit by hand. -->
+    <Version>0.0.0</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
