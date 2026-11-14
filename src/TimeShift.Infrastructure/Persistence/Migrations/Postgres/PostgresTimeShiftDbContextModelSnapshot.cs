@@ -346,6 +346,14 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("boolean")
                         .HasColumnName("is_onboarded");
 
+                    b.Property<DateOnly?>("LastEveningReview")
+                        .HasColumnType("date")
+                        .HasColumnName("last_evening_review");
+
+                    b.Property<DateOnly?>("LastMorningCheck")
+                        .HasColumnType("date")
+                        .HasColumnName("last_morning_check");
+
                     b.Property<DateTime?>("LastPingAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_ping_at");

@@ -76,6 +76,16 @@ public class User
     /// <summary>До какого момента участки 🟡 уже предлагались к разбору (spec §5.4) — чтобы не спрашивать дважды.</summary>
     public DateTime? YellowReviewedUntilUtc { get; private set; }
 
+    /// <summary>Местная дата последнего вечернего разбора (spec §5.4) — раз в день.</summary>
+    public DateOnly? LastEveningReview { get; private set; }
+
+    /// <summary>Местная дата последнего утреннего вопроса про сон.</summary>
+    public DateOnly? LastMorningCheck { get; private set; }
+
+    public void MarkEveningReview(DateOnly localDate) => LastEveningReview = localDate;
+
+    public void MarkMorningCheck(DateOnly localDate) => LastMorningCheck = localDate;
+
     public void MarkYellowReviewed(DateTime untilUtc)
     {
         Utc.Ensure(untilUtc, nameof(untilUtc));

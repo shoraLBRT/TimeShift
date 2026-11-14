@@ -53,6 +53,17 @@ public sealed partial class ConversationService
         }
 
         var state = Parse(user.DialogState);
+        if (state is { Step: Step.SleepFix })
+        {
+            if (!Parsing.ScheduleText.TryParseTimeRange(text, out var lay, out var wake))
+            {
+                return [BotReply.Plain("Не понял время. Напиши, например, «2-10» или «23:30-7:15».")];
+            }
+
+            user.DialogState = null;
+            return [await daily.RecordSleepAsync(user, lay, wake, now, ct)];
+        }
+
         if (state is { Step: Step.AddPast })
         {
             var defaultDay = DateOnly.TryParseExact(StateArgument(user.DialogState), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
@@ -93,6 +104,16 @@ public sealed partial class ConversationService
         if (await questions.OnButtonAsync(user, data, now, ct) is { } answer)
         {
             return [answer];
+        }
+
+        if (await daily.OnButtonAsync(user, data, now, ct) is { } dailyAnswer)
+        {
+            if (dailyAnswer.AskSleep)
+            {
+                user.DialogState = State(Mode.Edit, Step.SleepFix);
+            }
+
+            return dailyAnswer.Replies;
         }
 
         if (await yellow.OnButtonAsync(user, data, now, ct) is { } review)

@@ -26,6 +26,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
   retry, day/time resolution `PastTime`.
 - **LLM eval (`tools/TimeShift.LlmEval`):** 40 phrases with expected intents, `IntentMatcher`, live run with
   accuracy/latency/cost and `--record`; offline checks in `dotnet test`. No live run yet (no key, #2).
+- **Daily review (`DailyReview`):** evening — by the ping loop at «sleep − offset» (up to 30 min after sleep starts) or when sleep is started: the day, remaining 🟡 one by one, «⚪ Остальное верно» materializes ⚪ as ✅; morning — first message after the template sleep: «Спал как обычно?» (yes → ✅ sleep, no → «во сколько лёг и встал»). Once a day each; nothing before registration.
 - **Yellow review (`YellowReview`):** after a text/voice message or an answer button, the first unreviewed 🟡 span (≥ 15 min, last 12 h, after onboarding) is asked «Пока тебя не было…» — recent activity / wasted / describe (`/add`) / skip; each span once (`users.yellow_reviewed_until`).
 - **Classification (`Domain.Categories.Classifier`):** spec §4.2 defaults by name; YouTube, games and unknown activities get a one-time category question (buttons or a category name).
 - **Questions (`QuestionService`, `pending_questions`):** category, then unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, routes.
@@ -35,7 +36,7 @@ MVP, stage 5 (LLM). Steps 1–4 of spec §11 are done; the backlog is in GitHub 
 
 ## Next
 
-[#13](https://github.com/shoraLBRT/TimeShift/issues/13) — evening review and morning sleep question. (#2 waits for the LLM key; voice needs a whisper model on the server).
+[#14](https://github.com/shoraLBRT/TimeShift/issues/14) — edit segments by text. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
 ## Open questions
 
