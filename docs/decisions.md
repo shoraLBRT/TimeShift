@@ -64,10 +64,20 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 
 ### Applying changes (`Timeline.Apply`)
 
-- **An incoming segment that overlaps the open segment ends it at the start of the earliest overlapping incoming
-  segment; nothing of the open activity continues after the incoming ones.** In spec §3.4 the description of
-  14:00–17:00 must replace the open "Тренировка", not leave it running from 17:00. If the user is in fact still
-  doing it, the next ping restarts it.
+- **~~An incoming segment that overlaps the open segment ends it~~ — replaced 2026-11-14 (user decision, spec §3.6).**
+  Now the open activity is cut around the incoming segments and **resumes after the last one** when all of these
+  hold: the incoming batch ends before `now`, none of it is open, and the first incoming segment starts after the
+  open activity's start (otherwise the stated start is contradicted). Spec §3.4 still works because a described
+  period that reaches `now` ends the activity. `Apply` therefore takes `nowUtc`.
+- **The resumed open segment carries `ElapsedBefore`** — the time of the same activity before the break, summed
+  over all breaks. Extension limits become `T·factor − ElapsedBefore` measured from the resumed start, so a lunch
+  break does not reset "how long you have been working". Closing a segment drops the value.
+- **Parallel activities are a second track (`Segment.IsParallel`, `Timeline.ParallelSegments`)**, not a second
+  category on one segment: they have their own boundaries ("обедал 13:00–13:30 за работой" inside a 9-hour work
+  segment). The main track keeps all invariants and still sums to 24 h; parallel segments are always closed, may
+  overlap anything (including each other), are never cut by main edits, and are built separately
+  (`TimelineBuilder.BuildParallel`). An open parallel activity ("сейчас ем за работой") is materialized by the
+  Application layer as a closed ⚪ segment of typical length.
 - **An incoming open segment covers everything from its start on** (closes the previous open one, removes later
   segments). This is how "start a new activity" works.
 - **Adjacent identical stored segments are not merged** — the builder merges for display; storage keeps what was

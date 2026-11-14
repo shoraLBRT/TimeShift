@@ -140,12 +140,22 @@ public static class TimelineBuilder
             return result;
         }
 
+        if (open.ElapsedBefore < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "Уже прожитое время не может быть отрицательным.");
+        }
+
+        var elapsed = open.ElapsedBefore;
         var policy = request.Policy;
         if (open.TypicalDuration is not { } typical)
         {
             // T неизвестна: берём запасную длительность, но всё продление — под вопросом.
-            var end = Cap(start, request.UnknownDurationFallback, policy.MaxFactor, now);
-            result.Add((new TimeRange(start, end), SegmentStatus.Questionable));
+            var end = Cap(start, request.UnknownDurationFallback, policy.MaxFactor, elapsed, now);
+            if (end > start)
+            {
+                result.Add((new TimeRange(start, end), SegmentStatus.Questionable));
+            }
+
             return result;
         }
 
@@ -154,8 +164,8 @@ public static class TimelineBuilder
             throw new ArgumentOutOfRangeException(nameof(request), "Типичная длительность должна быть > 0.");
         }
 
-        var normEnd = Cap(start, typical, policy.NormFactor, now);
-        var maxEnd = Cap(start, typical, policy.MaxFactor, now);
+        var normEnd = Cap(start, typical, policy.NormFactor, elapsed, now);
+        var maxEnd = Cap(start, typical, policy.MaxFactor, elapsed, now);
         if (normEnd > start)
         {
             result.Add((new TimeRange(start, normEnd), SegmentStatus.Assumed));
@@ -169,7 +179,8 @@ public static class TimelineBuilder
         return result;
     }
 
-    private static DateTime Cap(DateTime start, TimeSpan typical, double factor, DateTime now)
+    /// <summary><c>S + T·factor − elapsed</c>, но не раньше <c>S</c> и не позже «сейчас».</summary>
+    private static DateTime Cap(DateTime start, TimeSpan typical, double factor, TimeSpan elapsed, DateTime now)
     {
         var available = (now - start).Ticks;
         if (double.IsPositiveInfinity(factor))
@@ -177,8 +188,38 @@ public static class TimelineBuilder
             return now;
         }
 
-        var ticks = typical.Ticks * factor;
+        var ticks = typical.Ticks * factor - elapsed.Ticks;
+        if (ticks <= 0)
+        {
+            return start;
+        }
+
         return ticks >= available ? now : start.AddTicks((long)ticks);
+    }
+
+    /// <summary>
+    /// Параллельная дорожка в окне: отрезки, обрезанные по окну, по порядку начала. Могут пересекаться между собой
+    /// и с основной лентой; пробелы не заполняются (spec §3.6).
+    /// </summary>
+    public static IReadOnlyList<TimelinePiece> BuildParallel(TimeRange window, IReadOnlyList<Segment> parallel, DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(parallel);
+        Utc.Ensure(nowUtc, nameof(nowUtc));
+        if (parallel.Any(s => s is null || !s.IsParallel))
+        {
+            throw new ArgumentException("Ожидаются только параллельные занятия.", nameof(parallel));
+        }
+
+        return parallel
+            .Where(s => s.StartUtc < window.EndUtc && s.EndUtc > window.StartUtc)
+            .OrderBy(s => s.StartUtc)
+            .Select(s =>
+            {
+                var start = s.StartUtc > window.StartUtc ? s.StartUtc : window.StartUtc;
+                var end = s.EndUtc!.Value < window.EndUtc ? s.EndUtc.Value : window.EndUtc;
+                return new TimelinePiece(start, end, s.Title, s.ActivityId, s.CategoryKey, s.Status, s.Source, start >= nowUtc);
+            })
+            .ToList();
     }
 
     private static List<Segment> PrepareSegments(IReadOnlyList<Segment> segments, TimeRange window)
@@ -187,6 +228,12 @@ public static class TimelineBuilder
         {
             throw new ArgumentException(
                 "Открытый отрезок передаётся как OpenActivity, а не среди материализованных.", nameof(segments));
+        }
+
+        if (segments.Any(s => s.IsParallel))
+        {
+            throw new ArgumentException(
+                "Параллельные занятия строятся отдельно (BuildParallel), а не в основной ленте.", nameof(segments));
         }
 
         var sorted = segments.OrderBy(s => s.StartUtc).ToList();

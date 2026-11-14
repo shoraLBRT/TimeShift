@@ -5,6 +5,8 @@ namespace TimeShift.Domain.Tests;
 
 public class TimelineApplyTests
 {
+    private static readonly DateTime Now = Msk(20);
+
     private static Segment Seg(int fromHour, int fromMinute, int? toHour, int toMinute, string title) =>
         new(Msk(fromHour, fromMinute), toHour is { } h ? Msk(h, toMinute) : null, title, SegmentStatus.Confirmed, SegmentSource.User);
 
@@ -28,7 +30,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(10, 12, "A"), Seg(12, 14, "B")]);
 
-        var change = timeline.Apply([Seg(11, 13, "C")]);
+        var change = timeline.Apply([Seg(11, 13, "C")], Now);
 
         Assert.Equal(
             ["10:00-11:00 A Confirmed", "11:00-13:00 C Confirmed", "13:00-14:00 B Confirmed"],
@@ -42,7 +44,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(10, 14, "Работа")]);
 
-        timeline.Apply([Seg(11, 0, 12, 30, "Обед")]);
+        timeline.Apply([Seg(11, 0, 12, 30, "Обед")], Now);
 
         Assert.Equal(
             ["10:00-11:00 Работа Confirmed", "11:00-12:30 Обед Confirmed", "12:30-14:00 Работа Confirmed"],
@@ -54,7 +56,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(10, 16, "A"), Seg(16, 17, "B")]);
 
-        timeline.Apply([Seg(11, 12, "X"), Seg(13, 14, "Y"), Seg(15, 18, "Z")]);
+        timeline.Apply([Seg(11, 12, "X"), Seg(13, 14, "Y"), Seg(15, 18, "Z")], Now);
 
         Assert.Equal(
             [
@@ -69,7 +71,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(10, 11, "A")]);
 
-        var change = timeline.Apply([Seg(12, 13, "B")]);
+        var change = timeline.Apply([Seg(12, 13, "B")], Now);
 
         Assert.Empty(change.Before);
         Assert.Equal(2, timeline.Segments.Count);
@@ -79,21 +81,63 @@ public class TimelineApplyTests
     public void Overlapping_incoming_is_rejected()
     {
         var timeline = new Timeline();
-        Assert.Throws<ArgumentException>(() => timeline.Apply([Seg(10, 12, "A"), Seg(11, 13, "B")]));
+        Assert.Throws<ArgumentException>(() => timeline.Apply([Seg(10, 12, "A"), Seg(11, 13, "B")], Now));
         Assert.Empty(timeline.Segments);
     }
 
     [Fact]
-    public void Describing_a_period_inside_open_activity_closes_it()
+    public void Segment_inside_open_activity_interrupts_it_and_the_activity_resumes()
     {
-        var timeline = new Timeline([Seg(10, 12, "A"), Seg(14, null, "Тренировка")]);
+        var timeline = new Timeline([Seg(10, 12, "A"), Seg(14, null, "Работа")]);
 
-        timeline.Apply([Seg(15, 16, "Дорога")]);
+        timeline.Apply([Seg(15, 0, 15, 30, "Обед")], Now);
+
+        Assert.Equal(
+            ["10:00-12:00 A Confirmed", "14:00-15:00 Работа Confirmed", "15:00-15:30 Обед Confirmed", "15:30-… Работа Confirmed"],
+            Lines(timeline));
+        Assert.Equal(TimeSpan.FromHours(1), timeline.OpenSegment!.ElapsedBefore);
+    }
+
+    [Fact]
+    public void Several_interruptions_accumulate_elapsed_time()
+    {
+        var timeline = new Timeline([Seg(9, null, "Работа")]);
+
+        timeline.Apply([Seg(11, 0, 11, 15, "Кофе")], Now);
+        timeline.Apply([Seg(13, 14, "Обед")], Now);
+
+        Assert.Equal(
+            [
+                "09:00-11:00 Работа Confirmed", "11:00-11:15 Кофе Confirmed", "11:15-13:00 Работа Confirmed",
+                "13:00-14:00 Обед Confirmed", "14:00-… Работа Confirmed",
+            ],
+            Lines(timeline));
+        Assert.Equal(TimeSpan.FromMinutes(225), timeline.OpenSegment!.ElapsedBefore);
+    }
+
+    [Fact]
+    public void Period_described_up_to_now_ends_the_open_activity()
+    {
+        var timeline = new Timeline([Seg(14, null, "Тренировка")]);
+
+        timeline.Apply([Seg(15, 16, "Дорога"), Seg(16, 20, "Дом")], Now);
 
         Assert.Null(timeline.OpenSegment);
         Assert.Equal(
-            ["10:00-12:00 A Confirmed", "14:00-15:00 Тренировка Confirmed", "15:00-16:00 Дорога Confirmed"],
+            ["14:00-15:00 Тренировка Confirmed", "15:00-16:00 Дорога Confirmed", "16:00-20:00 Дом Confirmed"],
             Lines(timeline));
+    }
+
+    [Fact]
+    public void Undo_of_an_interruption_restores_the_open_activity()
+    {
+        var original = new[] { Seg(14, null, "Работа") };
+        var timeline = new Timeline(original);
+
+        var change = timeline.Apply([Seg(15, 16, "Обед")], Now);
+        timeline.Undo(change);
+
+        Assert.Equal(original, timeline.Segments);
     }
 
     [Fact]
@@ -101,7 +145,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(14, null, "Тренировка")]);
 
-        timeline.Apply([Seg(15, null, "Дорога")]);
+        timeline.Apply([Seg(15, null, "Дорога")], Now);
 
         Assert.Equal(["14:00-15:00 Тренировка Confirmed", "15:00-… Дорога Confirmed"], Lines(timeline));
         Assert.Equal("Дорога", timeline.OpenSegment!.Title);
@@ -112,7 +156,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(10, 12, "A"), Seg(13, 14, "B")]);
 
-        timeline.Apply([Seg(11, null, "C")]);
+        timeline.Apply([Seg(11, null, "C")], Now);
 
         Assert.Equal(["10:00-11:00 A Confirmed", "11:00-… C Confirmed"], Lines(timeline));
     }
@@ -122,7 +166,7 @@ public class TimelineApplyTests
     {
         var timeline = new Timeline([Seg(14, null, "Тренировка")]);
 
-        timeline.Apply([Seg(13, 15, "Другое")]);
+        timeline.Apply([Seg(13, 15, "Другое")], Now);
 
         Assert.Equal(["13:00-15:00 Другое Confirmed"], Lines(timeline));
         Assert.Null(timeline.OpenSegment);
@@ -134,7 +178,7 @@ public class TimelineApplyTests
         var original = new[] { Seg(10, 12, "A"), Seg(12, 14, "B"), Seg(15, null, "Open") };
         var timeline = new Timeline(original);
 
-        var change = timeline.Apply([Seg(11, 16, "C")]);
+        var change = timeline.Apply([Seg(11, 16, "C")], Now);
         timeline.Undo(change);
 
         Assert.Equal(original, timeline.Segments);
@@ -144,8 +188,8 @@ public class TimelineApplyTests
     public void Undo_of_a_stale_change_fails()
     {
         var timeline = new Timeline([Seg(10, 12, "A")]);
-        var first = timeline.Apply([Seg(11, 12, "B")]);
-        timeline.Apply([Seg(11, 12, "C")]);
+        var first = timeline.Apply([Seg(11, 12, "B")], Now);
+        timeline.Apply([Seg(11, 12, "C")], Now);
 
         Assert.Throws<InvalidOperationException>(() => timeline.Undo(first));
     }

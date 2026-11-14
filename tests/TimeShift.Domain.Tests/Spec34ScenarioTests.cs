@@ -37,7 +37,7 @@ public class Spec34ScenarioTests
     {
         // 14:00 «тренируюсь» → открытый отрезок.
         var timeline = new Timeline();
-        timeline.Apply([new Segment(Msk(14), null, "Тренировка", SegmentStatus.Confirmed, SegmentSource.User, categoryKey: "sport")]);
+        timeline.Apply([new Segment(Msk(14), null, "Тренировка", SegmentStatus.Confirmed, SegmentSource.User, categoryKey: "sport")], Msk(14));
 
         // 17:00: лента до ответа пользователя.
         var before = BuildDay(timeline);
@@ -61,7 +61,8 @@ public class Spec34ScenarioTests
         var proposal = Assert.IsType<PeriodProposal>(resolution);
 
         // Пользователь нажал «✅ Верно» → применяем.
-        var change = timeline.Apply(proposal.Segments);
+        // Описанный период доходит до «сейчас» — тренировка не продолжается после него.
+        var change = timeline.Apply(proposal.Segments, Msk(17));
         Assert.Null(timeline.OpenSegment);
         Assert.Single(change.Before);
 
