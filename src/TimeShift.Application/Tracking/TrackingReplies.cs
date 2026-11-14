@@ -48,7 +48,7 @@ public static class TrackingReplies
         ? $"⏹ «{segment.Title}»: {Clock(segment.StartUtc, timeZone)}–{Clock(end, timeZone)} ({Duration(end - segment.StartUtc)})."
         : $"⏹ «{segment.Title}» убрал — оно только началось.";
 
-    /// <summary>Лента дня текстом (spec §5.6: /day; картинка — шаг 8).</summary>
+    /// <summary>Лента дня текстом (spec §5.7: /day; картинка — шаг 8).</summary>
     public static string Day(IReadOnlyList<TimelinePiece> pieces, TimeZoneInfo timeZone, DateTime nowUtc)
     {
         var builder = new StringBuilder();

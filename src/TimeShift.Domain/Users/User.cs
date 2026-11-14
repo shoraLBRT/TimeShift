@@ -70,7 +70,7 @@ public class User
     /// <summary>Сколько пингов подряд остались без ответа; на <c>MaxUnansweredPings</c> пинги встают на паузу.</summary>
     public int UnansweredPings { get; private set; }
 
-    /// <summary>Ручные тихие часы (spec §5.6: /quiet): не пинговать до этого момента.</summary>
+    /// <summary>Ручные тихие часы (spec §5.7: /quiet): не пинговать до этого момента.</summary>
     public DateTime? QuietUntilUtc { get; private set; }
 
     /// <summary>Пользователь что-то написал: пинги считаются отвеченными, пауза снимается.</summary>
