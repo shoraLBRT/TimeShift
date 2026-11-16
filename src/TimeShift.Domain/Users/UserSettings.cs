@@ -12,6 +12,14 @@ public class UserSettings
     public const int DefaultEveningReviewOffsetMin = 30;
     public const int DefaultRoundingMin = 5;
 
+    /// <summary>Допустимый интервал пингов, минут (spec §5.1, §6).</summary>
+    public const int MinPingIntervalMin = 5;
+
+    public const int MaxPingIntervalMin = 240;
+
+    /// <summary>Интервал пингов в допустимых пределах?</summary>
+    public static bool IsValidPingInterval(int minutes) => minutes is >= MinPingIntervalMin and <= MaxPingIntervalMin;
+
     public Guid UserId { get; private set; }
 
     public int PingIntervalMin { get; set; } = DefaultPingIntervalMin;

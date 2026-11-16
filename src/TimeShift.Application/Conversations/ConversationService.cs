@@ -37,7 +37,7 @@ public sealed partial class ConversationService(
 
     private static readonly string[] SleepPresets = ["23:00-07:00", "00:00-08:00", "01:00-09:00", "02:00-10:00"];
 
-    private static readonly int[] PingIntervals = [30, 45, 60];
+    private static readonly int[] PingIntervals = [15, 30, 45, 60, 90, 120];
 
     public async Task<IReadOnlyList<BotReply>> HandleAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
@@ -236,8 +236,8 @@ public sealed partial class ConversationService(
             "Есть ещё что-то регулярное? Например «Тренировка вт, чт 19-21» или «Йога каждый день 7-7:30».",
             [[new ReplyButton("Нет / Готово", "next")]]),
         Step.PingInterval => new BotReply(
-            "Как часто спрашивать, чем ты занят?",
-            [PingIntervals.Select(m => new ReplyButton($"Раз в {m} мин", $"ping:{m}")).ToList()]),
+            $"Как часто спрашивать, чем ты занят? Нажми кнопку или напиши число минут — от {UserSettings.MinPingIntervalMin} до {UserSettings.MaxPingIntervalMin}.",
+            Rows(PingIntervals.Select(m => new ReplyButton($"Раз в {m} мин", $"ping:{m}")), 3)),
         Step.Extension => new BotReply(
             "Если ты сказал «тренируюсь» и пропал — сколько считать, что ты всё ещё тренируешься?\n\n" +
             "Рекомендую: до полуторной обычной длительности — в норме ⚪, до двойной — под вопросом 🟡, дальше — фон.",
@@ -323,9 +323,9 @@ public sealed partial class ConversationService(
                 return AddBlock(user, mode, step, text);
 
             case Step.PingInterval:
-                return int.TryParse(text.Split(' ')[0], out var minutes) && minutes is >= 30 and <= 60
+                return int.TryParse(text.Split(' ')[0], out var minutes) && UserSettings.IsValidPingInterval(minutes)
                     ? SetPing(user, mode, minutes)
-                    : [BotReply.Plain("Интервал — от 30 до 60 минут."), Ask(step)];
+                    : [BotReply.Plain($"Интервал — от {UserSettings.MinPingIntervalMin} до {UserSettings.MaxPingIntervalMin} минут."), Ask(step)];
 
             case Step.CustomExtension:
                 return SetCustomExtension(user, mode, text);
@@ -374,7 +374,7 @@ public sealed partial class ConversationService(
                     ? [new BotReply($"Убрал: {ScheduleText.Format(removed)}", [], ReplacesSource: true)]
                     : [new BotReply("Этого блока уже нет.", [], ReplacesSource: true)];
 
-            case "ping" when int.TryParse(value, out var minutes) && minutes is >= 30 and <= 60:
+            case "ping" when int.TryParse(value, out var minutes) && UserSettings.IsValidPingInterval(minutes):
                 if (state is { Mode: Mode.Onboarding, Step: Step.PingInterval })
                 {
                     return SetPing(user, Mode.Onboarding, minutes);
@@ -652,7 +652,7 @@ public sealed partial class ConversationService(
 
         IReadOnlyList<IReadOnlyList<ReplyButton>> rows =
         [
-            PingIntervals.Select(m => new ReplyButton(Mark(s.PingIntervalMin == m, $"{m} мин"), $"ping:{m}")).ToList(),
+            .. Rows(PingIntervals.Select(m => new ReplyButton(Mark(s.PingIntervalMin == m, $"{m} мин"), $"ping:{m}")), 3),
             .. ExtensionButtons(s.Extension, onboarding: false),
             [
                 new ReplyButton($"Пинг в блоках: {(s.PingDuringBlocks ? "да" : "нет")}", "set:blockping"),

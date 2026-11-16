@@ -93,6 +93,44 @@ public class ConversationTests
     }
 
     [Fact]
+    public async Task Ping_interval_accepts_the_whole_range_and_rejects_the_rest()
+    {
+        await Text("/start");
+        await Press("tz:Europe/Moscow");
+        await Text("1-9");
+        await Press("wkend:same");
+        await Press("next");
+        var ask = await Press("next");
+        Assert.Contains("ping:120", ButtonData(ask));
+
+        foreach (var bad in new[] { "4", "241", "0", "много" })
+        {
+            var rejected = await Text(bad);
+            Assert.Contains(rejected, r => r.Text.Contains("от 5 до 240"));
+            Assert.Equal(UserSettings.DefaultPingIntervalMin, Me.Settings.PingIntervalMin);
+        }
+
+        await Text("15");
+        Assert.Equal(15, Me.Settings.PingIntervalMin);
+    }
+
+    [Fact]
+    public async Task Ping_interval_buttons_in_settings_cover_the_range()
+    {
+        await OnboardAsync();
+
+        await Press("ping:120");
+        Assert.Equal(120, Me.Settings.PingIntervalMin);
+        await Press("ping:4");
+        await Press("ping:241");
+        Assert.Equal(120, Me.Settings.PingIntervalMin);
+        Assert.True(UserSettings.IsValidPingInterval(5));
+        Assert.True(UserSettings.IsValidPingInterval(240));
+        Assert.False(UserSettings.IsValidPingInterval(4));
+        Assert.False(UserSettings.IsValidPingInterval(241));
+    }
+
+    [Fact]
     public async Task Any_first_message_starts_onboarding()
     {
         var replies = await Text("привет");
