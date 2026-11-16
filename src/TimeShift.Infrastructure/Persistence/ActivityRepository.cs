@@ -38,5 +38,15 @@ internal sealed class ActivityRepository(TimeShiftDbContext db) : IActivityRepos
     public async Task<IReadOnlyList<Activity>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
         await db.Activities.Where(a => a.UserId == userId).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, DateTime>> LastUsedAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var rows = await db.Segments
+            .Where(s => EF.Property<Guid>(s, "UserId") == userId && s.ActivityId != null)
+            .GroupBy(s => s.ActivityId)
+            .Select(g => new { Id = g.Key!.Value, Last = g.Max(s => s.StartUtc) })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(r => r.Id, r => r.Last);
+    }
+
     public void Add(Activity activity) => db.Activities.Add(activity);
 }

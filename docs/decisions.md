@@ -249,3 +249,32 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   system font with Cyrillic.
 - **The Dockerfile now restores all adapter projects** (Speech had been missing since #9).
 
+## Web client (#37, #39)
+
+- **The ping interval is any whole number of minutes from 5 to 240** (`UserSettings.MinPingIntervalMin` /
+  `MaxPingIntervalMin`, one rule for the bot and the API). Buttons offer 15 · 30 · 45 · 60 · 90 · 120; free text
+  accepts anything in range.
+- **`User.TelegramChatId` is nullable.** The web client may be the only client, so a user can exist without
+  Telegram; the unique index stays (NULLs are distinct in SQLite and Postgres). The notifier and the ping loop skip
+  users without a chat (Web Push will serve them, #40).
+- **Single-owner mode, owner resolution**: `Web:TelegramChatId` if set (that Telegram user, created when missing);
+  otherwise the only user in the database; otherwise the user without Telegram (created when missing). Resolved on
+  every authenticated request in Application (`OwnerService`), not cached.
+- **The session is a stateless signed cookie** (`expiry.HMACSHA256`, key = SHA-256 of the access key), not
+  ASP.NET Data Protection: Data Protection keys would have to be persisted or every container restart would sign the
+  owner out. Changing the access key invalidates all sessions. The key is compared in constant time; login is
+  limited to 5 attempts a minute per address; every non-GET request needs `X-TimeShift: 1` (CSRF, together with
+  `SameSite=Lax`).
+- **A day piece maps to exactly one stored segment, and the mapping lives in Application** (`DayBuilder`):
+  `TimelineBuilder` merges equal neighbours and has no segment ids, so Application cuts its pieces at stored-segment
+  boundaries and looks the segment up by time containment (extension pieces belong to the running segment). The
+  domain builder and Telegram's `/day` text are untouched.
+- **The API shows the whole day**, not clamped to now: pieces after now come back with `future: true` (a forecast
+  from the template); totals count only the past part of the main track.
+- **`POST /api/confirm` materialises computed pieces only** (template and background, never stored segments) and
+  stays away from time inside the running activity: the extension of a running activity is confirmed through
+  `ContinueAsync` (as «still doing it», up to now), and only together with `includeQuestionable` when part of it is
+  🟡 — applying a closed segment over a running one would stop it.
+- **Updating a schedule block is remove + add with rollback** (the block keeps its id and activity link); sleep
+  stays a separate resource.
+

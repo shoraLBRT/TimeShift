@@ -366,7 +366,7 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("quiet_until");
 
-                    b.Property<long>("TelegramChatId")
+                    b.Property<long?>("TelegramChatId")
                         .HasColumnType("INTEGER")
                         .HasColumnName("telegram_chat_id");
 

@@ -11,6 +11,9 @@ public interface ITimelineRepository
     /// <summary>Отрезки, которые кончаются после <paramref name="fromUtc"/> (и открытый), обе дорожки.</summary>
     Task<Timeline> LoadAsync(Guid userId, DateTime fromUtc, CancellationToken cancellationToken);
 
+    /// <summary>Отрезок пользователя по Id (любая дорожка, в том числе открытый).</summary>
+    Task<Segment?> FindSegmentAsync(Guid userId, Guid segmentId, CancellationToken cancellationToken);
+
     Task<Segment?> FindOpenAsync(Guid userId, CancellationToken cancellationToken);
 
     /// <summary>Сохраняет изменение (убирает <c>Before</c>, добавляет <c>After</c>) и пишет его в журнал.</summary>

@@ -21,11 +21,23 @@ public class Activity
         Name = string.Empty;
     }
 
+    public const int MaxNameLength = 60;
+
+    /// <summary>Верхняя граница типичной длительности, минут (сутки).</summary>
+    public const int MaxTypicalMinutes = 1440;
+
     public Guid Id { get; private set; } = Guid.NewGuid();
 
     public Guid UserId { get; private set; }
 
     public string Name { get; private set; }
+
+    /// <summary>Переименовывает занятие (прошлые отрезки ленты хранят прежнее название).</summary>
+    public void Rename(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Name = name.Trim();
+    }
 
     /// <summary>Для поиска без учёта регистра и «ё».</summary>
     public string NormalizedName

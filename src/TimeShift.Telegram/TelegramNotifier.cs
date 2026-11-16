@@ -13,27 +13,34 @@ internal sealed class TelegramNotifier(ITelegramBotClient bot) : INotifier
 {
     public async Task<string?> SendAsync(User user, BotReply reply, CancellationToken cancellationToken)
     {
+        // Пользователь без Telegram (только web-клиент) — слать некуда.
+        if (user.TelegramChatId is not { } chatId)
+        {
+            return null;
+        }
+
         if (reply.Image is { } image)
         {
-            await TelegramMedia.SendPhotoAsync(bot, user.TelegramChatId, null, reply, image, TelegramMarkup.From(reply), cancellationToken);
+            await TelegramMedia.SendPhotoAsync(bot, chatId, null, reply, image, TelegramMarkup.From(reply), cancellationToken);
             return null;
         }
 
         var message = await bot.SendMessage(
-            user.TelegramChatId, reply.Text, replyMarkup: (ReplyMarkup?)TelegramMarkup.From(reply), cancellationToken: cancellationToken);
+            chatId, reply.Text, replyMarkup: (ReplyMarkup?)TelegramMarkup.From(reply), cancellationToken: cancellationToken);
         return message.MessageId.ToString(CultureInfo.InvariantCulture);
     }
 
     public async Task DeleteAsync(User user, string messageRef, CancellationToken cancellationToken)
     {
-        if (!int.TryParse(messageRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var messageId))
+        if (user.TelegramChatId is not { } chatId
+            || !int.TryParse(messageRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var messageId))
         {
             return;
         }
 
         try
         {
-            await bot.DeleteMessage(user.TelegramChatId, messageId, cancellationToken);
+            await bot.DeleteMessage(chatId, messageId, cancellationToken);
         }
         catch (ApiRequestException)
         {

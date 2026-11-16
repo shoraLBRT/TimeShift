@@ -14,5 +14,8 @@ public interface IActivityRepository
 
     Task<IReadOnlyList<Activity>> ListAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>Когда занятие в последний раз начиналось в ленте (по началу отрезков); занятия без отрезков не входят.</summary>
+    Task<IReadOnlyDictionary<Guid, DateTime>> LastUsedAsync(Guid userId, CancellationToken cancellationToken);
+
     void Add(Activity activity);
 }

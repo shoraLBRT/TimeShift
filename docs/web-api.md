@@ -32,7 +32,7 @@ Single owner. `Web:AccessKey` (config / env `Web__AccessKey`) is the key the own
 - `POST /api/auth/logout` → `204`, cookie cleared.
 - The session is stateless: `expiry.signature`, HMAC-SHA256 keyed by a hash of the access key. Changing the key
   signs every device out. It survives restarts and needs no storage.
-- Every non-GET request must carry the header `X-TimeShift: 1` (CSRF), login included.
+- Every non-GET request must carry the header `X-TimeShift: 1` (CSRF), login and logout included.
 - Which user: `Web:TelegramChatId` if set (the same account as in Telegram, created when missing); otherwise the
   only user in the database if there is exactly one; otherwise the user without Telegram (created when missing).
 
@@ -52,6 +52,8 @@ Single owner. `Web:AccessKey` (config / env `Web__AccessKey`) is the key the own
   "push": { "enabled": true, "publicKey": "BPm…" }
 }
 ```
+
+Until Web Push (#40) is implemented, `push` is `{ "enabled": false, "publicKey": null }`.
 
 `assetsVersion` changes whenever a file under `wwwroot` changes; the client uses it to refresh its cache.
 
@@ -103,6 +105,7 @@ All of the following return the updated **Me**:
 | `POST /api/onboarding/complete` | — (`409` when sleep is not set) |
 
 A block that overlaps another block or sleep → `409 conflict` with the name of the other block in `message`.
+An update keeps the block's `id`; a failed update leaves the block as it was.
 
 ## Day
 
@@ -146,8 +149,10 @@ A block that overlaps another block or sleep → `409 conflict` with the name of
 - `totals`, `status`, `parallelMin` count the past part of the main track only (up to "now"); `totals` is ordered
   by minutes, descending. `category` may be `null` (not classified yet).
 - A day in the future is allowed (all pieces `future`); it shows the week template.
+- `attention.pingPending` is `true` while the last ping is unanswered. A malformed date → `422` with `field: "date"`
+  (`view` for the `?view=` parameter).
 
-`GET /api/summary?from=2026-11-11&to=2026-11-17` (at most 31 days) → totals per day and for the whole range:
+`GET /api/summary?from=2026-11-11&to=2026-11-17` (at most 31 days; `to` defaults to today, `from` to six days before `to`) → totals per day and for the whole range:
 
 ```json
 {
@@ -172,7 +177,7 @@ Every request below returns `{ "day": Day }` — the refreshed day. Which day: q
 | `POST /api/entries` | `{ "start", "end", "title" \| "activityId", "category"?, "parallel"? }` | Records a past period as confirmed; it cuts and displaces what was there (parallel entries displace nothing). |
 | `PATCH /api/entries/{segmentId}` | any of `start`, `end`, `title`, `category` | Edits a stored segment. Freed time falls back to the template / background. |
 | `DELETE /api/entries/{segmentId}` | — | Removes a stored segment. |
-| `POST /api/confirm` | `{ "start", "end", "includeQuestionable"? }` | Confirms computed pieces in the range as they are shown (assumed → confirmed; questionable only when `includeQuestionable`). |
+| `POST /api/confirm` | `{ "start", "end", "includeQuestionable"? }` | Confirms computed pieces in the range as they are shown (assumed → confirmed; questionable only when `includeQuestionable`). Stored segments are left alone. The running activity is confirmed as a whole up to now (like `continue`), and only together with `includeQuestionable` when part of it is questionable; other time inside the running activity is not touched. |
 | `POST /api/undo` | — | Reverts the last change. Adds `"result": "undone" \| "nothing" \| "stale"`. |
 | `POST /api/quiet` | `{ "minutes": 120 }` (`0` — off; 5…1440) | Manual quiet hours. |
 
@@ -201,9 +206,11 @@ intents, without it a short text starts an activity and `/add`-style lines recor
 }
 ```
 
-`409` when the owner has not finished onboarding (the PWA has its own onboarding screens).
+Exactly one of `text` / `button`. Voice is not accepted here. `409` when the owner has not finished onboarding (the PWA has its own onboarding screens).
 
 ## Push
+
+> Not implemented yet — issue #40. Everything below is the planned contract.
 
 Web Push with VAPID. Keys: `Push:PublicKey` / `Push:PrivateKey` / `Push:Subject` from config; when absent they
 are generated once and kept in the database.

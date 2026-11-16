@@ -57,42 +57,57 @@ public sealed partial class ConversationService(
 
         var now = clock.UtcNow;
         var user = await users.FindByTelegramChatIdAsync(message.ChatId, cancellationToken);
-        IReadOnlyList<BotReply> replies;
-        if (user is null)
+        if (user is not null)
         {
-            var name = string.IsNullOrWhiteSpace(message.DisplayName) ? "друг" : message.DisplayName.Trim();
-            user = new User(message.ChatId, name, User.DefaultTimeZone, now);
-            users.Add(user);
-            user.RegisterActivity(now);
-            replies = StartOnboarding(user);
+            return await HandleKnownAsync(user, message, now, cancellationToken);
         }
-        else
+
+        var name = string.IsNullOrWhiteSpace(message.DisplayName) ? "друг" : message.DisplayName.Trim();
+        user = new User(message.ChatId, name, User.DefaultTimeZone, now);
+        users.Add(user);
+        user.RegisterActivity(now);
+        var replies = StartOnboarding(user);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return replies;
+    }
+
+    /// <summary>
+    /// То же сообщение, но для уже известного пользователя (web-клиент сам находит владельца и идёт мимо чата).
+    /// Голосовые здесь не разбираются — клиент присылает текст или нажатую кнопку.
+    /// </summary>
+    public async Task<IReadOnlyList<BotReply>> HandleAsync(User user, IncomingMessage message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(message);
+        return await HandleKnownAsync(user, message, clock.UtcNow, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<BotReply>> HandleKnownAsync(User user, IncomingMessage message, DateTime now, CancellationToken cancellationToken)
+    {
+        user.RegisterActivity(now);
+        var replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
+            ?? Dispatch(user, message, now);
+
+        // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
+        // Время до начала работы с ботом не разбираем — точка отсчёта 🟡 — первое сообщение после онбординга.
+        if (user.IsOnboarded && user.YellowReviewedUntilUtc is null)
         {
-            user.RegisterActivity(now);
-            replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
-                ?? Dispatch(user, message, now);
+            user.MarkYellowReviewed(now);
+        }
 
-            // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
-            // Время до начала работы с ботом не разбираем — точка отсчёта 🟡 — первое сообщение после онбординга.
-            if (user.IsOnboarded && user.YellowReviewedUntilUtc is null)
-            {
-                user.MarkYellowReviewed(now);
-            }
-
-            // После обычного сообщения или кнопки (не команды): сначала разобрать 🟡 «пока тебя не было» (spec §5.4),
-            // иначе — очередь вопросов.
-            var answersBot = message.ButtonData is { } pressed
-                ? pressed.StartsWith("act:", StringComparison.Ordinal) || pressed.StartsWith("per:", StringComparison.Ordinal)
-                  || pressed.StartsWith("q:", StringComparison.Ordinal)
-                : message.Text?.TrimStart().StartsWith('/') != true;
-            if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
-                && (await daily.MorningAsync(user, now, cancellationToken)
-                    ?? await EveningOnSleepAsync(user, now, cancellationToken)
-                    ?? await yellow.NextAsync(user, now, cancellationToken)
-                    ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
-            {
-                replies = [.. replies, question];
-            }
+        // После обычного сообщения или кнопки (не команды): сначала разобрать 🟡 «пока тебя не было» (spec §5.4),
+        // иначе — очередь вопросов.
+        var answersBot = message.ButtonData is { } pressed
+            ? pressed.StartsWith("act:", StringComparison.Ordinal) || pressed.StartsWith("per:", StringComparison.Ordinal)
+              || pressed.StartsWith("q:", StringComparison.Ordinal)
+            : message.Text?.TrimStart().StartsWith('/') != true;
+        if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
+            && (await daily.MorningAsync(user, now, cancellationToken)
+                ?? await EveningOnSleepAsync(user, now, cancellationToken)
+                ?? await yellow.NextAsync(user, now, cancellationToken)
+                ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
+        {
+            replies = [.. replies, question];
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

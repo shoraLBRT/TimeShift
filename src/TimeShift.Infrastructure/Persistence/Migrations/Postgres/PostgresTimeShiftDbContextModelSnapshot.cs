@@ -371,7 +371,7 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("quiet_until");
 
-                    b.Property<long>("TelegramChatId")
+                    b.Property<long?>("TelegramChatId")
                         .HasColumnType("bigint")
                         .HasColumnName("telegram_chat_id");
 
