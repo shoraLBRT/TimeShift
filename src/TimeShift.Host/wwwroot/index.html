@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<script>
+  // The list of designs. To drop one: delete its folder and its line here.
+  window.TS_DESIGNS = [
+    { key: 'a', name: 'Лист', text: 'Бумажный ежедневник: антиква, чернила, линовка.' },
+    { key: 'b', name: 'Сетка', text: 'Родной календарь iOS: цветные события, полоса недели.' },
+    { key: 'c', name: 'Нить', text: 'Тёмный типографический: светящаяся нить дня и крупный таймер.' },
+  ];
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var chosen = null;
+    try { chosen = localStorage.getItem('ts.design'); } catch (e) { /* private mode */ }
+    var known = window.TS_DESIGNS.some(function (d) { return d.key === chosen; });
+    if (known && !q.has('choose')) location.replace('/' + chosen + '/' + location.search);
+    else if (window.TS_DESIGNS.length === 1 && !q.has('choose')) location.replace('/' + window.TS_DESIGNS[0].key + '/' + location.search);
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TimeShift">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<title>TimeShift — выбор вида</title>
+<style>
+  :root { --bg: #f6f5f2; --fg: #1f1d1a; --muted: #6b665e; --line: #dedad2; --card: #fff; --accent: #c8442b; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161514; --fg: #eeeae3; --muted: #9b958b; --line: #34312d; --card: #201e1c; } }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: calc(env(safe-area-inset-top) + 32px) calc(env(safe-area-inset-right) + 20px) calc(env(safe-area-inset-bottom) + 32px) calc(env(safe-area-inset-left) + 20px); }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lead { margin: 0 0 24px; color: var(--muted); max-width: 36em; }
+  .designs { display: grid; gap: 14px; grid-template-columns: 1fr; list-style: none; margin: 0; padding: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { margin: 0; font-size: 19px; display: flex; gap: 10px; align-items: baseline; }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .card p { margin: 0; color: var(--muted); }
+  .card[aria-current="true"] { border-color: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .actions a, .actions button { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+    color: inherit; font: inherit; text-decoration: none; display: inline-flex; align-items: center; cursor: pointer; }
+  .actions .primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .frame { display: none; }
+  @media (min-width: 1000px) {
+    .designs { grid-template-columns: repeat(var(--count, 3), minmax(0, 1fr)); }
+    .frame { display: block; width: 390px; height: 844px; max-width: 100%; margin: 0 auto 6px; border: 10px solid #111; border-radius: 48px;
+      overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--line); }
+    .frame iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  }
+  footer { margin-top: 28px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TimeShift</h1>
+  <p class="lead">Учёт прожитого времени. Выбери вид — логика у всех одна, отличается только внешность. Поменять можно в настройках.</p>
+  <ul class="designs" id="designs"></ul>
+  <footer>Демо работает без сервера: данные живут только в этой вкладке.</footer>
+</main>
+<script>
+  (function () {
+    var list = document.getElementById('designs');
+    var designs = window.TS_DESIGNS;
+    var current = null;
+    try { current = localStorage.getItem('ts.design'); } catch (e) { /* ignore */ }
+    var q = new URLSearchParams(location.search);
+    q.delete('choose');
+    var rest = q.toString() ? '?' + q.toString() : '';
+    list.style.setProperty('--count', String(designs.length));
+    var wide = window.matchMedia('(min-width: 1000px)');
+    designs.forEach(function (d) {
+      var li = document.createElement('li');
+      li.className = 'card';
+      if (d.key === current) li.setAttribute('aria-current', 'true');
+      li.innerHTML = '<div class="frame" data-src="/' + d.key + '/?demo=1&amp;embed=1"></div>' +
+        '<h2>' + d.name + ' <small>' + d.key.toUpperCase() + '</small></h2><p></p>' +
+        '<div class="actions"><a href="/' + d.key + '/?demo=1">Демо</a><a href="/' + d.key + '/' + rest + '">Открыть</a>' +
+        '<button type="button" class="primary">Выбрать этот</button></div>';
+      li.querySelector('p').textContent = d.text;
+      li.querySelector('button').addEventListener('click', function () {
+        try { localStorage.setItem('ts.design', d.key); } catch (e) { /* ignore */ }
+        location.href = '/' + d.key + '/' + rest;
+      });
+      list.appendChild(li);
+    });
+    function frames() {
+      if (!wide.matches) return;
+      document.querySelectorAll('.frame[data-src]').forEach(function (f) {
+        var i = document.createElement('iframe');
+        i.src = f.getAttribute('data-src');
+        i.title = 'Демо';
+        i.loading = 'lazy';
+        f.appendChild(i);
+        f.removeAttribute('data-src');
+      });
+    }
+    frames();
+    wide.addEventListener && wide.addEventListener('change', frames);
+  })();
+</script>
+</body>
+</html>
