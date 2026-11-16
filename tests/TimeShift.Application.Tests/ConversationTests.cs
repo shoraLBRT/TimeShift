@@ -131,6 +131,35 @@ public class ConversationTests
     }
 
     [Fact]
+    public async Task Help_describes_only_what_exists()
+    {
+        await OnboardAsync();
+
+        var help = Assert.Single(await Text("/help")).Text;
+
+        // Без LLM фразы не разбираются, голос включён в фейке; устаревших обещаний нет.
+        Assert.DoesNotContain("научусь", help);
+        Assert.DoesNotContain("Можно писать свободно", help);
+        Assert.Contains("Голосовые тоже понимаю", help);
+        Assert.Contains("/add", help);
+
+        _store.Speech.Enabled = false;
+        Assert.DoesNotContain("Голосовые", Assert.Single(await Text("/help")).Text);
+    }
+
+    [Fact]
+    public async Task Long_text_without_llm_suggests_add_instead_of_promising()
+    {
+        await OnboardAsync();
+
+        var replies = await Text("час тренировался, потом поехал домой и ещё много всего случилось за день");
+
+        var text = Assert.Single(replies).Text;
+        Assert.Contains("/add", text);
+        Assert.DoesNotContain("научусь", text);
+    }
+
+    [Fact]
     public async Task Any_first_message_starts_onboarding()
     {
         var replies = await Text("привет");
