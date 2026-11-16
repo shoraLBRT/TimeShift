@@ -68,7 +68,10 @@ app.start();
 | `app.api` | the client (live or demo) — normally not needed |
 
 Demo: `?demo=1` (remembered for the tab; `?demo=0` leaves it), `&fresh=1` starts at onboarding, `&login=1` at the
-login screen (any key works). `?embed=1` marks an embedded frame (the chooser's side-by-side view): the demo flag is
+login screen (any key works). `&at=HH:mm` sets the demo clock: the demo backend and the app clock (`nowMs()`,
+`nowMin`, `today`) behave as if the local time were that time today, and keep ticking from there (remembered with
+the demo flag for the tab; `?demo=1` without `at` returns to the real time; `state.demoAt` shows it). The chooser's
+«Демо» links and previews use `&at=15:40` so the day is full. `?embed=1` marks an embedded frame (the chooser's side-by-side view): the demo flag is
 not remembered and sheets do not touch history.
 
 ### State
@@ -78,7 +81,7 @@ not remembered and sheets do not touch history.
   phase: 'loading' | 'login' | 'onboarding' | 'ready',
   bootError: ApiError | null,        // first load failed (loading screen shows retry)
   loginError: string | null,
-  demo: boolean, embed: boolean, design: string | null,
+  demo: boolean, demoAt: 'HH:mm' | null, embed: boolean, design: string | null,
   online: boolean,                   // false after a network failure / 'offline' event → show a quiet «Нет сети»
   meta: Meta | null,                 // GET /api/meta
   me: Me | null,                     // GET /api/me (settings, sleep, blocks, categories, timeZone, quietUntilUtc)
@@ -339,6 +342,13 @@ Panels:
   (`.ts-week-label`, `.ts-week-bar[style=--fill]` > `.ts-week-seg[data-group][style=--share]`, `.ts-week-total`);
   `.ts-summary-parallel`. `--share` / `--fill` are 0…1: e.g. `width: calc(var(--share) * 100%)` or `flex: var(--share)`.
   To draw your own chart, use the panel's `data` (`{ day: daySummary, range: rangeSummary }`) or the two functions.
+  Unknown time: in the day model the questionable background minutes (`daySummary(...).unknownMin`, also
+  `unknownMinutes(day)`) are taken out of `wasted` and shown as their own neutral row «Не записано»
+  (`unknown: true`, group `none`, `li.ts-total[data-unknown=true]`); the questionable status part carries
+  `unknownMin`. The range model keeps the server numbers (they cannot be separated) and labels them instead: the
+  `wasted` row and the `lost` group get `includesUnknown: true` and a `label` («Залипание и не записанное»), the
+  questionable part is labelled «Под вопросом (вкл. не записанное)», and `note` explains it (`p.ts-summary-note`).
+  Render `label` (falls back to `name`); every row now has `label` and `unknown`.
 - **Assistant** `section.ts-assistant[data-busy]` > `.ts-thread-empty` (`.ts-hint`, `ul.ts-examples > li >
   button.ts-example`), `ol.ts-thread[aria-live] > li.ts-msg[data-from=user|bot][data-pending][data-error]` >
   `p.ts-msg-text` (pre-wrap), `p.ts-msg-error`, `.ts-msg-buttons > .ts-msg-row > button.ts-msg-button[aria-pressed]`;
@@ -379,8 +389,8 @@ Panels:
 
 ## 13. Known gaps
 
-- Totals from the server count background time under its category (`wasted` «Залипание»); the summary therefore shows
-  unknown time as «Залипание» — only `describePiece` hides it. Use `day.status.questionableMin` to show it separately.
+- Server totals count background time under `wasted`: the day summary separates it using the pieces, the 7-day
+  summary can only label it (see Summary above).
 - No offline queue: mutations made offline fail with a toast.
 - Settings sub-pages are not history entries: the system back closes the whole settings sheet.
 - `state.day` between refreshes is a projection; status changes caused by passing a norm appear on the next refresh

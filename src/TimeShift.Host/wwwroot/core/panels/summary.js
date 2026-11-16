@@ -9,8 +9,8 @@ const pct = (x) => `${Math.round(x * 100)}%`;
 export function totalsList(items, kind) {
   if (!items.length) return h('p', { class: 'ts-empty' }, 'Пока ничего не учтено.');
   return h('ul', { class: 'ts-totals', dataset: { kind } }, items.map((t) => h('li', {
-    class: 'ts-total', dataset: { group: t.group, category: t.key ?? '' }, style: { '--share': t.share.toFixed(4) },
-  }, h('span', { class: 'ts-total-name' }, t.name), h('span', { class: 'ts-total-value' }, t.durationText), h('span', { class: 'ts-total-share' }, pct(t.share)),
+    class: 'ts-total', dataset: { group: t.group, category: t.key ?? '', unknown: t.unknown ? 'true' : null, includesUnknown: t.includesUnknown ? 'true' : null }, style: { '--share': t.share.toFixed(4) },
+  }, h('span', { class: 'ts-total-name' }, t.label ?? t.name), h('span', { class: 'ts-total-value' }, t.durationText), h('span', { class: 'ts-total-share' }, pct(t.share)),
     h('span', { class: 'ts-bar', 'aria-hidden': 'true' }))));
 }
 
@@ -66,7 +66,7 @@ export function summaryPanel(app, opts = {}) {
           h('span', { class: 'ts-week-bar', style: { '--fill': (dd.minutes / r.maxMinutes).toFixed(4) }, 'aria-hidden': 'true' },
             dd.groups.map((g) => h('span', { class: 'ts-week-seg', dataset: { group: g.group }, style: { '--share': (g.minutes / Math.max(1, dd.minutes)).toFixed(4) } }))),
           h('span', { class: 'ts-week-total' }, T.fmtCompact(dd.minutes)))))),
-      statusBar(r.status),
+      statusBar(r.status), h('p', { class: 'ts-hint ts-summary-note' }, r.note),
       h('h4', { class: 'ts-summary-subtitle' }, 'По группам'), totalsList(r.totals.groups.map((g) => ({ ...g, key: null })), 'group'),
       h('h4', { class: 'ts-summary-subtitle' }, 'По категориям'), totalsList(r.totals.categories, 'category'));
   });

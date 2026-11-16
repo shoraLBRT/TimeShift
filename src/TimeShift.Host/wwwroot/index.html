@@ -80,9 +80,9 @@
       var li = document.createElement('li');
       li.className = 'card';
       if (d.key === current) li.setAttribute('aria-current', 'true');
-      li.innerHTML = '<div class="frame" data-src="/' + d.key + '/?demo=1&amp;embed=1"></div>' +
+      li.innerHTML = '<div class="frame" data-src="/' + d.key + '/?demo=1&amp;embed=1&amp;at=15:40"></div>' +
         '<h2>' + d.name + ' <small>' + d.key.toUpperCase() + '</small></h2><p></p>' +
-        '<div class="actions"><a href="/' + d.key + '/?demo=1">Демо</a><a href="/' + d.key + '/' + rest + '">Открыть</a>' +
+        '<div class="actions"><a href="/' + d.key + '/?demo=1&amp;at=15:40">Демо</a><a href="/' + d.key + '/' + rest + '">Открыть</a>' +
         '<button type="button" class="primary">Выбрать этот</button></div>';
       li.querySelector('p').textContent = d.text;
       li.querySelector('button').addEventListener('click', function () {

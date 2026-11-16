@@ -53,7 +53,7 @@ export function onboardingPanel(app) {
     setText(next, step === ONBOARDING_STEPS.length - 1 ? 'Начать' : 'Далее');
     next.dataset.action = step === ONBOARDING_STEPS.length - 1 ? 'finish' : 'next';
     page.dataset.step = s.key;
-    page.replaceChildren(...PAGES[s.key]());
+    page.replaceChildren(...PAGES[s.key]().filter(Boolean)); // native replaceChildren would print null
     page.querySelector('.ts-onboarding-title')?.setAttribute('id', 'ts-onb-title');
     page.scrollTop = 0;
     root.scrollIntoView?.({ block: 'start' });
@@ -151,6 +151,7 @@ export function onboardingPanel(app) {
         m?.sleep ? `Сон: ${m.sleep.start}–${m.sleep.end}${m.sleep.weekend ? `, в выходные ${m.sleep.weekend.start}–${m.sleep.weekend.end}` : ''}` : 'Сон не указан',
         `Блоков: ${m?.blocks?.length ?? 0}`,
         `Напоминать каждые ${T.fmtDuration(m?.settings?.pingIntervalMin ?? 30)}`,
+        app.state.push.subscribed ? 'Уведомления на этом устройстве включены' : 'Уведомления пока выключены — их можно включить в настройках',
       ];
       leave = async () => true;
       return [...title('Всё готово', 'Остальное можно поменять в настройках.'),

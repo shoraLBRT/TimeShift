@@ -238,8 +238,8 @@ export function settingsPanel(app, opts = {}) {
       const install = h('div', { class: 'ts-install' });
       const renderInstall = (info) => {
         install.dataset.kind = info.kind;
-        install.replaceChildren(note(info.text, info.kind === 'installed' ? 'success' : 'install'),
-          info.kind === 'prompt' ? button('Установить', { variant: 'primary', action: 'install', onClick: () => app.actions.promptInstall() }) : null);
+        install.replaceChildren(...[note(info.text, info.kind === 'installed' ? 'success' : 'install'),
+          info.kind === 'prompt' ? button('Установить', { variant: 'primary', action: 'install', onClick: () => app.actions.promptInstall() }) : null].filter(Boolean));
       };
       let lastInstall = null;
       const unsub = app.subscribe((st) => {

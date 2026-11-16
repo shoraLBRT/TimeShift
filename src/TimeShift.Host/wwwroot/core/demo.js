@@ -28,7 +28,7 @@ const SEED_ACTIVITIES = [
   ['YouTube', 'wasted.youtube', 45], ['Ужин с семьёй', 'family', 50], ['Чтение', 'rest', 40],
   ['Пет-проект', 'projects', 60], ['Английский', 'study', 45], ['Встреча с друзьями', 'friends', 150],
   ['Dota 2', 'wasted.multiplayer', 60], ['Соцсети', 'wasted.short_video', 20], ['Уборка', 'household', 45],
-  ['Созвон', 'work', 30], ['Прогулка', 'rest', 50],
+  ['Созвон', 'work', 45], ['Прогулка', 'rest', 50],
 ];
 
 const MIN = 60000;
@@ -51,13 +51,24 @@ function rng(seedText) {
 }
 
 /**
- * @param {{ fresh?: boolean, login?: boolean, latency?: [number, number], onUnauthorized?: () => void }} opts
+ * Offset (ms) that makes the clock read `at` ('HH:mm') today in the device zone; null when `at` is malformed.
+ */
+export function demoClockOffset(at, tz = T.deviceTimeZone()) {
+  if (!/^\d{1,2}:\d{2}$/.test(at ?? '') || T.parseClock(at) >= 1440) return null;
+  const clock = T.fmtClock(T.parseClock(at));
+  return T.localToUtc(`${T.todayIn(tz)}T${clock}`, tz) - Date.now();
+}
+
+/**
+ * @param {{ fresh?: boolean, login?: boolean, latency?: [number, number], onUnauthorized?: () => void,
+ *           clockOffsetMs?: number }} opts  clockOffsetMs shifts the demo's "now" (see ?at=HH:mm)
  */
 export function createDemoApi(opts = {}) {
   const tz = T.deviceTimeZone();
   let ids = 0;
   const id = (p) => `${p}${(++ids).toString(36)}`;
-  const now = () => floorMin(Date.now());
+  const clock = () => Date.now() + (opts.clockOffsetMs ?? 0); // ?at=HH:mm shifts the demo clock
+  const now = () => floorMin(clock());
   const toMs = (local) => T.localToUtc(local, tz);
   const toLocal = (ms) => T.utcToLocal(ms, tz);
 
@@ -207,7 +218,7 @@ export function createDemoApi(opts = {}) {
     const parallelMin = parallel.reduce((s, p) => s + Math.max(0, Math.min(p.endMin, pastEnd) - p.startMin), 0);
     return {
       date, timeZone: tz, isToday, startUtc: iso(startMs), endUtc: iso(endMs), dayMinutes,
-      nowUtc: iso(Date.now()), nowMin,
+      nowUtc: iso(clock()), nowMin,
       pieces: out, parallel,
       current: run ? { segmentId: run.id, activityId: run.activityId, title: run.title, category: run.category, startUtc: iso(run.start), startLocal: toLocal(run.start), elapsedMin: Math.round((nowMs - run.start) / MIN), typicalMin: T0 } : null,
       totals: [...totalsMap].map(([category, minutes]) => ({ category, minutes })).sort((a, b) => b.minutes - a.minutes),
@@ -454,7 +465,7 @@ export function createDemoApi(opts = {}) {
     return clone(fn());
   }
   const mutate = (fn, view) => call(() => { snapshot(); try { fn(); } catch (e) { undo.pop(); throw e; } return { day: buildDay(view || T.todayIn(tz, now())) }; });
-  const meOut = () => ({ ...db.me, quietUntilUtc: db.me.quietUntilUtc && Date.parse(db.me.quietUntilUtc) > Date.now() ? db.me.quietUntilUtc : null });
+  const meOut = () => ({ ...db.me, quietUntilUtc: db.me.quietUntilUtc && Date.parse(db.me.quietUntilUtc) > clock() ? db.me.quietUntilUtc : null });
 
   return {
     demo: true,
@@ -592,7 +603,7 @@ export function createDemoApi(opts = {}) {
     quiet: (minutes, view) => mutate(() => {
       const m = Number(minutes);
       if (m !== 0 && !(m >= 5 && m <= 1440)) throw err(422, 'validation', 'От 5 минут до суток.', 'minutes');
-      db.me.quietUntilUtc = m ? iso(Date.now() + m * MIN) : null;
+      db.me.quietUntilUtc = m ? iso(clock() + m * MIN) : null;
     }, view),
 
     activities: () => call(() => db.acts.slice().sort((a, b) => (b.lastUsedUtc ?? '').localeCompare(a.lastUsedUtc ?? '')).slice(0, 200)),

@@ -1,6 +1,6 @@
 // The app: state (immutable snapshots), actions, refresh and clock. Designs render from `state` and call `actions`.
 import { createApi, ApiError } from './api.js';
-import { createDemoApi } from './demo.js';
+import { createDemoApi, demoClockOffset } from './demo.js';
 import * as T from './time.js';
 import { advanceDay, patchDay, assumedPieces } from './timeline.js';
 import { showToast } from './toast.js';
@@ -48,13 +48,17 @@ export function createApp(opts = {}) {
   // The demo flag is remembered for the tab — except in an embedded frame, which shares sessionStorage with it.
   const embedded = params.get('embed') === '1' || window.top !== window;
   if (!embedded && params.get('demo') === '1') ss.set('ts.demo', '1');
-  if (params.get('demo') === '0') ss.del('ts.demo');
+  if (params.get('demo') === '0') { ss.del('ts.demo'); ss.del('ts.demo.at'); }
   const demo = !opts.api && (params.get('demo') === '1' || (params.get('demo') !== '0' && ss.get('ts.demo') === '1'));
+  // Demo clock: ?demo=1&at=HH:mm — "now" is that local time today, ticking on. Remembered with the demo flag.
+  if (!embedded && params.get('demo') === '1') { if (params.has('at')) ss.set('ts.demo.at', params.get('at')); else ss.del('ts.demo.at'); }
+  const demoAt = demo ? (params.get('at') ?? (embedded ? null : ss.get('ts.demo.at'))) : null;
+  const demoOffset = demoAt ? demoClockOffset(demoAt) ?? 0 : 0;
 
   let onUnauthorized = () => {};
   let onNetwork = () => {};
   const api = opts.api ?? (demo
-    ? createDemoApi({ fresh: params.get('fresh') === '1', login: params.get('login') === '1', onUnauthorized: () => onUnauthorized() })
+    ? createDemoApi({ fresh: params.get('fresh') === '1', login: params.get('login') === '1', clockOffsetMs: demoOffset, onUnauthorized: () => onUnauthorized() })
     : createApi({ onUnauthorized: () => onUnauthorized(), onNetwork: (on) => onNetwork(on) }));
 
   const themePref = ls.get(THEME_KEY) ?? 'auto';
@@ -63,6 +67,7 @@ export function createApp(opts = {}) {
     bootError: null,
     loginError: null,
     demo,
+    demoAt: demoAt && demoClockOffset(demoAt) !== null ? demoAt : null,
     embed: params.get('embed') === '1',
     design: opts.design ?? null,
     online: navigator.onLine !== false,
@@ -111,7 +116,7 @@ export function createApp(opts = {}) {
   }
 
   // ---------- clock ----------
-  let clockOffset = 0;
+  let clockOffset = demoOffset;
   const nowMs = () => Date.now() + clockOffset;
   const tz = () => state.me?.timeZone ?? T.deviceTimeZone();
   const computeToday = () => T.todayIn(tz(), nowMs());
