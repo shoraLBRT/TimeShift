@@ -104,8 +104,8 @@ public class AuthTests
         Assert.False(anonymous.Json["authenticated"]!.GetValue<bool>());
         Assert.False(anonymous.Json["onboarded"]!.GetValue<bool>());
         Assert.Equal(8, anonymous.Json["assetsVersion"]!.GetValue<string>().Length);
-        Assert.False(anonymous.Json["push"]!["enabled"]!.GetValue<bool>());
-        Assert.Null(anonymous.Json["push"]!["publicKey"]);
+        Assert.True(anonymous.Json["push"]!["enabled"]!.GetValue<bool>());
+        Assert.Equal(87, anonymous.Json["push"]!["publicKey"]!.GetValue<string>().Length);
         Assert.False(anonymous.Json["llm"]!.GetValue<bool>());
 
         await app.OnboardAsync();

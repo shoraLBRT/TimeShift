@@ -278,3 +278,24 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **Updating a schedule block is remove + add with rollback** (the block keeps its id and activity link); sleep
   stays a separate resource.
 
+## Web Push (#40)
+
+- **Notification channels fan out.** `INotificationChannel` (stable `Key`, `CanReachAsync`, `SendAsync`,
+  `DeleteAsync`) is implemented by Telegram (`tg`) and Web Push (`wp`); the only `INotifier` is
+  `NotificationFanout` in Application. A failing channel is reported (`IFailureReporter`) and never stops the others.
+  The stored message ref is `tg:123,wp:…` so deletion finds its channel (a ref without a key is the old Telegram
+  format); refs over the 64-character column limit are dropped. Web Push returns no ref: a new notification with the
+  same `tag` replaces the previous one. Telegram behaviour is unchanged.
+- **A user nobody can reach is skipped by the ping loop** (`CanReachAsync`: a Telegram chat or a push subscription),
+  so pings are not counted as unanswered for nobody. `PingWorker` starts when any channel is registered; the push
+  channel is registered when the web client is enabled.
+- **The notification kind is a hint on the reply** (`BotReply.Notice`: kind, title, short body, `CanAct`), set where
+  the ping and the evening review are built, so channels do not parse texts. The evening body is a one-line summary
+  (≤ 160 characters), not the day listing.
+- **VAPID keys come from `Push:*` or are generated once and kept in the database** (`server_keys`), so a deployment
+  needs no setup and survives restarts. P-256, public key as the 65-byte uncompressed point, both base64url.
+- **A library for the protocol** (`Lib.Net.Http.WebPush`): VAPID JWT and aes128gcm payload encryption are easy to get
+  subtly wrong and are not worth owning; it sits behind `IWebPushSender`, so tests never touch a push service.
+  TTL: 1 h for pings (a stale «what are you doing?» is useless), 3 h for the evening review, 5 min for the test;
+  urgency high; 404/410 delete the subscription.
+

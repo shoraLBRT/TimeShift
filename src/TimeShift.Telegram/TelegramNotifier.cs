@@ -9,8 +9,12 @@ using TimeShift.Domain.Users;
 namespace TimeShift.Telegram;
 
 /// <summary>Сообщения по инициативе бота: ссылка на сообщение — его message_id.</summary>
-internal sealed class TelegramNotifier(ITelegramBotClient bot) : INotifier
+internal sealed class TelegramNotifier(ITelegramBotClient bot) : INotificationChannel
 {
+    public string Key => "tg";
+
+    public Task<bool> CanReachAsync(User user, CancellationToken cancellationToken) => Task.FromResult(user.TelegramChatId is not null);
+
     public async Task<string?> SendAsync(User user, BotReply reply, CancellationToken cancellationToken)
     {
         // Пользователь без Telegram (только web-клиент) — слать некуда.

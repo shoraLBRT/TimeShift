@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TimeShift.Application.Clients;
+using TimeShift.Application.Push;
 
 namespace TimeShift.Web;
 
@@ -32,6 +33,18 @@ public static class WebExtensions
         services.AddScoped<ProfileService>();
         services.AddScoped<ActivityService>();
         services.AddScoped<MessageService>();
+
+        // Web Push: ключи из Push:* или созданные сервером; канал уведомлений — только когда web-клиент включён.
+        var push = configuration.GetSection("Push");
+        services.AddSingleton(new PushOptions(
+            push["PublicKey"], push["PrivateKey"], string.IsNullOrWhiteSpace(push["Subject"]) ? PushOptions.DefaultSubject : push["Subject"]!.Trim()));
+        services.AddScoped<VapidKeyProvider>();
+        services.AddScoped<PushService>();
+        if (WebOptions.From(configuration).IsEnabled)
+        {
+            services.AddScoped<TimeShift.Application.Abstractions.INotificationChannel, WebPushChannel>();
+        }
+
 
         services.AddRateLimiter(options =>
         {

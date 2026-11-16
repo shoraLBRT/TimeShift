@@ -210,9 +210,7 @@ Exactly one of `text` / `button`. Voice is not accepted here. `409` when the own
 
 ## Push
 
-> Not implemented yet — issue #40. Everything below is the planned contract.
-
-Web Push with VAPID. Keys: `Push:PublicKey` / `Push:PrivateKey` / `Push:Subject` from config; when absent they
+Web Push with VAPID; enabled whenever the web client is (`Push:Subject` defaults to `mailto:owner@localhost`). Keys: `Push:PublicKey` / `Push:PrivateKey` / `Push:Subject` from config; when absent they
 are generated once and kept in the database.
 
 - `GET /api/push` → `{ "enabled": true, "publicKey": "…", "subscriptions": 1 }`

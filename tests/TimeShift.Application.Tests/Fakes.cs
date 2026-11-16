@@ -246,6 +246,8 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
     public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     // INotifier
+    public Task<bool> CanReachAsync(User user, CancellationToken cancellationToken) => Task.FromResult(true);
+
     public Task<string?> SendAsync(User user, BotReply reply, CancellationToken cancellationToken)
     {
         var id = (++_messageId).ToString(System.Globalization.CultureInfo.InvariantCulture);

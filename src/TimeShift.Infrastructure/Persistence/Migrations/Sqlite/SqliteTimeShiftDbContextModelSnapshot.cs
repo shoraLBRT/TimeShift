@@ -206,6 +206,52 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("user_facts", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Domain.Push.WebPushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("auth");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("endpoint");
+
+                    b.Property<DateTime?>("LastOkAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_ok_at");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("p256dh");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("push_subscriptions", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -392,6 +438,24 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Infrastructure.Persistence.ServerKey", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("value");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("server_keys", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Infrastructure.Persistence.TimelineChangeRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -460,6 +524,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                 });
 
             modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Push.WebPushSubscription", b =>
                 {
                     b.HasOne("TimeShift.Domain.Users.User", null)
                         .WithMany()

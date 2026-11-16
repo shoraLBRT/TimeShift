@@ -18,6 +18,27 @@ internal sealed class FakeClock : IClock
     public DateTime UtcNow { get; set; } = new(2026, 11, 17, 8, 30, 0, DateTimeKind.Utc);
 }
 
+/// <summary>Вместо настоящего push-сервиса: запоминает сообщения, отвечает как скажут.</summary>
+internal sealed class FakeWebPushSender : IWebPushSender
+{
+    public List<(PushRequest Request, VapidKeys Keys)> Sent { get; } = [];
+
+    public HashSet<string> GoneEndpoints { get; } = [];
+
+    public HashSet<string> FailingEndpoints { get; } = [];
+
+    public Task<PushOutcome> SendAsync(PushRequest request, VapidKeys keys, CancellationToken cancellationToken)
+    {
+        if (FailingEndpoints.Contains(request.Endpoint))
+        {
+            throw new InvalidOperationException("push service is down");
+        }
+
+        Sent.Add((request, keys));
+        return Task.FromResult(GoneEndpoints.Contains(request.Endpoint) ? PushOutcome.Gone : PushOutcome.Delivered);
+    }
+}
+
 internal sealed record ApiResponse(HttpStatusCode Status, JsonNode? Body, HttpResponseMessage Raw)
 {
     public JsonNode Json => Body ?? throw new InvalidOperationException($"No JSON body ({(int)Status}).");
@@ -30,14 +51,18 @@ internal sealed class TestApp : IAsyncDisposable
 {
     public const string AccessKey = "test-key";
 
-    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"timeshift-web-{Guid.NewGuid():N}.db");
+    private readonly string _dbPath;
+
+    private readonly bool _deleteDb;
 
     private readonly WebApplicationFactory<Program> _factory;
 
     private readonly HttpClient _client;
 
-    public TestApp(string accessKey = AccessKey, string? telegramChatId = null)
+    public TestApp(string accessKey = AccessKey, string? telegramChatId = null, string? dbPath = null, bool deleteDb = true, Dictionary<string, string?>? extra = null)
     {
+        _dbPath = dbPath ?? Path.Combine(Path.GetTempPath(), $"timeshift-web-{Guid.NewGuid():N}.db");
+        _deleteDb = deleteDb;
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
@@ -47,16 +72,27 @@ internal sealed class TestApp : IAsyncDisposable
             builder.UseSetting("Web:AccessKey", accessKey);
             builder.UseSetting("Web:TelegramChatId", telegramChatId);
             builder.UseSetting("Telegram:BotToken", string.Empty);
+            foreach (var (key, value) in extra ?? [])
+            {
+                builder.UseSetting(key, value);
+            }
+
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IClock>();
                 services.AddSingleton<IClock>(Clock);
+                services.RemoveAll<IWebPushSender>();
+                services.AddSingleton<IWebPushSender>(Push);
             });
         });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
     }
 
     public FakeClock Clock { get; } = new();
+
+    public FakeWebPushSender Push { get; } = new();
+
+    public string DbPath => _dbPath;
 
     public IServiceProvider Services => _factory.Services;
 
@@ -113,6 +149,11 @@ internal sealed class TestApp : IAsyncDisposable
     {
         _client.Dispose();
         await _factory.DisposeAsync();
+        if (!_deleteDb)
+        {
+            return;
+        }
+
         foreach (var file in Directory.GetFiles(Path.GetTempPath(), Path.GetFileName(_dbPath) + "*"))
         {
             try

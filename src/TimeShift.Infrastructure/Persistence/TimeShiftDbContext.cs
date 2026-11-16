@@ -27,6 +27,10 @@ public abstract class TimeShiftDbContext : DbContext
 
     public DbSet<TimelineChangeRecord> TimelineChanges => Set<TimelineChangeRecord>();
 
+    public DbSet<Domain.Push.WebPushSubscription> PushSubscriptions => Set<Domain.Push.WebPushSubscription>();
+
+    public DbSet<ServerKey> ServerKeys => Set<ServerKey>();
+
     public DbSet<UserFact> Facts => Set<UserFact>();
 
     public DbSet<PendingPeriod> PendingPeriods => Set<PendingPeriod>();

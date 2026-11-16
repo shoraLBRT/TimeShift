@@ -28,8 +28,8 @@ public sealed class PingService(
         var failures = new List<(Guid, Exception)>();
         foreach (var user in await users.ListOnboardedAsync(cancellationToken))
         {
-            // Пользователю без Telegram пинги слать некуда (для него будет Web Push).
-            if (user.TelegramChatId is null)
+            // Достучаться некуда (нет ни чата Telegram, ни подписки Web Push) — пинг не считается отправленным.
+            if (!await notifier.CanReachAsync(user, cancellationToken))
             {
                 continue;
             }

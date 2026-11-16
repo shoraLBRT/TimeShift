@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Clients;
 using TimeShift.Application.Conversations;
+using TimeShift.Application.Push;
 using TimeShift.Application.Tracking;
 using TimeShift.Domain.Users;
 
@@ -190,6 +191,27 @@ public static class ApiEndpoints
                 await days.GetAsync(user, View(http), ct)));
         });
 
+        api.MapGet("/push", async (HttpContext http, PushService push, CancellationToken ct) =>
+            Json(await push.InfoAsync(Owner(http), ct)));
+        api.MapPost("/push/subscriptions", async (HttpContext http, PushService push, CancellationToken ct) =>
+        {
+            var f = await Fields.ReadAsync(http.Request, ct);
+            var keys = f.Object("keys");
+            await push.SubscribeAsync(Owner(http), f.Str("endpoint"), keys?.Str("p256dh"), keys?.Str("auth"), ct);
+            return Results.NoContent();
+        });
+        api.MapDelete("/push/subscriptions", async (HttpContext http, PushService push, CancellationToken ct) =>
+        {
+            var f = await Fields.ReadAsync(http.Request, ct);
+            await push.UnsubscribeAsync(Owner(http), f.Str("endpoint"), ct);
+            return Results.NoContent();
+        });
+        api.MapPost("/push/test", async (HttpContext http, PushService push, CancellationToken ct) =>
+        {
+            await push.TestAsync(Owner(http), ct);
+            return Results.NoContent();
+        });
+
         api.MapFallback("/{**path}", (HttpContext http) => Error(StatusCodes.Status404NotFound, "not_found", "Такого адреса нет."))
             .WithMetadata(new AnonymousApi(), new WorksWhenDisabled());
         return api;
@@ -238,14 +260,15 @@ public static class ApiEndpoints
 
     private static async Task<IResult> MetaAsync(
         HttpContext http, WebOptions options, WebAppInfo info, AssetsVersion assets, IClock clock,
-        Application.Llm.IntentApplier intents, ISpeechToText speech, OwnerService owners, CancellationToken ct)
+        Application.Llm.IntentApplier intents, ISpeechToText speech, OwnerService owners, PushService push, CancellationToken ct)
     {
         var authenticated = options.IsEnabled
             && SessionTokens.IsValid(options.AccessKey, http.Request.Cookies[SessionTokens.CookieName], clock.UtcNow);
         var onboarded = authenticated && (await owners.ResolveAsync(options.TelegramChatId, ct)).IsOnboarded;
+        var pushKey = options.IsEnabled ? await push.PublicKeyAsync(ct) : null;
         return Json(new MetaResponse(
             info.Version, assets.Current, options.IsEnabled, authenticated, onboarded, intents.IsEnabled, speech.IsEnabled,
-            new PushInfo(false, null)));
+            new PushInfo(options.IsEnabled, pushKey)));
     }
 
     private static async Task<IResult> LoginAsync(HttpContext http, WebOptions options, IClock clock, CancellationToken ct)

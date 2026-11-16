@@ -16,7 +16,10 @@ public static class TrackingReplies
     {
         if (current is null)
         {
-            return new BotReply("Чем занят?", Choices(recent, exceptActivityId: null));
+            return new BotReply("Чем занят?", Choices(recent, exceptActivityId: null))
+            {
+                Notice = new ClientNotice(NoticeKind.Ping, "Чем занят?", "Открой, чтобы выбрать занятие."),
+            };
         }
 
         var segment = current.Segment;
@@ -26,7 +29,11 @@ public static class TrackingReplies
             new[] { new ReplyButton($"▶️ Да, {segment.Title}", "act:cont"), new ReplyButton("⏹ Закончил", "act:stop") },
         };
         rows.AddRange(Choices(recent, segment.ActivityId));
-        return new BotReply(text, rows);
+        return new BotReply(text, rows)
+        {
+            Notice = new ClientNotice(
+                NoticeKind.Ping, $"Всё ещё «{segment.Title}»?", $"Идёт {Duration(current.Elapsed(nowUtc))}", CanAct: true),
+        };
     }
 
     /// <summary>Недавние занятия (по два в ряд) и «Другое…».</summary>

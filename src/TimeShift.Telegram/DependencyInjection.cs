@@ -37,7 +37,7 @@ public static class DependencyInjection
 
                 return new TelegramBotClient(options.BotToken!, new HttpClient(handler));
             });
-            services.AddSingleton<TimeShift.Application.Abstractions.INotifier, TelegramNotifier>();
+            services.AddSingleton<TimeShift.Application.Abstractions.INotificationChannel, TelegramNotifier>();
             services.AddHostedService<TelegramPollingService>();
         }
 

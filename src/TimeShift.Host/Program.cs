@@ -27,6 +27,7 @@ builder.Services.AddScoped<YellowReview>();
 builder.Services.AddScoped<DailyReview>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddScoped<PingService>();
+builder.Services.AddScoped<TimeShift.Application.Abstractions.INotifier, TimeShift.Application.Notifications.NotificationFanout>();
 builder.Services.AddTelegramAdapter(builder.Configuration);
 builder.Services.AddTimeShiftWeb(builder.Configuration, version);
 
@@ -46,7 +47,7 @@ builder.Services.AddResponseCompression(options =>
 });
 TimeShift.Speech.DependencyInjection.AddSpeech(builder.Services, builder.Configuration);
 TimeShift.Rendering.DependencyInjection.AddRendering(builder.Services);
-if (builder.Services.Any(d => d.ServiceType == typeof(TimeShift.Application.Abstractions.INotifier)))
+if (builder.Services.Any(d => d.ServiceType == typeof(TimeShift.Application.Abstractions.INotificationChannel)))
 {
     builder.Services.AddHostedService<PingWorker>();
 }

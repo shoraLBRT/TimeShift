@@ -68,7 +68,9 @@ dotnet run --project src/TimeShift.Host
 
 Чьи данные открывает ключ: `Web:TelegramChatId` (тот же пользователь, что в Telegram), иначе единственный
 пользователь в базе, иначе отдельный пользователь без Telegram — тогда бот и web живут независимо.
-За обратным прокси (docker, Caddy/nginx) приложение читает `X-Forwarded-For` / `X-Forwarded-Proto`.
+Уведомления (Web Push) включены вместе с web-клиентом и идут рядом с Telegram: пинг и вечерний разбор приходят и туда, и на
+подписанные устройства. Доставка зависит от доступности push-сервисов браузера с сервера (`web.push.apple.com`,
+`fcm.googleapis.com`). За обратным прокси (docker, Caddy/nginx) приложение читает `X-Forwarded-For` / `X-Forwarded-Proto`.
 
 ## Конфигурация
 
@@ -79,6 +81,8 @@ dotnet run --project src/TimeShift.Host
 | `Database:MigrateOnStartup` | применять миграции при старте (`true` в Development и в compose) |
 | `Telegram:BotToken` | токен бота; пусто — Telegram выключен |
 | `Web:AccessKey` | ключ доступа web-клиента; пусто — web-клиент выключен (`Web__AccessKey`) |
+| `Push:Subject` | контакт для push-сервисов (VAPID `sub`), `mailto:вы@пример.рф` или https-адрес; по умолчанию `mailto:owner@localhost` |
+| `Push:PublicKey`, `Push:PrivateKey` | ключи VAPID (base64url); не заданы — сервер создаёт пару один раз и хранит в базе, настраивать ничего не нужно |
 | `Web:TelegramChatId` | чей аккаунт открывает web-клиент; пусто — единственный пользователь или пользователь без Telegram |
 | `Telegram:Proxy` | прокси до api.telegram.org (`socks5://127.0.0.1:1080`, `http://…`); пусто — напрямую |
 | `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом; пусто — всем |
