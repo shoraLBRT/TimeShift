@@ -70,7 +70,8 @@ dotnet run --project src/TimeShift.Host
 пользователь в базе, иначе отдельный пользователь без Telegram — тогда бот и web живут независимо.
 Уведомления (Web Push) включены вместе с web-клиентом и идут рядом с Telegram: пинг и вечерний разбор приходят и туда, и на
 подписанные устройства. Доставка зависит от доступности push-сервисов браузера с сервера (`web.push.apple.com`,
-`fcm.googleapis.com`). За обратным прокси (docker, Caddy/nginx) приложение читает `X-Forwarded-For` / `X-Forwarded-Proto`.
+`fcm.googleapis.com`). Развёртывание на сервере с HTTPS (Caddy) и установка на телефон — в [docs/deploy.md](docs/deploy.md).
+За обратным прокси (docker, Caddy/nginx) приложение читает `X-Forwarded-For` / `X-Forwarded-Proto`.
 
 ## Конфигурация
 

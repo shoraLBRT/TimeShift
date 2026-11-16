@@ -12,8 +12,33 @@ services:
       Database__MigrateOnStartup: "true"
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timeshift};Username=${POSTGRES_USER:-timeshift};Password=${POSTGRES_PASSWORD:-timeshift}"
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__Proxy: ${TELEGRAM_PROXY:-}
+      Web__AccessKey: ${WEB_ACCESS_KEY:-}
+      Web__TelegramChatId: ${WEB_TELEGRAM_CHAT_ID:-}
+      Push__Subject: ${PUSH_SUBJECT:-}
+      Llm__BaseUrl: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      Llm__ApiKey: ${LLM_API_KEY:-}
+      Llm__Model: ${LLM_MODEL:-gpt-4o-mini}
     ports:
       - "8080:8080"
+    restart: unless-stopped
+
+  # HTTPS для web-клиента: docker compose --profile web up -d --build (нужны DOMAIN и WEB_ACCESS_KEY в .env).
+  caddy:
+    profiles: ["web"]
+    image: caddy:2
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     restart: unless-stopped
 
   postgres:
@@ -33,3 +58,5 @@ services:
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
