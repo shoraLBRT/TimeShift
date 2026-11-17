@@ -1,5 +1,6 @@
 using SkiaSharp;
 using TimeShift.Application.Abstractions;
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Categories;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
@@ -27,6 +28,23 @@ internal sealed class SkiaDayRenderer : IDayRenderer
     private const int ParallelLeft = 576;
 
     private const int ParallelRight = 640;
+
+    /// <summary>Неделя: левое поле, начало полос дней, правый край, верх первой полосы, шаг полос и строк категорий.</summary>
+    public const int WeekLeft = 24;
+
+    public const int WeekStripLeft = 96;
+
+    public const int WeekRight = 696;
+
+    public const int WeekTop = 110;
+
+    public const int WeekRow = 52;
+
+    public const int CategoryRow = 62;
+
+    private const int ChangeColumn = 170;
+
+    private static readonly SKColor StatusColor = new(0x54, 0x6E, 0x7A);
 
     private static readonly SKColor Background = new(0xFA, 0xFA, 0xF7);
 
@@ -118,44 +136,101 @@ internal sealed class SkiaDayRenderer : IDayRenderer
 
     public byte[]? RenderWeek(WeekImage week)
     {
-        const int left = 70;
-        const int right = 700;
-        const int top = 110;
-        const int rowHeight = 170;
-        var height = top + (rowHeight * week.Days.Count) + 30;
+        var stats = week.Stats;
+        var categoriesTop = WeekTop + (WeekRow * week.Days.Count) + 26;
+        var statusTop = categoriesTop + (CategoryRow * stats.Categories.Count) + 14;
+        var height = statusTop + 86 + (stats.Parallel.Count > 0 ? 34 : 0) + (stats.IsCompared ? 30 : 0) + 14;
         using var surface = SKSurface.Create(new SKImageInfo(Width, height));
         var canvas = surface.Canvas;
         canvas.Clear(Background);
-        using var title = Paint(Ink);
-        canvas.DrawText(week.Title, 24, 52, SKTextAlign.Left, Font30(), title);
+        using var ink = Paint(Ink);
+        using var muted = Paint(Muted);
+        using var track = new SKPaint { Color = Future };
+        canvas.DrawText(week.Title, WeekLeft, 52, SKTextAlign.Left, Font30(), ink);
 
-        // Ось часов сверху.
-        using var hours = Paint(Muted);
+        // Полоса на день: слева полночь, справа следующая полночь.
         for (var h = 0; h <= 24; h += 6)
         {
-            var x = left + ((right - left) * h / 24f);
-            canvas.DrawText($"{h % 24:00}", x, top - 14, SKTextAlign.Center, Font16(), hours);
+            var x = WeekStripLeft + ((WeekRight - WeekStripLeft) * h / 24f);
+            canvas.DrawText($"{h:00}", x, WeekTop - 10, h == 0 ? SKTextAlign.Left : h == 24 ? SKTextAlign.Right : SKTextAlign.Center, Font16(), muted);
         }
 
-        using var dayLabel = Paint(Ink);
-        var row = 0;
-        foreach (var (day, start, pieces) in week.Days)
+        var ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+        for (var row = 0; row < week.Days.Count; row++)
         {
-            var y0 = top + (row * rowHeight) + 10;
-            var y1 = y0 + rowHeight - 40;
-            canvas.DrawText(day.ToString("ddd d", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")), 10, y0 + 24, SKTextAlign.Left, Font20(), dayLabel);
-            float X(DateTime utc) => left + (float)((utc - start).TotalMinutes / (24 * 60)) * (right - left);
-            using (var empty = new SKPaint { Color = Future })
+            var day = week.Days[row];
+            float y0 = WeekTop + (row * WeekRow);
+            var y1 = y0 + WeekRow - 12;
+            canvas.DrawText(day.Day.ToString("ddd d", ru), WeekLeft, y0 + 27, SKTextAlign.Left, Font20(), day.Pieces.Count > 0 ? ink : muted);
+            canvas.DrawRect(new SKRect(WeekStripLeft, y0, WeekRight, y1), track);
+            var span = (day.EndUtc - day.StartUtc).TotalMinutes;
+            float X(DateTime utc) => WeekStripLeft + (float)((utc - day.StartUtc).TotalMinutes / span) * (WeekRight - WeekStripLeft);
+            foreach (var piece in day.Pieces)
             {
-                canvas.DrawRect(new SKRect(left, y0 + 34, right, y1), empty);
+                if (X(piece.EndUtc) - X(piece.StartUtc) >= 0.5f)
+                {
+                    Fill(canvas, ColorOf(piece.CategoryKey), piece.Status, piece.IsFuture, new SKRect(X(piece.StartUtc), y0, X(piece.EndUtc), y1));
+                }
+            }
+        }
+
+        // Категории: название, время, разница с прошлой неделей и полоса в долях от самой большой.
+        var longest = stats.Categories.Count > 0 ? stats.Categories.Max(c => c.Total.Ticks) : 0;
+        for (var i = 0; i < stats.Categories.Count; i++)
+        {
+            var category = stats.Categories[i];
+            float y = categoriesTop + (i * CategoryRow);
+            canvas.DrawText(category.Name, WeekLeft, y + 24, SKTextAlign.Left, Font22(), ink);
+            if (category.Change is { } change)
+            {
+                canvas.DrawText(TrackingReplies.Change(change), WeekRight, y + 24, SKTextAlign.Right, Font20(), muted);
             }
 
-            foreach (var piece in pieces)
+            canvas.DrawText(TrackingReplies.Duration(category.Total), WeekRight - (stats.IsCompared ? ChangeColumn : 0), y + 24, SKTextAlign.Right, Font22(), ink);
+            canvas.DrawRect(new SKRect(WeekLeft, y + 34, WeekRight, y + 48), track);
+            if (category.Total > TimeSpan.Zero && longest > 0)
             {
-                DrawHorizontal(canvas, piece, X(piece.StartUtc), X(piece.EndUtc), y0 + 34, y1);
+                var width = Math.Max(3f, (WeekRight - WeekLeft) * (float)category.Total.Ticks / longest);
+                using var bar = new SKPaint { Color = ColorOf(category.Key) };
+                canvas.DrawRect(new SKRect(WeekLeft, y + 34, WeekLeft + width, y + 48), bar);
+            }
+        }
+
+        // Доли статусов одной полосой в тех же заливках, что и лента.
+        var (confirmed, assumed, questionable) = stats.Shares();
+        float left = WeekLeft;
+        foreach (var (status, time) in new[]
+                 {
+                     (SegmentStatus.Confirmed, stats.Confirmed), (SegmentStatus.Assumed, stats.Assumed),
+                     (SegmentStatus.Questionable, stats.Questionable),
+                 })
+        {
+            var right = stats.Total > TimeSpan.Zero ? left + ((WeekRight - WeekLeft) * (float)time.Ticks / stats.Total.Ticks) : left;
+            if (right - left >= 0.5f)
+            {
+                Fill(canvas, StatusColor, status, isFuture: false, new SKRect(left, statusTop, right, statusTop + 30));
             }
 
-            row++;
+            left = right;
+        }
+
+        var legend = statusTop + 62;
+        canvas.DrawText($"подтверждено {confirmed}%", WeekLeft, legend, SKTextAlign.Left, Font20(), ink);
+        canvas.DrawText($"предполагаю {assumed}%", (WeekLeft + WeekRight) / 2f, legend, SKTextAlign.Center, Font20(), ink);
+        canvas.DrawText($"под вопросом {questionable}%", WeekRight, legend, SKTextAlign.Right, Font20(), ink);
+
+        var line = legend + 24;
+        if (stats.Parallel.Count > 0)
+        {
+            line += 10;
+            canvas.DrawText($"Параллельно, сверх суток: {TrackingReplies.Duration(stats.ParallelSum)}", WeekLeft, line, SKTextAlign.Left, Font20(), muted);
+            line += 24;
+        }
+
+        if (stats.IsCompared)
+        {
+            line += 6;
+            canvas.DrawText("+ / − — к тем же дням прошлой недели", WeekLeft, line, SKTextAlign.Left, Font16(), muted);
         }
 
         return Encode(surface);
@@ -169,7 +244,7 @@ internal sealed class SkiaDayRenderer : IDayRenderer
         }
 
         var rect = new SKRect(left, top, right, bottom);
-        Fill(canvas, piece, rect);
+        Fill(canvas, ColorOf(piece.CategoryKey), piece.Status, piece.IsFuture, rect);
         if (!label || bottom - top < 24 || piece.IsFuture)
         {
             return;
@@ -185,28 +260,17 @@ internal sealed class SkiaDayRenderer : IDayRenderer
         canvas.Restore();
     }
 
-    private static void DrawHorizontal(SKCanvas canvas, TimelinePiece piece, float x0, float x1, float top, float bottom)
-    {
-        if (x1 - x0 < 0.5f)
-        {
-            return;
-        }
-
-        Fill(canvas, piece, new SKRect(x0, top, x1, bottom));
-    }
-
     /// <summary>Заливка по статусу: ✅ сплошная, ⚪ бледная, 🟡 штриховка цветом категории; будущее — серым.</summary>
-    private static void Fill(SKCanvas canvas, TimelinePiece piece, SKRect rect)
+    private static void Fill(SKCanvas canvas, SKColor color, SegmentStatus status, bool isFuture, SKRect rect)
     {
-        var color = ColorOf(piece.CategoryKey);
-        if (piece.IsFuture)
+        if (isFuture)
         {
             using var future = new SKPaint { Color = Future.WithAlpha(255) };
             canvas.DrawRect(rect, future);
             return;
         }
 
-        switch (piece.Status)
+        switch (status)
         {
             case SegmentStatus.Confirmed:
             {
@@ -246,6 +310,8 @@ internal sealed class SkiaDayRenderer : IDayRenderer
     private static SKPaint Paint(SKColor color) => new() { Color = color, IsAntialias = true };
 
     private static SKFont Font30() => new(Font.Value, 30) { Embolden = true };
+
+    private static SKFont Font22() => new(Font.Value, 22);
 
     private static SKFont Font20() => new(Font.Value, 20);
 

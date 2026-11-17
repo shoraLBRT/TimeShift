@@ -27,6 +27,7 @@ internal sealed partial class TelegramPollingService(
     [
         new() { Command = "now", Description = "Что сейчас идёт, сменить занятие" },
         new() { Command = "day", Description = "Лента за сегодня (или /day вчера)" },
+        new() { Command = "week", Description = "Неделя по категориям" },
         new() { Command = "add", Description = "Записать прошедшее: вчера 19-21 Зал" },
         new() { Command = "quiet", Description = "Не беспокоить пару часов" },
         new() { Command = "undo", Description = "Отменить последнюю запись" },

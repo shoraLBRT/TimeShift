@@ -107,6 +107,60 @@ public static class TrackingReplies
         return text;
     }
 
+    /// <summary>«Эта неделя, 16–22 ноября», «Прошлая неделя, 9–15 ноября», «Неделя 30 ноября – 6 декабря».</summary>
+    public static string WeekTitle(DateOnly monday, DateOnly thisMonday)
+    {
+        var ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+        var sunday = monday.AddDays(6);
+        var range = monday.Month == sunday.Month
+            ? $"{monday.Day}–{sunday.ToString("d MMMM", ru)}"
+            : $"{monday.ToString("d MMMM", ru)} – {sunday.ToString("d MMMM", ru)}";
+        return monday == thisMonday ? "Эта неделя, " + range
+            : monday == thisMonday.AddDays(-7) ? "Прошлая неделя, " + range
+            : "Неделя " + range;
+    }
+
+    /// <summary>
+    /// Цифры недели текстом (spec §5.7: /week): категории основной дорожки (в сумме — «Всего»), параллельные отдельной
+    /// строкой, доли ✅/⚪/🟡; в скобках — разница с прошлой неделей.
+    /// </summary>
+    public static string Week(string title, WeekStats stats)
+    {
+        var builder = new StringBuilder();
+        builder.Append(title).AppendLine(":").AppendLine();
+        foreach (var category in stats.Categories)
+        {
+            builder.Append(category.Name).Append(' ').Append(Duration(category.Total));
+            if (category.Change is { } change)
+            {
+                builder.Append(" (").Append(Change(change)).Append(')');
+            }
+
+            builder.AppendLine();
+        }
+
+        builder.Append("Всего: ").AppendLine(Duration(stats.Total));
+        if (stats.Parallel.Count > 0)
+        {
+            builder.AppendLine().Append("Параллельно: ")
+                .AppendLine(string.Join(" · ", stats.Parallel.Select(p => $"{p.Title} {Duration(p.Total)}")));
+        }
+
+        var (confirmed, assumed, questionable) = stats.Shares();
+        builder.AppendLine().Append("✅ ").Append(confirmed).Append("% · ⚪ ").Append(assumed).Append("% · 🟡 ").Append(questionable).Append('%');
+        if (stats.IsCompared)
+        {
+            builder.AppendLine().Append("В скобках — разница с теми же днями прошлой недели.");
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>«+2 ч», «−40 мин», «=» — разница с прошлой неделей.</summary>
+    public static string Change(TimeSpan change) => Math.Abs(change.TotalMinutes) < 0.5
+        ? "="
+        : (change > TimeSpan.Zero ? "+" : "−") + Duration(change.Duration());
+
     public static string Icon(SegmentStatus status) => status switch
     {
         SegmentStatus.Confirmed => "✅",

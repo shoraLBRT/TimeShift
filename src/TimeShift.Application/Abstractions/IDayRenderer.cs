@@ -1,3 +1,4 @@
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Timelines;
 
 namespace TimeShift.Application.Abstractions;
@@ -12,8 +13,11 @@ public sealed record DayImage(
     IReadOnlyList<TimelinePiece> Pieces,
     IReadOnlyList<TimelinePiece> Parallel);
 
-/// <summary>Неделя по дням (spec §5.7: /week): для каждого дня — куски основной дорожки.</summary>
-public sealed record WeekImage(string Title, TimeZoneInfo TimeZone, IReadOnlyList<(DateOnly Day, DateTime StartUtc, IReadOnlyList<TimelinePiece> Pieces)> Days);
+/// <summary>День недели на картинке: окно дня и куски основной дорожки (пусто — день не считается: будущий или до регистрации).</summary>
+public sealed record WeekDay(DateOnly Day, DateTime StartUtc, DateTime EndUtc, IReadOnlyList<TimelinePiece> Pieces);
+
+/// <summary>Неделя (spec §5.7: /week): полоса на каждый день и цифры — категории, доли статусов, параллельные.</summary>
+public sealed record WeekImage(string Title, TimeZoneInfo TimeZone, IReadOnlyList<WeekDay> Days, WeekStats Stats);
 
 /// <summary>Картинки лент. Нет реализации или не вышло — <c>null</c>, бот ответит текстом.</summary>
 public interface IDayRenderer

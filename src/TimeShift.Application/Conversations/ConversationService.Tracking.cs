@@ -6,7 +6,7 @@ using TimeShift.Domain.Users;
 
 namespace TimeShift.Application.Conversations;
 
-/// <summary>Учёт после онбординга: кнопки пинга, свободный текст как новое занятие, /now /day /quiet /undo.</summary>
+/// <summary>Учёт после онбординга: кнопки пинга, свободный текст как новое занятие, /now /day /week /quiet /undo.</summary>
 public sealed partial class ConversationService
 {
     private const int MaxActivityNameLength = 60;
@@ -37,6 +37,7 @@ public sealed partial class ConversationService
             {
                 "/now" => [await NowAsync(user, now, ct)],
                 "/day" => [await DayCommandAsync(user, argument, now, ct)],
+                "/week" => [await WeekAsync(user, DateOnly.FromDateTime(LocalTime.ToLocal(now, user.TimeZoneInfo)), now, ct)],
                 "/add" => argument is null ? [AskAddPast(user, null, now)] : await AddPastAsync(user, argument, null, now, ct),
                 "/quiet" => [Quiet(user, argument, now)],
                 "/undo" => [await UndoAsync(user, ct)],
@@ -196,6 +197,13 @@ public sealed partial class ConversationService
                 System.Globalization.DateTimeStyles.None, out var day))
         {
             return [await DayAsync(user, day, now, ct) with { ReplacesSource = true }];
+        }
+
+        if (data.StartsWith(WeekButton, StringComparison.Ordinal)
+            && DateOnly.TryParseExact(data[WeekButton.Length..], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var week))
+        {
+            return [await WeekAsync(user, week, now, ct) with { ReplacesSource = true }];
         }
 
         if (data.StartsWith("quiet:", StringComparison.Ordinal))

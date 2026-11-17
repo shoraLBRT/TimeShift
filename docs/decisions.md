@@ -315,3 +315,20 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   only while the rule holds that all logic and markup live in `core/` and a design folder is CSS plus the main
   screen. A feature that cannot be expressed through the core's panels is a reason to extend the core, not a
   design.
+
+## `/week` (#16)
+
+- **The week is the calendar week Mon–Sun in the user's time zone**; the current one is counted up to "now". ◀ ▶
+  move by a week, never past the current one and not into weeks that lie wholly before registration.
+- **Week numbers are the sum of the `/day` numbers.** Each day is built with the same window as `/day`, categories
+  are grouped the same way (sub-categories of «Залипание» are folded into it), so the totals cannot drift apart.
+  Days before the registration day are not counted and are drawn empty, like future days.
+- **Comparison is with the same part of the previous week** — whole days against whole days, today against the
+  same number of hours from midnight a week earlier — so a half-finished week is not compared with a full one.
+  It is shown only when the previous week lies wholly after registration. A category that existed only last week
+  stays in the list with zero and a negative difference.
+- **Shares ✅/⚪/🟡 are whole percents that sum to 100** (largest remainder). Parallel activities are a separate
+  line and are not part of the total (spec §3.6).
+- **The picture shows numbers, not only strips:** a strip per day, a bar per category with hours and the
+  difference, one bar for the status shares. Differences are neutral grey: whether more sleep or less work is
+  good is not the bot's call.
