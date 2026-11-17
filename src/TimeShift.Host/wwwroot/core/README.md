@@ -293,6 +293,56 @@ The swipe locks direction after 10 px and never fights vertical scrolling (`touc
 `.ts-swipe-area`); a swipe swallows the click that would follow. `canSwipe` returning false rubber-bands that
 direction. Elements with `data-ts-noswipe` (or horizontally scrollable ones) are ignored.
 
+## 8a. Dragging on the timeline — `core/drag.js`
+
+```js
+timelineDrag(app, flows, {
+  scroller,                       // the vertical scroll container of the timeline
+  surface,                        // element (or () => element) whose top edge is 00:00 of the viewed day and whose
+                                  // height is layout.height; must be positioned — the overlay is appended to it
+  layout: () => L,                // the current layoutDay() result of the viewed day (or null)
+  ignore: '.confirm, .parallel',  // selector or (target) => boolean: press targets to leave alone
+  insets: () => ({ top, bottom }),// px of the scroller hidden under the header / bottom bar (edge auto-scroll)
+  ms: 450, tolerance: 10,
+}) → { cancel(), destroy(), active }
+```
+
+One call per design; everything else is the core's.
+
+- **Long press a stored past entry** (a piece with `segment`) → the overlay covers it and shows two handles. Drag a
+  handle: the edge follows the finger in steps of `me.settings.roundingMin`, the time rides above the finger, the
+  device ticks on every step (`navigator.vibrate`, where the browser has it). Release → `actions.updateEntry` with
+  the moved edge alone; the handles go away, the usual toast offers «Отменить». Releasing where it started keeps the
+  handles; a tap anywhere else, Escape, or the entry disappearing puts them away. The running entry has only the
+  start handle; an edge that lies on another day has none (the sheet edits those).
+- **Long press unrecorded time** (no piece, or a computed one: background, template, extension) → drag out an
+  interval → `flows.openAdd({ startMin, endMin })`: the entry sheet asks what it was. Without a drag the sheet opens
+  for an hour from the pressed quarter, cut to the unrecorded piece under the finger.
+- Never: future time, future days, parallel entries (pass them in `ignore`), while `state.busy`.
+- The core does not move neighbours. It previews only the dragged entry; after the release the optimistic
+  `patchDay` and then the server's day show what was displaced.
+- Scrolling: nothing happens until the finger has rested for `ms` (movement over `tolerance` px or a scroll cancels
+  the press). From then on a non-passive `touchmove` listener on the scroller keeps the page still, and the day
+  swipe does not see that finger. A selected entry does not block scrolling — only the handles take touches
+  (`touch-action: none`). Near the top / bottom of the visible timeline the page scrolls under the finger.
+
+Markup and hooks (structure in `base.css`, the look is the design's):
+
+```html
+<div class="ts-drag" data-mode="resize | new" data-edge="start | end" data-dragging="true" aria-hidden="true">
+  <div class="ts-drag-time"><span class="ts-drag-clock">09:35</span><span class="ts-drag-duration">1 ч 5 мин</span></div>
+  <div class="ts-drag-handle" data-edge="start"></div>   <!-- 44 × 44 px target centred on the edge; draw the knob -->
+  <div class="ts-drag-handle" data-edge="end"></div>     <!-- with ::before -->
+</div>
+```
+
+`data-edge` on the overlay is the edge being moved (absent when the entry is only selected); `.ts-drag-time` is
+hidden unless a drag runs. Set `left` / `right` of `.ts-drag` to the entry column. Variables: `--ts-drag-start-x`
+(28 %) and `--ts-drag-end-x` (72 %) — where the handles sit; they are on opposite sides so that the two targets
+never overlap on a short entry. `--ts-drag-time-lift` (30 px above the edge), `--ts-drag-time-inset` (64 px from
+the sides). Pure helpers for tests and other clients of the layout: `pressTarget`, `entryEdges`, `snapEdge`,
+`newInterval`.
+
 ## 9. DOM helpers — `core/dom.js`
 
 `h(tag, props, ...children)` (props: `class`, `style` object incl. `--vars`, `dataset`, `onClick`…, boolean props,
@@ -441,6 +491,8 @@ Panels:
 - [ ] voice (`?demo=1` has it, `&speech=0` turns it off): microphone idle / `starting` / `recording` / cancel armed /
       `sending` / disabled while `threadBusy`; the status line instead of the field; send button instead of the
       microphone once there is text
+- [ ] timeline drag: an entry selected (two handles; the running one — only the start), an edge being dragged
+      (`data-edge`, the time above the finger), a new interval (`data-mode="new"`), a 5-minute entry
 - [ ] every panel above, light and dark, `prefers-reduced-motion`, safe areas (notch, home indicator)
 
 ## 13. Known gaps
@@ -456,5 +508,10 @@ Panels:
 - Voice was exercised in Chromium only, with a synthetic microphone. Safari records AAC and takes other paths in
   `core/voice.js` (callback forms of `decodeAudioData` / `startRendering`, resampling in script when an offline
   context at 16 kHz is refused) — these are written from the documentation and not yet run on an iPhone.
+- Timeline drag (`core/drag.js`) was exercised in Chromium only, with pointer and touch events dispatched from
+  script — not with a finger. Whether the long press and the drag coexist with native scrolling on an iPhone and on
+  Android is the open item of #51. iOS Safari has no `navigator.vibrate`, so there the steps are silent.
+- Timeline drag has no keyboard path (the entry sheet is the accessible way to change bounds), does not handle
+  parallel entries, and moves one edge per gesture — one undo step each.
 - The microphone is opened on every press and released right after, so the first ~0.3 s of a phrase can be lost
   while the browser starts recording; the status line says «Говори» only once recording runs.

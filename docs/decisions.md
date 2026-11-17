@@ -385,3 +385,36 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   the stream while the sheet is open.
 - **The demo has the microphone** (it "hears" a fixed phrase) so that the three designs can be reviewed without a
   model; `?demo=1&speech=0` shows the composer of a server without one.
+
+## Dragging boundaries on the timeline (#51)
+
+- **No new API.** Moving an edge is `PATCH /api/entries/{id}` with that edge alone; a new interval is the ordinary
+  `POST /api/entries` from the entry sheet. The displacement rule stays where it was (`Timeline.Edit` / `Apply`
+  and its one journal step); the PWA has no second copy of it. A Web test pins the contract the gesture relies on:
+  one moved edge displaces the neighbour, undo returns both.
+- **"Вытеснение" = the dragged entry wins.** Growing an entry over its neighbour cuts the neighbour (a stored one
+  is shortened or removed, computed time simply gives way); shrinking it returns the freed time to the template /
+  background, it does not stretch the neighbour. The client previews only the dragged entry; what happened to the
+  neighbours is shown after the release, by the optimistic patch and then the server's day.
+- **One gesture — one edge — one undo step.** The edge is saved on release and the handles go away, so «Отменить»
+  in the toast returns exactly the previous bounds. Keeping the handles to move the second edge would make two
+  steps and the toast would undo only the last; moving both edges is two long presses (or the sheet).
+- **Long press is 450 ms with 10 px of tolerance** — the same as `longPress` in `core/gestures.js`. Until it fires
+  the touch belongs to the browser (scrolling, the day swipe); any movement or scroll cancels the press. After it
+  fires the page is held still by a non-passive `touchmove` listener, which is the only way to stop a scroll that
+  has not started yet on both iOS and Android.
+- **A selected entry does not block scrolling.** Only the two handles take touches; the overlay itself lets them
+  through, otherwise a long entry (sleep fills the screen) could not be scrolled to reach its other edge. A tap
+  outside puts the handles away and does nothing else.
+- **Handles sit on opposite sides** (start on the left third, end on the right third): two 44 px targets on the
+  same vertical would overlap on any entry shorter than 44 px.
+- **Unrecorded time means "no stored entry here"**: background, template blocks and extensions are all computed,
+  and a long press on them starts a new entry. A stored entry is never the start of a new one (it gets handles),
+  but the dragged interval may run over stored neighbours — the usual displacement applies when it is saved.
+- **The new entry is not saved by the drag.** The gesture gives the interval, the entry sheet asks what it was —
+  one `POST`, one undo step. A long press without a drag opens the sheet for an hour from the pressed quarter, cut
+  to the unrecorded piece (this replaces the long press design B had of its own).
+- **Steps come from `roundingMin`**; an edge can also stop exactly at "now" or at the other edge minus one step.
+  The future is not reachable: the server rejects it, so the drag stops at "now".
+- **Left out:** parallel entries, the end of the running entry (that is «Закончил»), edges lying on another day,
+  a keyboard path — all of these stay in the entry sheet.
