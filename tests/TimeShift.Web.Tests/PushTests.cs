@@ -1,6 +1,7 @@
 using System.Buffers.Text;
 using System.Net;
 using System.Text.Json.Nodes;
+using TimeShift.TestSupport;
 
 namespace TimeShift.Web.Tests;
 
@@ -101,9 +102,9 @@ public class PushTests
     [Fact]
     public async Task Vapid_keys_are_generated_once_and_survive_a_restart()
     {
-        var db = Path.Combine(Path.GetTempPath(), $"timeshift-web-{Guid.NewGuid():N}.db");
+        await using var db = TestDatabase.Create();
         string first;
-        await using (var app = new TestApp(dbPath: db, deleteDb: false))
+        await using (var app = new TestApp(database: db))
         {
             first = (await app.GetAsync("/api/push")).Json["publicKey"]!.GetValue<string>();
             Assert.Equal(first, (await app.GetAsync("/api/meta", authenticated: false)).Json["push"]!["publicKey"]!.GetValue<string>());
@@ -112,7 +113,7 @@ public class PushTests
             Assert.Equal(0x04, point[0]);
         }
 
-        await using (var again = new TestApp(dbPath: db))
+        await using (var again = new TestApp(database: db))
         {
             Assert.Equal(first, (await again.GetAsync("/api/push")).Json["publicKey"]!.GetValue<string>());
             await again.PostAsync("/api/push/subscriptions", Subscription());

@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Compile Include="..\Shared\TestDatabase.cs" Link="Shared\TestDatabase.cs" />
   </ItemGroup>
 
   <ItemGroup>

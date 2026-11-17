@@ -12,10 +12,32 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      # Same image as docker-compose.yml (production).
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: timeshift
+          POSTGRES_USER: timeshift
+          POSTGRES_PASSWORD: timeshift
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U timeshift -d timeshift"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - run: dotnet build -c Release
-      - run: dotnet test -c Release --no-build
+      - name: Test (SQLite)
+        run: dotnet test -c Release --no-build
+      # The same suite again: every database test gets its own Postgres database and applies the
+      # Postgres migrations. --fail-skips: a Postgres-only test that is skipped here is a failure.
+      - name: Test (Postgres)
+        env:
+          TIMESHIFT_TEST_POSTGRES: Host=localhost;Port=5432;Database=timeshift;Username=timeshift;Password=timeshift
+        run: dotnet test -c Release --no-build -- --fail-skips on

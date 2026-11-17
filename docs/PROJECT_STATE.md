@@ -51,10 +51,17 @@ Two tracks, order in `docs/ROADMAP.md`:
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
+- **Tests on both databases (#17):** every test that needs a database gets it from `tests/Shared/TestDatabase.cs`
+  — a temporary SQLite file, or its own Postgres database when `TIMESHIFT_TEST_POSTGRES` is set. CI runs the
+  suite twice, on SQLite and on a `postgres:17` service container (Postgres migrations applied from scratch for
+  every test; a skipped Postgres-only test fails that run). `MigrationTests` also fail, without any database,
+  when the model is ahead of either migration set.
 
 ## Next
 
-[#17](https://github.com/shoraLBRT/TimeShift/issues/17) — migrations and tests on a real Postgres in CI. (#2 waits for the LLM key; voice needs a whisper model on the server).
+[#19](https://github.com/shoraLBRT/TimeShift/issues/19) — logs, DB backups, monitoring.
+[#18](https://github.com/shoraLBRT/TimeShift/issues/18) (deploy to a VPS) comes first in the roadmap but waits for
+the maintainer to choose and pay for the VPS. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
 PWA: check on a real phone over HTTPS (#45), then #50 (voice), #51 (drag the edges of an entry).
 
@@ -76,7 +83,8 @@ PWA: check on a real phone over HTTPS (#45), then #50 (voice), #51 (drag the edg
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green (Domain, Application, Infrastructure on SQLite)
+dotnet test           # all green: 321 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 321, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/)

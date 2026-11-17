@@ -15,6 +15,7 @@ behaviour; data model is §7, architecture §9.
 ```sh
 dotnet build                                   # must stay at 0 warnings (TreatWarningsAsErrors)
 dotnet test                                    # xUnit v3 on Microsoft.Testing.Platform (see global.json)
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same tests on Postgres (CI runs both)
 dotnet run --project src/TimeShift.Host        # Development: SQLite timeshift.db, migrations on start
 curl http://localhost:5138/health
 docker compose up --build                      # app + postgres
@@ -23,6 +24,9 @@ docker compose up --build                      # app + postgres
 Migrations exist per provider — always add both (`SqliteTimeShiftDbContext` → `Persistence/Migrations/Sqlite`,
 `PostgresTimeShiftDbContext` → `Persistence/Migrations/Postgres`); full commands in README.md.
 `dotnet ef` is a local tool: `dotnet tool restore` first.
+
+Tests that need a database take it from `tests/Shared/TestDatabase.cs` (SQLite file by default, a throwaway
+Postgres database when `TIMESHIFT_TEST_POSTGRES` is set) — do not hard-code a provider in a test.
 
 ## Layer rule (enforced by project references — do not add shortcuts)
 

@@ -21,7 +21,7 @@ tests/
   TimeShift.Domain.Tests
   TimeShift.Application.Tests
   TimeShift.Infrastructure.Tests
-  TimeShift.Web.Tests       API целиком на временной SQLite (WebApplicationFactory)
+  TimeShift.Web.Tests       API целиком на временной базе (WebApplicationFactory)
 ```
 
 ## Требования
@@ -37,6 +37,19 @@ dotnet test
 ```
 
 Тесты работают на Microsoft.Testing.Platform (xUnit v3), это включено в `global.json`.
+
+Тесты с базой (`TimeShift.Infrastructure.Tests`, `TimeShift.Web.Tests`) по умолчанию идут на временных файлах
+SQLite — ни Postgres, ни Docker для них не нужны. Те же тесты на настоящем Postgres: задать
+`TIMESHIFT_TEST_POSTGRES` — строку подключения к серверу, где пользователю можно создавать базы. Каждый тест
+создаёт свою базу `timeshift_test_…`, накатывает миграции Postgres и удаляет её за собой.
+
+```sh
+docker run -d --rm --name timeshift-test-pg -e POSTGRES_PASSWORD=timeshift -p 127.0.0.1:55432:5432 postgres:17
+TIMESHIFT_TEST_POSTGRES="Host=127.0.0.1;Port=55432;Username=postgres;Password=timeshift" dotnet test -- --fail-skips on
+docker stop timeshift-test-pg
+```
+
+CI делает оба прогона на каждом PR (`.github/workflows/ci.yml`, Postgres — service container).
 
 ## Локальный запуск
 
