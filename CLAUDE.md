@@ -32,6 +32,15 @@ Migrations exist per provider — always add both (`SqliteTimeShiftDbContext` �
 - Adapters (`Infrastructure`, `Telegram`) depend on Application. `Host` wires everything together.
 - Telegram is just one client. All logic lives in Domain/Application; adapters only translate.
 
+## Web client (PWA)
+
+- REST contract: `docs/web-api.md` (adapter `src/TimeShift.Web`, use cases in `Application/Clients`).
+- Frontend: `src/TimeShift.Host/wwwroot` — plain ES modules and CSS, **no build step, no dependencies, no
+  requests to other origins**. All logic is in `core/` (its interface: `core/README.md`); a design folder
+  (`a/`, `b/`, `c/`) holds only the look. Check a change with `?demo=1&at=15:40` (no server data needed).
+- `dotnet run` with a Telegram token in user secrets starts long polling against the real bot — for a
+  throwaway run set `Telegram__BotToken=" "`.
+
 ## Conventions
 
 - All time is stored in UTC.
