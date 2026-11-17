@@ -4,7 +4,8 @@ import { createFlows } from '/core/flows.js';
 import { configureSheets } from '/core/sheet.js';
 import { layoutDay, describePiece, categoryInfo, initialScrollTop } from '/core/timeline.js';
 import { h, reconcile, setText, prefersReducedMotion, isTyping } from '/core/dom.js';
-import { swipeHorizontal, longPress } from '/core/gestures.js';
+import { swipeHorizontal } from '/core/gestures.js';
+import { timelineDrag } from '/core/drag.js';
 import * as T from '/core/time.js';
 
 const LAYOUT = { hourHeight: 60, minBlockHeight: 14, shortHeight: 34, minHit: 44 };
@@ -344,20 +345,13 @@ track.addEventListener('click', (e) => {
   flows.openPiece(li.__piece, { parallel: li.__parallel });
 });
 
-// Long press on the grid: a new past entry at that time (as in Calendar).
-longPress(scroller, (e) => {
-  const s = app.state;
-  const L = pager.cur?.layout;
-  if (!L || !s.day || s.day.date !== s.viewDate || s.viewDate > s.today || e.target.closest('.b-ev-ok')) return;
-  const step = 15;
-  const limit = s.day.nowMin ?? L.dayMinutes;
-  const at = L.minOf(e.clientY - grid.getBoundingClientRect().top);
-  if (at < 0 || at > limit) return;
-  const startMin = clamp(T.floorTo(at, step), 0, Math.max(0, limit - step));
-  const endMin = Math.min(limit, startMin + 60);
-  if (endMin - startMin < 5) return;
-  flows.openAdd({ startMin, endMin });
-}, { ms: 480 });
+// Long press (core/drag.js): handles on a stored entry's edges; on unrecorded time — a new entry, dragged out or,
+// without a drag, an hour at that place (as in Calendar).
+timelineDrag(app, flows, {
+  scroller, surface: () => pager.cur?.el ?? null, layout: () => pager.cur?.layout ?? null,
+  ignore: (t) => !!t.closest('.b-ev-ok') || !!t.closest('.b-ev')?.__parallel,
+  insets: () => ({ top: header.offsetHeight, bottom: bottomPad() }),
+});
 
 // ---------------------------------------------------------------- header: month, week strip, caption
 

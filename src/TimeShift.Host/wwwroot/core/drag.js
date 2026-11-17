@@ -62,7 +62,7 @@ export function newInterval({ anchor, value, at, limit, step, piece }) {
  * @param {Element | (() => Element)} o.surface    positioned element whose top edge is 00:00 of the viewed day and
  *                                                 whose height is layout.height; the overlay is appended to it
  * @param {() => object} o.layout                  the current layoutDay() result of the viewed day (or null)
- * @param {string} [o.ignore]                      selector of press targets to leave alone (buttons, parallel notes)
+ * @param {string | ((target: Element) => boolean)} [o.ignore]  press targets to leave alone (buttons, parallel notes)
  * @param {() => { top?: number, bottom?: number }} [o.insets]  px of the scroller hidden under bars (auto-scroll)
  * @param {number} [o.ms=450]  [o.tolerance=10]    long press: hold time and allowed movement
  * @returns {{ cancel(), destroy(), readonly active: boolean }}
@@ -72,6 +72,7 @@ export function timelineDrag(app, flows, o) {
   const surfaceOf = typeof o.surface === 'function' ? o.surface : () => o.surface;
   const ms = o.ms ?? 450;
   const tol = o.tolerance ?? 10;
+  const ignored = (t) => (typeof o.ignore === 'function' ? !!o.ignore(t) : o.ignore ? !!t.closest(o.ignore) : false);
 
   const time = h('span', { class: 'ts-drag-clock' });
   const dur = h('span', { class: 'ts-drag-duration' });
@@ -139,7 +140,7 @@ export function timelineDrag(app, flows, o) {
     if (press || drag || held !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if (overlay.contains(e.target)) return;
     const surface = surfaceOf();
-    if (!surface || !surface.contains(e.target) || (o.ignore && e.target.closest(o.ignore))) return;
+    if (!surface || !surface.contains(e.target) || ignored(e.target)) return;
     if (!ctx() || app.state.busy) return;
     press = { id: e.pointerId, x: e.clientX, y: e.clientY, surface, timer: setTimeout(fire, ms) };
   };
