@@ -112,7 +112,7 @@ not remembered and sheets do not touch history.
   nowMin: number | null,             // minutes since the start of viewDate, or null when it is not today
   activities: Activity[],            // most recently used first
   busy: null | 'start' | 'stop' | 'continue' | 'addEntry' | 'updateEntry' | 'deleteEntry' | 'confirm' | 'undo' | 'quiet' | 'login' | 'onboarding' | 'push',
-  thread: [{ id, from: 'user' | 'bot', text, buttons?: [[{ label, data }]], pending?, error?, pressed?, hasImage? }],
+  thread: [{ id, from: 'user' | 'bot', text, buttons?: [[{ label, data }]], pending?, error?, pressed?, hasImage?, voice? }],
   threadBusy: boolean,
   summary: { from, to, data } | null, // last loadSummary result
   ping: { requested: boolean, pending: boolean }, // requested: open the switcher now; pending: server waits for an answer
@@ -148,6 +148,7 @@ All return promises. Timeline mutations resolve to `{ ok, result?, error? }`, ne
 | `undo()` | toast «Отменено» / «Нечего отменять» / «Уже нельзя отменить» |
 | `quiet(minutes)` | `0` turns quiet hours off |
 | `sendMessage(text)`, `pressButton(data, messageId)`, `clearThread()` | the assistant thread; a reply with `replacesSource` replaces the message whose button was pressed |
+| `sendVoice(wav, seconds)` | a recording from `core/voice.js` (WAV 16 kHz mono) → the same thread: the user's message is «🎙 Голосовое · 0:12» (`voice: true`), the first reply is what the server heard |
 | `saveSettings(patch)`, `setSleep(sleep)`, `addBlock(b)`, `updateBlock(id, b)`, `deleteBlock(id)` | optimistic, rolled back on error, run one after another |
 | `updateActivity(id, { name?, category?, typicalMin? })` | optimistic |
 | `loadSummary({ from?, to? })` | resolves to the raw `/api/summary` data (default: 7 days ending with `viewDate`) |
@@ -308,6 +309,22 @@ rebuilds its cache from the network and the page reloads once when it is safe (h
 idle 2.5 s). Notifications: tag replaces the previous one; buttons «Продолжаю» / «Закончил» call the API directly;
 a tap focuses the app and opens the switcher.
 
+## 10a. Voice — `core/voice.js`
+
+Used by the assistant panel; a design does not call it.
+
+- `voiceSupported()` — a secure context with `getUserMedia`, `MediaRecorder` and Web Audio.
+- `createRecorder({ maxSec, onLimit })` → `{ state, elapsed, start(), stop(), cancel() }`. `start()` asks for the
+  microphone and resolves `true` once recording runs (`false` when cancelled meanwhile, e.g. while the permission
+  prompt was open); `stop()` resolves `{ wav: Blob('audio/wav'), seconds }`; the microphone is held only while
+  recording. Failures are `VoiceError` (`code`: `denied`, `no-device`, `busy`, `empty`, `decode`, `unsupported`)
+  with a Russian message.
+- `toWav(blob, maxSec)` — whatever the browser recorded (Opus in WebM, AAC in MP4) → `AudioContext.decodeAudioData`
+  → `OfflineAudioContext` at 16 kHz mono → 16-bit PCM WAV, cut to `maxSec` (`meta.speechMaxSec`). The server gets
+  one format and needs no FFmpeg. `encodeWav`, `resampleMono` are the pieces.
+- `api.voice(wav, view)` sends it: `POST /api/messages`, `Content-Type: audio/wav`, timeout 180 s (recognition on a
+  small server is slow).
+
 ## 11. Panels — markup and hooks to style
 
 Every panel is `panel(app, opts) → { el, title, destroy() }` (flows create them; you rarely do). Shared controls:
@@ -381,6 +398,14 @@ Panels:
   `p.ts-msg-text` (pre-wrap), `p.ts-msg-error`, `.ts-msg-buttons > .ts-msg-row > button.ts-msg-button[aria-pressed]`;
   `form.ts-compose` > `textarea.ts-compose-input` (grows to 160 px; Enter sends, Shift+Enter breaks) +
   `[data-action=send]`.
+  **Voice** (`panels/mic.js`, only when `meta.speech` is true and the browser can record — otherwise the markup
+  above is all there is): `form.ts-compose[data-voice=idle|starting|recording|sending][data-voice-cancel][data-has-text]`
+  also holds `p.ts-voice-status[data-cancel]` (`.ts-voice-time` «0:07», `.ts-voice-hint`; shown instead of the
+  textarea while `data-voice` is not `idle`) and `button.ts-mic[data-action=voice][data-phase][data-cancel][aria-pressed]`.
+  Hold the button and speak, release to send, move the finger 72 px away to cancel (`data-cancel`); Space / Enter
+  held on the focused button do the same, Escape cancels. One slot on the right: the core hides `[data-action=send]`
+  while the field is empty and `.ts-mic` once there is text. The core draws the microphone glyph (`.ts-mic::before`,
+  `currentColor`, mask `--ts-mic-icon`); a design sets the button's size, colours and the recording look.
 - **Settings** `.ts-settings[data-depth]` > `.ts-nav` > `section.ts-page[data-page][data-state=active|enter|below|hidden|leave]`
   (push / pop animate `transform`; tune `--ts-page-duration`, `--ts-page-easing`) > `header.ts-page-header`
   (sub-pages: `button.ts-page-back`, `h3.ts-page-title`) + `.ts-page-body`. Root: `ul.ts-menu > li >
@@ -413,6 +438,9 @@ Panels:
 - [ ] now control: running (title, elapsed, over typical), nothing running, `ping.pending`
 - [ ] sheets: auto and large detents, dragging, stacked (`data-stacked`), with keyboard open
 - [ ] toast: info with «Отменить», error
+- [ ] voice (`?demo=1` has it, `&speech=0` turns it off): microphone idle / `starting` / `recording` / cancel armed /
+      `sending` / disabled while `threadBusy`; the status line instead of the field; send button instead of the
+      microphone once there is text
 - [ ] every panel above, light and dark, `prefers-reduced-motion`, safe areas (notch, home indicator)
 
 ## 13. Known gaps
@@ -423,3 +451,10 @@ Panels:
 - `state.day` between refreshes is a projection; status changes caused by passing a norm appear on the next refresh
   (≤ 60 s).
 - The demo's message engine understands only short activity names and «[вчера] 19-21 зал»-style lines.
+- Voice in the demo records for real (the browser asks for the microphone) but does not listen: the answer is always
+  the same phrase.
+- Voice was exercised in Chromium only, with a synthetic microphone. Safari records AAC and takes other paths in
+  `core/voice.js` (callback forms of `decodeAudioData` / `startRendering`, resampling in script when an offline
+  context at 16 kHz is refused) — these are written from the documentation and not yet run on an iPhone.
+- The microphone is opened on every press and released right after, so the first ~0.3 s of a phrase can be lost
+  while the browser starts recording; the status line says «Говори» only once recording runs.

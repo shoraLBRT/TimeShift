@@ -24,7 +24,7 @@ export function micControl(app, opts = {}) {
   const time = h('span', { class: 'ts-voice-time' }, '0:00');
   const hint = h('span', { class: 'ts-voice-hint' });
   const status = h('p', { class: 'ts-voice-status', role: 'status', hidden: true }, time, hint);
-  const button = h('button', { type: 'button', class: 'ts-mic', dataset: { action: 'voice', phase: 'idle' }, 'aria-label': 'Голос: удерживай и говори', title: 'Удерживай и говори' });
+  const button = h('button', { type: 'button', class: 'ts-mic', dataset: { action: 'voice', phase: 'idle' }, 'aria-label': 'Голос: удерживай и говори', 'data-ts-nodrag': '' }); // holding must not drag the sheet
 
   let phase = 'idle';
   let held = false;

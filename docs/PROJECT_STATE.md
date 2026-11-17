@@ -34,10 +34,11 @@ Two tracks, order in `docs/ROADMAP.md`:
 - **Questions (`QuestionService`, `pending_questions`):** category, then unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, routes.
 - **Rendering (`TimeShift.Rendering`, SkiaSharp):** `/day` is a PNG (vertical day bar, colour = category, ✅ solid / ⚪ pale / 🟡 hatched, «now» line, parallel column) with the text and «Итого» per category as caption; `/week` is a PNG (a strip per day, a bar per category with hours and the difference with the previous week, one bar for the ✅/⚪/🟡 shares, parallel total) with the same numbers as caption; Docker image installs DejaVu for Cyrillic.
 - **Week numbers (`WeekStats`):** calendar week Mon–Sun, the current one up to «now»; built from the same day windows as `/day`, so the week equals the sum of its days; days before registration are not counted; comparison with the same part of the previous week when that week is wholly after registration (`docs/decisions.md`).
-- **Speech (`TimeShift.Speech`):** voice → OGG/Opus decoded in C# (Concentus) → local whisper.cpp (Whisper.net); `Speech:ModelPath`, `Speech:AutoDownload`; off without a model.
+- **Speech (`TimeShift.Speech`):** voice → OGG/Opus (Telegram, decoded in C# with Concentus) or WAV (the PWA; PCM 16 / float 32, any rate and channel count, recognised by signature) → PCM 16 kHz → local whisper.cpp (Whisper.net); `Speech:ModelPath`, `Speech:AutoDownload`; off without a model.
 - **Web API (`TimeShift.Web`, contract `docs/web-api.md`):** single-owner access key with a stateless signed
   session cookie; day (pieces mapped to stored segments), summary, start / stop / continue, entries, confirm,
-  undo, quiet, activities, settings, week template, free text through the same dialog engine. Use cases live in
+  undo, quiet, activities, settings, week template, free text and voice (`POST /api/messages` with an
+  `audio/wav` body, the reply starts with what was heard) through the same dialog engine. Use cases live in
   `Application/Clients`. A user can exist without Telegram (`telegram_chat_id` is nullable).
 - **Notifications:** channels fan-out (`NotificationFanout`): Telegram and Web Push (VAPID keys from config or
   generated once and kept in the database, subscriptions in `push_subscriptions`).
@@ -47,6 +48,11 @@ Two tracks, order in `docs/ROADMAP.md`:
   planner), `b/` «Сетка» (iOS calendar grid), `c/` «Нить» (dark typographic thread). All three stay: the look is switched in Настройки → Прочее → Вид;
   `/` opens the stored one (the chooser on the first run).
   Ping interval is 5–240 minutes.
+- **Voice in the PWA (#50, code complete, not yet tried on a phone):** a hold-to-talk microphone in the phrase
+  composer («Записать фразой») — hold and speak, release to send, slide away to cancel. `core/voice.js` records
+  with `MediaRecorder` and re-encodes on the device to WAV 16 kHz mono; `core/panels/mic.js` is the button, styled
+  in each design. The button exists only when `/api/meta` says `speech: true` (a model on the server) and the
+  browser can record. The demo has it and "hears" a fixed phrase; `?demo=1&speech=0` shows the composer without it.
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -63,7 +69,9 @@ Two tracks, order in `docs/ROADMAP.md`:
 [#18](https://github.com/shoraLBRT/TimeShift/issues/18) (deploy to a VPS) comes first in the roadmap but waits for
 the maintainer to choose and pay for the VPS. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
-PWA: check on a real phone over HTTPS (#45), then #50 (voice), #51 (drag the edges of an entry).
+PWA: check on a real phone over HTTPS (#45) — that now includes the one open item of #50: say a 10–30 s phrase
+on an iPhone and on Android against a server with a whisper model (`Speech:ModelPath` or `Speech:AutoDownload`;
+the microphone needs HTTPS). Then #51 (drag the edges of an entry).
 
 ## Open questions
 
@@ -78,14 +86,20 @@ PWA: check on a real phone over HTTPS (#45), then #50 (voice), #51 (drag the edg
   `GET /api/summary`.
 - Not verified on a real device: the service worker, push delivery and "Add to Home Screen" (need HTTPS and a
   phone); motion smoothness of the three designs was checked by state, not watched on an iPhone.
+- Voice (#50) has never met a real microphone or a real model: no whisper model is configured on the development
+  machine, so recognition itself was not run; the browser part was run in Chromium with a synthetic microphone
+  (recording → WAV 16 kHz mono → request), the server part with a fake recogniser and synthetic WAV files. Safari
+  (AAC, older Web Audio API forms) is written but untested. To watch on the phone: whether the first word is lost
+  while the microphone starts (it is opened per phrase, `docs/decisions.md`), and how long whisper `base` takes
+  for 30 s on the VPS (the client waits up to 180 s).
 
 ## Verify
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 321 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 321, 0 skipped (README)
+dotnet test           # all green: 337 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 337, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
-# http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/)
+# http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone
 ```
