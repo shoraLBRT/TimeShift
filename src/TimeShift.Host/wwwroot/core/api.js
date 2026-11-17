@@ -16,6 +16,8 @@ export class ApiError extends Error {
   }
 }
 
+const VOICE_TIMEOUT_MS = 180000;
+
 const FALLBACK_MESSAGES = {
   0: 'Нет сети. Изменение не сохранено.',
   400: 'Сервер не понял запрос.',
@@ -35,17 +37,18 @@ export function createApi(opts = {}) {
   const base = opts.base ?? '';
   const timeoutMs = opts.timeoutMs ?? 20000;
 
-  async function request(method, path, body, { anonymous = false } = {}) {
+  // `raw` is a content type: the body (a Blob) is sent as is instead of JSON. `timeout` overrides the default.
+  async function request(method, path, body, { anonymous = false, raw = null, timeout = timeoutMs } = {}) {
     const headers = { Accept: 'application/json' };
     if (method !== 'GET') headers['X-TimeShift'] = '1';
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (body !== undefined) headers['Content-Type'] = raw ?? 'application/json';
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     let res;
     try {
       res = await fetch(base + path, {
         method, headers, credentials: 'same-origin', cache: 'no-store', signal: ctrl.signal,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       });
     } catch (e) {
       clearTimeout(timer);
@@ -103,6 +106,8 @@ export function createApi(opts = {}) {
     updateActivity: (id, patch) => request('PATCH', `/api/activities/${encodeURIComponent(id)}`, patch),
     // free text → { replies, day }
     message: (body, view) => post(`/api/messages${q(view)}`, body),
+    // a recording (WAV 16 kHz mono, see voice.js) → the same { replies, day }; recognition is slow, so a long timeout
+    voice: (wav, view) => post(`/api/messages${q(view)}`, wav, { raw: 'audio/wav', timeout: VOICE_TIMEOUT_MS }),
     // push
     pushInfo: () => get('/api/push'),
     subscribePush: (sub) => post('/api/push/subscriptions', sub),

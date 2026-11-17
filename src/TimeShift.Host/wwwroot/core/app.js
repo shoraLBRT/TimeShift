@@ -59,7 +59,7 @@ export function createApp(opts = {}) {
   let onUnauthorized = () => {};
   let onNetwork = () => {};
   const api = opts.api ?? (demo
-    ? createDemoApi({ fresh: params.get('fresh') === '1', login: params.get('login') === '1', clockOffsetMs: demoOffset, onUnauthorized: () => onUnauthorized() })
+    ? createDemoApi({ fresh: params.get('fresh') === '1', login: params.get('login') === '1', speech: params.get('speech') !== '0', clockOffsetMs: demoOffset, onUnauthorized: () => onUnauthorized() })
     : createApi({ onUnauthorized: () => onUnauthorized(), onNetwork: (on) => onNetwork(on) }));
 
   const themePref = ls.get(THEME_KEY) ?? 'auto';
@@ -369,6 +369,27 @@ export function createApp(opts = {}) {
   function thread(update) { set({ thread: update(state.thread) }); }
   let msgId = 0;
 
+  /** The user's message (typed or spoken) goes into the thread, then the server's replies. */
+  async function say(message, call) {
+    if (state.threadBusy) return { ok: false };
+    const id = `u${++msgId}`;
+    thread((th) => [...th, { id, from: 'user', ...message, pending: true }]);
+    set({ threadBusy: true });
+    try {
+      const res = await call(viewOrToday());
+      mutationSeq++;
+      thread((th) => [...th.map((m) => (m.id === id ? { ...m, pending: false } : m)),
+        ...res.replies.map((r) => ({ id: `b${++msgId}`, from: 'bot', text: r.text, buttons: r.buttons ?? [], hasImage: !!r.hasImage }))]);
+      if (res.day) { invalidateExcept(res.day.date); putDay(res.day); }
+      refreshActivities();
+      return { ok: true, result: res };
+    } catch (error) {
+      thread((th) => th.map((m) => (m.id === id ? { ...m, pending: false, error: error.message } : m)));
+      toastError(error);
+      return { ok: false, error };
+    } finally { set({ threadBusy: false }); }
+  }
+
   const actions = {
     // ----- phases -----
     retry: () => boot(),
@@ -505,29 +526,19 @@ export function createApp(opts = {}) {
       });
     },
 
-    // ----- free text -----
-    async sendMessage(text) {
+    // ----- free text and voice -----
+    sendMessage(text) {
       const t = (text ?? '').trim();
-      if (!t || state.threadBusy) return { ok: false };
-      const id = `u${++msgId}`;
-      thread((th) => [...th, { id, from: 'user', text: t, pending: true }]);
-      set({ threadBusy: true });
-      try {
-        const res = await api.message({ text: t }, viewOrToday());
-        mutationSeq++;
-        thread((th) => [...th.map((m) => (m.id === id ? { ...m, pending: false } : m)),
-          ...res.replies.map((r) => ({ id: `b${++msgId}`, from: 'bot', text: r.text, buttons: r.buttons ?? [], hasImage: !!r.hasImage }))]);
-        if (res.day) { invalidateExcept(res.day.date); putDay(res.day); }
-        refreshActivities();
-        return { ok: true, result: res };
-      } catch (error) {
-        thread((th) => th.map((m) => (m.id === id ? { ...m, pending: false, error: error.message } : m)));
-        toastError(error);
-        return { ok: false, error };
-      } finally { set({ threadBusy: false }); }
+      if (!t) return Promise.resolve({ ok: false });
+      return say({ text: t }, (view) => api.message({ text: t }, view));
     },
-    async pressButton(data, messageId) {
-      if (state.threadBusy) return { ok: false };
+    /** A recording from core/voice.js; the first reply is what the server heard. */
+    sendVoice(wav, seconds) {
+      if (!wav) return Promise.resolve({ ok: false });
+      const sec = Math.max(1, Math.round(seconds ?? 0));
+      return say({ text: `🎙 Голосовое · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, voice: true }, (view) => api.voice(wav, view));
+    },
+    async pressButton(data, messageId) {      if (state.threadBusy) return { ok: false };
       thread((th) => th.map((m) => (m.id === messageId ? { ...m, pressed: data } : m)));
       set({ threadBusy: true });
       try {
