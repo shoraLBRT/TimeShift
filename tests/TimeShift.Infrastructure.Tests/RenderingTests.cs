@@ -1,5 +1,6 @@
 using SkiaSharp;
 using TimeShift.Application.Abstractions;
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Categories;
 using TimeShift.Domain.Timelines;
 using TimeShift.Rendering;
@@ -51,18 +52,43 @@ public class RenderingTests
     }
 
     [Fact]
-    public void Week_image_has_a_row_per_day()
+    public void Week_image_has_day_strips_category_bars_and_fits_a_phone()
     {
         var renderer = new SkiaDayRenderer();
-        var days = Enumerable.Range(0, 7)
-            .Select(i => (DateOnly.FromDateTime(Day).AddDays(i), Day.AddDays(i), (IReadOnlyList<TimelinePiece>)[
-                new TimelinePiece(Day.AddDays(i), Day.AddDays(i).AddHours(8), "Сон", null, DefaultCategories.Sleep, SegmentStatus.Confirmed, SegmentSource.User, false)]))
-            .ToList();
+        IReadOnlyList<TimelinePiece> Pieces(int i) =>
+        [
+            new(Day.AddDays(i), Day.AddDays(i).AddHours(8), "Сон", null, DefaultCategories.Sleep, SegmentStatus.Assumed, SegmentSource.User, false),
+            new(Day.AddDays(i).AddHours(8), Day.AddDays(i).AddHours(17), "Работа", null, DefaultCategories.Work, SegmentStatus.Confirmed, SegmentSource.User, false),
+            new(Day.AddDays(i).AddHours(17), Day.AddDays(i + 1), "Залипание", null, DefaultCategories.Wasted, SegmentStatus.Questionable, SegmentSource.User, false),
+        ];
 
-        var png = renderer.RenderWeek(new WeekImage("Неделя", Utc, days));
+        // Пять дней с записями, два последних — будущее.
+        var days = Enumerable.Range(0, 7)
+            .Select(i => new WeekDay(DateOnly.FromDateTime(Day).AddDays(i), Day.AddDays(i), Day.AddDays(i + 1), i < 5 ? Pieces(i) : []))
+            .ToList();
+        var main = days.SelectMany(d => d.Pieces).ToList();
+        var stats = WeekStats.Of(main, [Piece(12, 13, "Обед", DefaultCategories.Household, SegmentStatus.Confirmed)], main);
+
+        var png = renderer.RenderWeek(new WeekImage("Эта неделя, 13–19 ноября", Utc, days, stats));
 
         using var bitmap = SKBitmap.Decode(png);
+        var categoriesTop = SkiaDayRenderer.WeekTop + (SkiaDayRenderer.WeekRow * 7) + 26;
         Assert.Equal(720, bitmap.Width);
-        Assert.Equal(110 + (170 * 7) + 30, bitmap.Height);
+        Assert.Equal(categoriesTop + (SkiaDayRenderer.CategoryRow * 3) + 14 + 86 + 34 + 30 + 14, bitmap.Height);
+        Assert.True(bitmap.Height <= SkiaDayRenderer.Height); // не выше картинки дня — помещается на экран телефона
+
+        // Полоса третьего дня в 13:00 — работа, сплошным цветом; в 4:00 — сон ⚪, бледнее.
+        int X(double hour) => SkiaDayRenderer.WeekStripLeft + (int)((SkiaDayRenderer.WeekRight - SkiaDayRenderer.WeekStripLeft) * hour / 24);
+        var row = SkiaDayRenderer.WeekTop + (SkiaDayRenderer.WeekRow * 2) + 20;
+        Assert.Equal(SkiaDayRenderer.ColorOf(DefaultCategories.Work), bitmap.GetPixel(X(13), row));
+        Assert.NotEqual(SkiaDayRenderer.ColorOf(DefaultCategories.Sleep), bitmap.GetPixel(X(4), row));
+
+        // Будущий день пуст — на том же месте нет цвета работы.
+        var empty = bitmap.GetPixel(X(13), SkiaDayRenderer.WeekTop + (SkiaDayRenderer.WeekRow * 6) + 20);
+        Assert.NotEqual(SkiaDayRenderer.ColorOf(DefaultCategories.Work), empty);
+
+        // Самая большая категория (работа, 45 ч) — первой строкой, её полоса во всю ширину.
+        Assert.Equal(SkiaDayRenderer.ColorOf(DefaultCategories.Work), bitmap.GetPixel(SkiaDayRenderer.WeekRight - 10, categoriesTop + 41));
+        Assert.NotEqual(SkiaDayRenderer.ColorOf(DefaultCategories.Sleep), bitmap.GetPixel(SkiaDayRenderer.WeekRight - 10, categoriesTop + SkiaDayRenderer.CategoryRow + 41));
     }
 }

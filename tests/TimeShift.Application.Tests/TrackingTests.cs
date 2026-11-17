@@ -247,6 +247,66 @@ public class TrackingTests
     }
 
     [Fact]
+    public async Task Week_sums_match_its_days_and_skip_days_before_registration()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 9, 0, 0, DateTimeKind.Utc); // пятница 12:00 Москва
+        await OnboardAsync();
+        await Text("Работа");
+        Advance(60);
+        await Press("act:stop");
+
+        _clock.UtcNow = new DateTime(2026, 11, 14, 7, 0, 0, DateTimeKind.Utc); // суббота 10:00
+        var week = Assert.Single(await Text("/week"));
+
+        // Пятница целиком (как в /day: Залипание 15 ч · Сон 8 ч · Работа 1 ч) + суббота до 10:00 (сон 8 ч, фон 2 ч).
+        Assert.StartsWith("Эта неделя, 9–15 ноября:", week.Text, StringComparison.Ordinal);
+        Assert.Contains("Залипание 17 ч\nСон 16 ч\nРабота 1 ч\nВсего: 34 ч", week.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("✅ 3% · ⚪ 47% · 🟡 50%", week.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("разница", week.Text, StringComparison.Ordinal);
+        Assert.NotNull(week.Image);
+        Assert.Empty(Data([week])); // раньше — только дни до регистрации, позже — будущее
+
+        var drawn = _store.Renderer.Weeks[^1];
+        Assert.Equal("Эта неделя, 9–15 ноября", drawn.Title);
+        Assert.Equal([0, 0, 0, 0, 5, 3, 0], drawn.Days.Select(d => d.Pieces.Count).ToList());
+        Assert.Equal(TimeSpan.FromHours(34), drawn.Stats.Total);
+        Assert.Equal(drawn.Stats.Total, TimeSpan.FromTicks(drawn.Stats.Categories.Sum(c => c.Total.Ticks)));
+        Assert.Equal(drawn.Stats.Total, drawn.Stats.Confirmed + drawn.Stats.Assumed + drawn.Stats.Questionable);
+    }
+
+    [Fact]
+    public async Task Week_navigates_and_compares_with_the_same_days_of_the_previous_week()
+    {
+        _clock.UtcNow = new DateTime(2026, 11, 13, 9, 0, 0, DateTimeKind.Utc); // пятница 12:00 Москва
+        await OnboardAsync();
+
+        _clock.UtcNow = new DateTime(2026, 11, 18, 7, 0, 0, DateTimeKind.Utc); // среда 10:00
+        var first = Assert.Single(await Text("/week"));
+        Assert.Contains("Всего: 58 ч", first.Text, StringComparison.Ordinal); // пн, вт и 10 часов среды
+        Assert.DoesNotContain("разница", first.Text, StringComparison.Ordinal); // прошлая неделя — не вся после регистрации
+        Assert.Equal(["week:2026-11-09"], Data([first]));
+
+        var earlier = Assert.Single(await Press("week:2026-11-09"));
+        Assert.True(earlier.ReplacesSource);
+        Assert.StartsWith("Прошлая неделя, 9–15 ноября:", earlier.Text, StringComparison.Ordinal);
+        Assert.Contains("Всего: 72 ч", earlier.Text, StringComparison.Ordinal); // пт, сб, вс
+        Assert.Equal(["week:2026-11-16"], Data([earlier]));
+
+        _clock.UtcNow = new DateTime(2026, 11, 25, 7, 0, 0, DateTimeKind.Utc); // среда через неделю, 10:00
+        await Text("/add вчера 14-16 Работа");
+        var compared = (await Text("/week"))[0];
+
+        Assert.StartsWith("Эта неделя, 23–29 ноября:", compared.Text, StringComparison.Ordinal);
+        Assert.Contains("Залипание 32 ч (−2 ч)\nСон 24 ч (=)\nРабота 2 ч (+2 ч)\nВсего: 58 ч", compared.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("разница с теми же днями прошлой недели", compared.Text, StringComparison.Ordinal);
+        Assert.Equal(["week:2026-11-16"], Data([compared]));
+
+        // Будущая неделя с кнопки — это текущая.
+        var future = Assert.Single(await Press("week:2026-12-07"));
+        Assert.StartsWith("Эта неделя, 23–29 ноября:", future.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Day_with_a_clock_change_has_23_hours()
     {
         _clock.UtcNow = new DateTime(2026, 3, 30, 10, 0, 0, DateTimeKind.Utc);
