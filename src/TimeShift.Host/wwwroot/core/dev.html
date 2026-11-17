@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<title>TimeShift core — dev</title>
+<script src="/core/boot.js"></script>
+<link rel="stylesheet" href="/core/base.css">
+<style>
+  /* Only what is needed to see things on the test bench. Designs style everything themselves. */
+  body { margin: 0; font-family: system-ui, sans-serif; background: Canvas; color: CanvasText; }
+  header { position: sticky; top: 0; z-index: 2; background: Canvas; padding: calc(var(--ts-safe-top) + 6px) 8px 6px; border-bottom: 1px solid GrayText; }
+  header p { margin: 4px 0; }
+  #scroller { height: calc(100dvh - var(--hdr, 170px)); overflow-y: auto; overscroll-behavior: contain; }
+  #track { position: relative; margin: 0 8px 0 52px; }
+  .hour { position: absolute; left: -48px; font-size: 11px; transform: translateY(-50%); }
+  .block, .par { position: absolute; left: 0; right: 34%; overflow: hidden; font-size: 12px; padding: 0 4px; border: 1px solid GrayText; background: Canvas; text-align: left; }
+  .par { left: 68%; right: 0; }
+  .block[data-kind=assumed] { border-style: dashed; } .block[data-kind=questionable] { background: #f5d76e55; } .block[data-kind=future] { opacity: .45; }
+  .block[data-tiny] { font-size: 0; } .block[data-open] { outline: 2px solid; }
+  .hit { position: absolute; left: 0; right: 34%; background: none; border: 0; padding: 0; }
+  #now { position: absolute; left: -8px; right: 0; border-top: 2px solid red; pointer-events: none; }
+  .ts-sheet { background: Canvas; border-top: 1px solid GrayText; } .ts-sheet-backdrop { background: #0006; }
+  .ts-sheet-header { padding: 4px 8px; } .ts-sheet-grabber { height: 18px; } .ts-sheet-body { padding: 0 12px; }
+  .ts-sheet-close::before { content: "✕"; }
+  .ts-toast { background: CanvasText; color: Canvas; padding: 4px 12px; gap: 12px; }
+  .ts-chip[aria-pressed=true], .ts-option:has(:checked) { font-weight: bold; }
+  .ts-page { background: Canvas; }
+  #gate:not([hidden]) { position: fixed; inset: 0; z-index: 50; background: Canvas; padding: 24px; overflow: auto; }
+  .ts-total, .ts-status-part, .ts-week-seg { --w: calc(var(--share) * 100%); }
+  .ts-bar { height: 4px; width: var(--w); background: CanvasText; }
+</style>
+</head>
+<body>
+<div id="gate"></div>
+<header>
+  <p><button id="prev">←</button> <b id="date"></b> <button id="next">→</button> <button id="today">Сегодня</button> <span id="status"></span></p>
+  <p><button id="now" style="display:block; min-height:44px; width:100%"></button></p>
+  <p>
+    <button data-flow="add">Записать прошлое</button> <button data-flow="assistant">Фраза</button>
+    <button data-flow="summary">Итоги</button> <button data-flow="settings">Настройки</button>
+    <button id="confirm-day">Подтвердить день</button> <button id="undo">Отменить</button>
+    <button id="theme">Тема</button> <button id="ping">Пинг</button>
+  </p>
+</header>
+<div id="scroller"><div id="track"><div id="now-line"></div></div></div>
+
+<script type="module">
+  import { createApp } from '/core/app.js';
+  import { createFlows } from '/core/flows.js';
+  import { layoutDay, describePiece, initialScrollTop, assumedPieces } from '/core/timeline.js';
+  import { h, reconcile, setText } from '/core/dom.js';
+  import { swipeHorizontal } from '/core/gestures.js';
+  import * as T from '/core/time.js';
+
+  const app = createApp({ design: 'dev' });
+  const flows = createFlows(app, { sheet: { className: 'dev-sheet' } });
+  flows.renderGate(document.getElementById('gate'));
+  const $ = (id) => document.getElementById(id);
+  const track = $('track');
+  const scroller = $('scroller');
+  const nowLine = $('now-line');
+  nowLine.id = 'now';
+
+  // Header buttons: every flow and action.
+  $('prev').onclick = () => app.actions.prevDay();
+  $('next').onclick = () => app.actions.nextDay();
+  $('today').onclick = () => app.actions.goToday();
+  $('now').onclick = () => flows.openSwitcher();
+  $('confirm-day').onclick = () => app.actions.confirmDay();
+  $('undo').onclick = () => app.actions.undo();
+  $('ping').onclick = () => app.actions.requestPing();
+  $('theme').onclick = () => app.actions.setTheme({ auto: 'light', light: 'dark', dark: 'auto' }[app.state.theme]);
+  for (const b of document.querySelectorAll('[data-flow]')) {
+    b.onclick = () => ({ add: () => flows.openAdd(), assistant: () => flows.openAssistant(), summary: () => flows.openSummary(), settings: () => flows.openSettings() })[b.dataset.flow]();
+  }
+
+  // Tapping a block (or its enlarged hit area) opens the right panel.
+  track.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-index]');
+    if (!el) return;
+    const s = app.state;
+    const list = el.dataset.track === 'parallel' ? s.day.parallel : s.day.pieces;
+    flows.openPiece(list[Number(el.dataset.index)], { parallel: el.dataset.track === 'parallel' });
+  });
+
+  // Day swipe: the track follows the finger, then the day changes.
+  swipeHorizontal(scroller, {
+    mouse: true,
+    onProgress: (dx) => { track.style.transform = `translateX(${dx}px)`; },
+    onEnd: ({ direction }) => {
+      track.style.transition = 'transform .2s';
+      track.style.transform = '';
+      setTimeout(() => { track.style.transition = ''; }, 220);
+      if (direction === 1) app.actions.prevDay();
+      if (direction === -1) app.actions.nextDay();
+    },
+  });
+
+  let scrolledFor = null;
+  function render(s) {
+    $('scroller').style.setProperty('--hdr', `${document.querySelector('header').offsetHeight}px`);
+    if (s.phase !== 'ready') return;
+    setText($('date'), s.viewDate ? T.fmtDateLabel(s.viewDate, s.today) : '');
+    setText($('status'), [s.demo && 'демо', !s.online && 'нет сети', s.busy && `…${s.busy}`, s.dayLoading && 'загрузка', s.ping.pending && 'ждёт ответа'].filter(Boolean).join(' · '));
+    const c = s.day?.current;
+    setText($('now'), c ? `Сейчас: ${c.title} · ${T.fmtDuration(c.elapsedMin)}` : 'Ничего не идёт — начать');
+    $('confirm-day').disabled = !s.day || !assumedPieces(s.day).length;
+    if (!s.day) { track.style.height = '0'; return; }
+
+    const L = layoutDay(s.day, { hourHeight: 64 });
+    track.style.height = `${L.height}px`;
+    const hours = L.hours.map((x) => ({ key: `h${x.hour}`, ...x }));
+    const blocks = L.blocks.flatMap((b) => [{ ...b, type: 'hit' }, { ...b, type: 'block' }]);
+    const items = [...hours.map((x) => ({ ...x, type: 'hour' })), ...blocks, ...L.parallel.map((b) => ({ ...b, type: 'par' }))];
+    reconcile(track, items, {
+      key: (x) => (x.type === 'hour' ? x.key : `${x.type}:${x.key}`),
+      create: (x) => (x.type === 'hour' ? h('div', { class: 'hour' }) : x.type === 'hit' ? h('button', { class: 'hit', 'aria-hidden': 'true', tabindex: '-1' }) : h('button', { class: x.type === 'par' ? 'par' : 'block' })),
+      update: (el, x) => {
+        if (x.type === 'hour') { el.style.top = `${x.y}px`; setText(el, x.label); return; }
+        el.dataset.index = x.index;
+        el.dataset.track = x.type === 'par' ? 'parallel' : 'main';
+        if (x.type === 'hit') { el.style.top = `${x.hitY}px`; el.style.height = `${x.hitHeight}px`; return; }
+        const d = describePiece(x.piece, s.me, { parallel: x.type === 'par' });
+        el.style.top = `${x.y}px`;
+        el.style.height = `${Math.max(1, x.height)}px`;
+        el.dataset.kind = x.kind;
+        el.toggleAttribute('data-tiny', x.tiny);
+        el.toggleAttribute('data-open', d.open);
+        setText(el, x.short ? `${d.title} ${d.rangeText}` : `${d.title}\n${d.rangeText} · ${d.durationText} · ${d.category.name}`);
+        el.setAttribute('aria-label', `${d.title}, ${d.rangeText}, ${d.statusLabel}`);
+      },
+    });
+    track.append(nowLine);
+    nowLine.hidden = L.nowY == null;
+    if (L.nowY != null) nowLine.style.top = `${L.nowY}px`;
+
+    // On opening a day: "now" at 40 % of the viewport (or the morning for other days).
+    if (scrolledFor !== s.day.date) {
+      scrolledFor = s.day.date;
+      scroller.scrollTop = initialScrollTop(L, scroller.clientHeight, { day: s.day });
+    }
+  }
+  app.subscribe(render);
+  app.start();
+  window.app = app; window.flows = flows; // for the console
+</script>
+</body>
+</html>

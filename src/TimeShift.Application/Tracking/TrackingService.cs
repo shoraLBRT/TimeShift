@@ -141,6 +141,21 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
         return change;
     }
 
+    /// <summary>Убирает отрезок из ленты (время вернётся шаблону и фону) — одним изменением журнала. <c>null</c> — такого отрезка нет.</summary>
+    public async Task<TimelineChange?> DeleteAsync(User user, Segment existing, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var timeline = await timelines.LoadAsync(user.Id, existing.StartUtc - RecentWindow, cancellationToken);
+        var stored = timeline.Segments.Concat(timeline.ParallelSegments).FirstOrDefault(s => s.Id == existing.Id);
+        if (stored is null)
+        {
+            return null;
+        }
+
+        var change = new TimelineChange([stored], []);
+        timelines.Record(user.Id, change, nowUtc);
+        return change;
+    }
+
     /// <summary>Откатывает последнее изменение ленты. <c>false</c> — откатывать нечего или лента с тех пор поменялась.</summary>
     public async Task<UndoResult> UndoAsync(User user, CancellationToken cancellationToken)
     {

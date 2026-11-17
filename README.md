@@ -15,10 +15,13 @@ src/
   TimeShift.Application     сценарии и интерфейсы (IClock, далее ILlmProvider, INotifier, ...)
   TimeShift.Infrastructure  EF Core: SQLite (разработка) / PostgreSQL (прод)
   TimeShift.Telegram        адаптер Telegram: long polling, кнопки → ConversationService (Application)
-  TimeShift.Host            ASP.NET Core: REST API, фоновые сервисы, Telegram в одном процессе
+  TimeShift.Web             адаптер web-клиента: REST API (`/api/*`), вход по ключу, JSON ↔ модели Application
+  TimeShift.Host            ASP.NET Core: сборка всего вместе, статика web-клиента, фоновые сервисы, Telegram
 tests/
   TimeShift.Domain.Tests
   TimeShift.Application.Tests
+  TimeShift.Infrastructure.Tests
+  TimeShift.Web.Tests       API целиком на временной SQLite (WebApplicationFactory)
 ```
 
 ## Требования
@@ -49,6 +52,27 @@ curl http://localhost:5138/health   # {"status":"ok"}
 `Telegram:BotToken`: локально — user-secrets (`dotnet user-secrets set "Telegram:BotToken" "<token>" --project src/TimeShift.Host`),
 на сервере — переменной окружения `Telegram__BotToken`.
 
+## Web-клиент
+
+Web-клиент (PWA) отдаётся из `src/TimeShift.Host/wwwroot`, REST-контракт — [docs/web-api.md](docs/web-api.md).
+Локально:
+
+```sh
+dotnet run --project src/TimeShift.Host
+```
+
+Открой `http://localhost:5138` и введи ключ доступа. Ключ разработки лежит в
+`src/TimeShift.Host/appsettings.Development.json` (`Web:AccessKey`); на сервере задай свой переменной окружения
+`Web__AccessKey` (пустой ключ — web-клиент выключен, `/api/*` отвечает `503`). Ключ вводится один раз на устройстве,
+смена ключа разлогинивает все устройства.
+
+Чьи данные открывает ключ: `Web:TelegramChatId` (тот же пользователь, что в Telegram), иначе единственный
+пользователь в базе, иначе отдельный пользователь без Telegram — тогда бот и web живут независимо.
+Уведомления (Web Push) включены вместе с web-клиентом и идут рядом с Telegram: пинг и вечерний разбор приходят и туда, и на
+подписанные устройства. Доставка зависит от доступности push-сервисов браузера с сервера (`web.push.apple.com`,
+`fcm.googleapis.com`). Развёртывание на сервере с HTTPS (Caddy) и установка на телефон — в [docs/deploy.md](docs/deploy.md).
+За обратным прокси (docker, Caddy/nginx) приложение читает `X-Forwarded-For` / `X-Forwarded-Proto`.
+
 ## Конфигурация
 
 | Ключ | Значения |
@@ -57,6 +81,10 @@ curl http://localhost:5138/health   # {"status":"ok"}
 | `ConnectionStrings:Default` | строка подключения |
 | `Database:MigrateOnStartup` | применять миграции при старте (`true` в Development и в compose) |
 | `Telegram:BotToken` | токен бота; пусто — Telegram выключен |
+| `Web:AccessKey` | ключ доступа web-клиента; пусто — web-клиент выключен (`Web__AccessKey`) |
+| `Push:Subject` | контакт для push-сервисов (VAPID `sub`), `mailto:вы@пример.рф` или https-адрес; по умолчанию `mailto:owner@localhost` |
+| `Push:PublicKey`, `Push:PrivateKey` | ключи VAPID (base64url); не заданы — сервер создаёт пару один раз и хранит в базе, настраивать ничего не нужно |
+| `Web:TelegramChatId` | чей аккаунт открывает web-клиент; пусто — единственный пользователь или пользователь без Telegram |
 | `Telegram:Proxy` | прокси до api.telegram.org (`socks5://127.0.0.1:1080`, `http://…`); пусто — напрямую |
 | `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом; пусто — всем |
 | `Llm:BaseUrl` | OpenAI-совместимый API (агрегатор: ProxyAPI, AITunnel, Polza, или провайдер напрямую) |

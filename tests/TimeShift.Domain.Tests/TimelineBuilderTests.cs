@@ -280,4 +280,50 @@ public class TimelineBuilderTests
         Assert.True(piece.IsFuture);
         Assert.Equal(SegmentSource.Background, piece.Source);
     }
+
+    private static IReadOnlyList<string> Running(WeekTemplate template, DateTime start, DateTime now, TimeSpan? typical, TimeSpan elapsedBefore = default) =>
+        TimelineBuilder.Build(new TimelineRequest
+        {
+            Window = new TimeRange(Msk(0), Msk(0).AddDays(1)),
+            NowUtc = now,
+            Template = template,
+            OpenActivity = new OpenActivity(start, "Созвон", typical, ElapsedBefore: elapsedBefore),
+        }).Where(p => p.Title == "Созвон").Select(p => Describe(p, Moscow)).ToList();
+
+    private static readonly WeekTemplate Work = new(
+        [new ScheduleBlock(ScheduleBlockKind.Fixed, "Работа", "work", DaysOfWeek.All, T(10), T(19))], Moscow);
+
+    [Fact]
+    public void Activity_started_inside_a_block_is_assumed_within_the_norm_and_questionable_beyond()
+    {
+        // 14:35, норма 1 ч × 1.5 = до 16:05, предел до 16:35.
+        var result = Running(Work, Msk(14, 35), Msk(17), TimeSpan.FromHours(1));
+
+        Assert.Equal(["14:35-16:05 Созвон Assumed", "16:05-16:35 Созвон Questionable"], result);
+    }
+
+    [Fact]
+    public void Activity_started_before_a_block_and_running_into_it_is_questionable_inside()
+    {
+        var result = Running(Work, Msk(9), Msk(12), TimeSpan.FromHours(4));
+
+        Assert.Equal(["09:00-10:00 Созвон Assumed", "10:00-12:00 Созвон Questionable"], result);
+    }
+
+    [Fact]
+    public void Activity_started_inside_sleep_follows_the_same_rule()
+    {
+        var result = Running(NightOnly, Msk(3), Msk(5), TimeSpan.FromHours(4));
+
+        Assert.Equal(["03:00-05:00 Созвон Assumed"], result);
+    }
+
+    [Fact]
+    public void Activity_resumed_inside_a_block_behaves_like_one_started_there()
+    {
+        // Начат в 09:00, подтверждён и возобновлён в 11:00 (уже прошло 2 ч): блок начался до возобновления.
+        var result = Running(Work, Msk(11), Msk(13), TimeSpan.FromHours(4), TimeSpan.FromHours(2));
+
+        Assert.Equal(["11:00-13:00 Созвон Assumed"], result);
+    }
 }

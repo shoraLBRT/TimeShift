@@ -249,3 +249,69 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   system font with Cyrillic.
 - **The Dockerfile now restores all adapter projects** (Speech had been missing since #9).
 
+## Web client (#37, #39)
+
+- **The ping interval is any whole number of minutes from 5 to 240** (`UserSettings.MinPingIntervalMin` /
+  `MaxPingIntervalMin`, one rule for the bot and the API). Buttons offer 15 · 30 · 45 · 60 · 90 · 120; free text
+  accepts anything in range.
+- **`User.TelegramChatId` is nullable.** The web client may be the only client, so a user can exist without
+  Telegram; the unique index stays (NULLs are distinct in SQLite and Postgres). The notifier and the ping loop skip
+  users without a chat (Web Push will serve them, #40).
+- **Single-owner mode, owner resolution**: `Web:TelegramChatId` if set (that Telegram user, created when missing);
+  otherwise the only user in the database; otherwise the user without Telegram (created when missing). Resolved on
+  every authenticated request in Application (`OwnerService`), not cached.
+- **The session is a stateless signed cookie** (`expiry.HMACSHA256`, key = SHA-256 of the access key), not
+  ASP.NET Data Protection: Data Protection keys would have to be persisted or every container restart would sign the
+  owner out. Changing the access key invalidates all sessions. The key is compared in constant time; login is
+  limited to 5 attempts a minute per address; every non-GET request needs `X-TimeShift: 1` (CSRF, together with
+  `SameSite=Lax`).
+- **A day piece maps to exactly one stored segment, and the mapping lives in Application** (`DayBuilder`):
+  `TimelineBuilder` merges equal neighbours and has no segment ids, so Application cuts its pieces at stored-segment
+  boundaries and looks the segment up by time containment (extension pieces belong to the running segment). The
+  domain builder and Telegram's `/day` text are untouched.
+- **The API shows the whole day**, not clamped to now: pieces after now come back with `future: true` (a forecast
+  from the template); totals count only the past part of the main track.
+- **`POST /api/confirm` materialises computed pieces only** (template and background, never stored segments) and
+  stays away from time inside the running activity: the extension of a running activity is confirmed through
+  `ContinueAsync` (as «still doing it», up to now), and only together with `includeQuestionable` when part of it is
+  🟡 — applying a closed segment over a running one would stop it.
+- **Updating a schedule block is remove + add with rollback** (the block keeps its id and activity link); sleep
+  stays a separate resource.
+
+## Web Push (#40)
+
+- **Notification channels fan out.** `INotificationChannel` (stable `Key`, `CanReachAsync`, `SendAsync`,
+  `DeleteAsync`) is implemented by Telegram (`tg`) and Web Push (`wp`); the only `INotifier` is
+  `NotificationFanout` in Application. A failing channel is reported (`IFailureReporter`) and never stops the others.
+  The stored message ref is `tg:123,wp:…` so deletion finds its channel (a ref without a key is the old Telegram
+  format); refs over the 64-character column limit are dropped. Web Push returns no ref: a new notification with the
+  same `tag` replaces the previous one. Telegram behaviour is unchanged.
+- **A user nobody can reach is skipped by the ping loop** (`CanReachAsync`: a Telegram chat or a push subscription),
+  so pings are not counted as unanswered for nobody. `PingWorker` starts when any channel is registered; the push
+  channel is registered when the web client is enabled.
+- **The notification kind is a hint on the reply** (`BotReply.Notice`: kind, title, short body, `CanAct`), set where
+  the ping and the evening review are built, so channels do not parse texts. The evening body is a one-line summary
+  (≤ 160 characters), not the day listing.
+- **VAPID keys come from `Push:*` or are generated once and kept in the database** (`server_keys`), so a deployment
+  needs no setup and survives restarts. P-256, public key as the 65-byte uncompressed point, both base64url.
+- **A library for the protocol** (`Lib.Net.Http.WebPush`): VAPID JWT and aes128gcm payload encryption are easy to get
+  subtly wrong and are not worth owning; it sits behind `IWebPushSender`, so tests never touch a push service.
+  TTL: 1 h for pings (a stale «what are you doing?» is useless), 3 h for the evening review, 5 min for the test;
+  urgency high; 404/410 delete the subscription.
+
+## Activity inside a template block (#54)
+
+- **A block makes the extension questionable only when the extension runs into it** (the block starts after the
+  open activity started), as spec §3.3 says. An activity named inside a block («созвон» at 14:35 during work) uses
+  the usual norm and maximum from its first minute.
+- **"Started" means the start of the current open segment.** An activity that began before the block, was
+  interrupted inside it and resumed there (`Segment.ResumedAt`) behaves like one started inside the block.
+
+## Three designs stay (#36, 2026-11-17)
+
+- **All three PWA designs are kept** («Лист», «Сетка», «Нить») instead of choosing one (#46 is closed as not
+  planned): the look is a user preference, switched in Настройки → Прочее → Вид, stored per device.
+- **The price is accepted knowingly:** every new screen or state has to be styled three times. It stays cheap
+  only while the rule holds that all logic and markup live in `core/` and a design folder is CSS plus the main
+  screen. A feature that cannot be expressed through the core's panels is a reason to extend the core, not a
+  design.

@@ -29,5 +29,29 @@ plan table in §11.
 left at the end of a day; answering a ping takes one button or one phrase (voice and past entries included);
 `/day` and `/week` show where the time went.
 
+## PWA — own mobile client (milestone **PWA**, epic [#36](https://github.com/shoraLBRT/TimeShift/issues/36))
+
+Pulled forward from iteration 3: Telegram is unreliable in Russia (spec §10.1), and an own client lets the
+server be hosted there. The REST contract is `docs/web-api.md`; the client is `src/TimeShift.Host/wwwroot`.
+
+| # | Issue | Notes |
+|---|---|---|
+| 1 | [#37](https://github.com/shoraLBRT/TimeShift/issues/37) Ping interval 5–240 minutes | |
+| 2 | [#38](https://github.com/shoraLBRT/TimeShift/issues/38) Stale bot replies | |
+| 3 | [#39](https://github.com/shoraLBRT/TimeShift/issues/39) REST API and the user without Telegram | |
+| 4 | [#40](https://github.com/shoraLBRT/TimeShift/issues/40) Web Push next to Telegram | |
+| 5 | [#41](https://github.com/shoraLBRT/TimeShift/issues/41) PWA core | shared by the three designs |
+| 6 | [#42](https://github.com/shoraLBRT/TimeShift/issues/42) · [#43](https://github.com/shoraLBRT/TimeShift/issues/43) · [#44](https://github.com/shoraLBRT/TimeShift/issues/44) Design MVPs A «Лист», B «Сетка», C «Нить» | equal in function; all three stay, switched in the settings |
+| 7 | [#45](https://github.com/shoraLBRT/TimeShift/issues/45) Deploy with HTTPS, guide for a VPS in Russia | |
+| 8 | [#50](https://github.com/shoraLBRT/TimeShift/issues/50) Voice in the PWA | |
+| 9 | [#51](https://github.com/shoraLBRT/TimeShift/issues/51) Drag the edges of an entry | |
+| 10 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | |
+
+Found while reviewing the current behaviour, need the maintainer's decision:
+[#47](https://github.com/shoraLBRT/TimeShift/issues/47) (unknown time is counted as «Залипание»),
+[#48](https://github.com/shoraLBRT/TimeShift/issues/48) (pings stop for good after two unanswered).
+Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default) and
+[#53](https://github.com/shoraLBRT/TimeShift/issues/53) (Telegram settings UX).
+
 After the MVP: iteration 2 (iPhone Shortcuts for app usage, Telegram Mini App, per-user LLM provider) and
-iteration 3 (planning, calendar export, own client) — spec §11 "Дальше".
+iteration 3 (planning, calendar export) — spec §11 "Дальше".

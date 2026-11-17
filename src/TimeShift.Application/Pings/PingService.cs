@@ -28,6 +28,12 @@ public sealed class PingService(
         var failures = new List<(Guid, Exception)>();
         foreach (var user in await users.ListOnboardedAsync(cancellationToken))
         {
+            // Достучаться некуда (нет ни чата Telegram, ни подписки Web Push) — пинг не считается отправленным.
+            if (!await notifier.CanReachAsync(user, cancellationToken))
+            {
+                continue;
+            }
+
             try
             {
                 if (await PingIfDueAsync(user, now, cancellationToken))

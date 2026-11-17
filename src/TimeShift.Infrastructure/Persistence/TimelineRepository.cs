@@ -20,6 +20,9 @@ internal sealed class TimelineRepository(TimeShiftDbContext db) : ITimelineRepos
         return new Timeline(segments);
     }
 
+    public Task<Segment?> FindSegmentAsync(Guid userId, Guid segmentId, CancellationToken cancellationToken) =>
+        ForUser(userId).FirstOrDefaultAsync(s => s.Id == segmentId, cancellationToken);
+
     public Task<Segment?> FindOpenAsync(Guid userId, CancellationToken cancellationToken) =>
         ForUser(userId).FirstOrDefaultAsync(s => s.EndUtc == null && !s.IsParallel, cancellationToken);
 

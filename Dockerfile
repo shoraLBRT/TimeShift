@@ -11,6 +11,7 @@ COPY src/TimeShift.Infrastructure/TimeShift.Infrastructure.csproj src/TimeShift.
 COPY src/TimeShift.Rendering/TimeShift.Rendering.csproj src/TimeShift.Rendering/
 COPY src/TimeShift.Speech/TimeShift.Speech.csproj src/TimeShift.Speech/
 COPY src/TimeShift.Telegram/TimeShift.Telegram.csproj src/TimeShift.Telegram/
+COPY src/TimeShift.Web/TimeShift.Web.csproj src/TimeShift.Web/
 COPY src/TimeShift.Host/TimeShift.Host.csproj src/TimeShift.Host/
 RUN dotnet restore src/TimeShift.Host/TimeShift.Host.csproj
 

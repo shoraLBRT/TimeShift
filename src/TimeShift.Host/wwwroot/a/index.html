@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F4EFE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161513" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TimeShift">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<title>TimeShift</title>
+<script src="/core/boot.js"></script>
+<link rel="stylesheet" href="/core/base.css">
+<link rel="stylesheet" href="/a/style.css">
+</head>
+<body>
+<div id="gate" class="a-gate"></div>
+
+<main id="main" class="a-app" hidden>
+  <header class="a-head" id="head">
+    <div class="a-head-text">
+      <p class="a-weekday" id="weekday"></p>
+      <button type="button" class="a-date" id="date" aria-haspopup="dialog">
+        <span class="a-date-text" id="date-text"></span>
+        <svg class="a-date-caret" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="a-attn" id="attn" hidden></button>
+    </div>
+    <div class="a-head-actions">
+      <button type="button" class="a-today" id="today" hidden><span>Сегодня</span></button>
+      <button type="button" class="a-more" id="more" aria-label="Меню" aria-haspopup="menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="a-scroll" id="scroll" tabindex="-1">
+    <div class="a-page" id="page">
+      <div class="a-placeholder" id="placeholder" hidden></div>
+      <div class="a-track" id="track">
+        <div class="a-rules" aria-hidden="true"></div>
+        <div class="a-hours" id="hours" aria-hidden="true"></div>
+        <div class="a-entries" id="entries" role="list" aria-label="Лента дня"></div>
+        <div class="a-notes" id="notes" role="list" aria-label="Параллельные занятия"></div>
+        <div class="a-now" id="now" aria-hidden="true" hidden>
+          <span class="a-now-time" id="now-time"></span>
+          <span class="a-now-line"></span>
+          <span class="a-now-dot"></span>
+          <span class="a-now-tail"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="a-bar" id="bar">
+    <button type="button" class="a-nowbtn" id="nowbtn" data-running="false">
+      <span class="a-nowbtn-dot" aria-hidden="true"></span>
+      <span class="a-nowbtn-title" id="nowbtn-title"></span>
+      <span class="a-nowbtn-dash" aria-hidden="true">—</span>
+      <span class="a-nowbtn-elapsed" id="nowbtn-elapsed"></span>
+    </button>
+    <button type="button" class="a-pen" id="pen" aria-label="Записать прошлое">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="rotate(45 12 12)">
+          <path d="M12 22 7.6 13.4a3 3 0 0 1 .3-3.2L10.4 7V3.2h3.2V7l2.5 3.2a3 3 0 0 1 .3 3.2L12 22Z"/>
+          <path d="M12 22v-8.2"/>
+          <circle cx="12" cy="12.2" r="1.5"/>
+        </g>
+      </svg>
+    </button>
+  </footer>
+
+  <div class="a-menu-layer" id="menu-layer" hidden>
+    <div class="a-menu" id="menu" role="menu" aria-label="Меню">
+      <button type="button" class="a-menu-item" role="menuitem" data-act="summary">Итоги</button>
+      <button type="button" class="a-menu-item" role="menuitem" data-act="settings">Настройки</button>
+      <button type="button" class="a-menu-item" role="menuitem" data-act="install" hidden>Установить приложение</button>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="/a/app.js"></script>
+</body>
+</html>

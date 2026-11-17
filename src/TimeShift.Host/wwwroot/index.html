@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru" class="ts-deciding">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TimeShift">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="modulepreload" href="/core/designs.js">
+<title>TimeShift — выбор вида</title>
+<script type="module">
+  // Start: go to the stored design. The chooser shows on first run (nothing stored) and under ?choose.
+  import { DESIGNS, storedDesign } from '/core/designs.js';
+  const q = new URLSearchParams(location.search);
+  const chosen = storedDesign();
+  if (!q.has('choose') && (chosen || DESIGNS.length === 1)) location.replace(`/${chosen ?? DESIGNS[0].id}/${location.search}`);
+  else document.documentElement.classList.remove('ts-deciding');
+</script>
+<script>
+  // If the module cannot load at all, show the page anyway rather than a blank screen.
+  setTimeout(function () { document.documentElement.classList.remove('ts-deciding'); }, 1500);
+</script>
+<style>
+  :root { --bg: #f6f5f2; --fg: #1f1d1a; --muted: #6b665e; --line: #dedad2; --card: #fff; --accent: #c8442b; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161514; --fg: #eeeae3; --muted: #9b958b; --line: #34312d; --card: #201e1c; } }
+  html.ts-deciding body { visibility: hidden; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: calc(env(safe-area-inset-top) + 32px) calc(env(safe-area-inset-right) + 20px) calc(env(safe-area-inset-bottom) + 32px) calc(env(safe-area-inset-left) + 20px); }
+  main { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lead { margin: 0 0 24px; color: var(--muted); max-width: 36em; }
+  .designs { display: grid; gap: 14px; grid-template-columns: 1fr; list-style: none; margin: 0; padding: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { margin: 0; font-size: 19px; display: flex; gap: 10px; align-items: baseline; }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .card p { margin: 0; color: var(--muted); }
+  .card[aria-current="true"] { border-color: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .actions a, .actions button { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+    color: inherit; font: inherit; text-decoration: none; display: inline-flex; align-items: center; cursor: pointer; }
+  .actions .primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .frame { display: none; }
+  @media (min-width: 1000px) {
+    .designs { grid-template-columns: repeat(var(--count, 3), minmax(0, 1fr)); }
+    .frame { display: block; width: 390px; height: 844px; max-width: 100%; margin: 0 auto 6px; border: 10px solid #111; border-radius: 48px;
+      overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--line); }
+    .frame iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  }
+  footer { margin-top: 28px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TimeShift</h1>
+  <p class="lead">Учёт прожитого времени. Выбери вид, который нравится, — поменять его можно в любой момент в настройках.</p>
+  <ul class="designs" id="designs"></ul>
+  <footer>Демо работает без сервера: данные живут только в этой вкладке.</footer>
+</main>
+<script type="module">
+  import { DESIGNS, storedDesign, storeDesign, designUrl } from '/core/designs.js';
+  const DEMO = '?demo=1&at=15:40'; // previews show a full day
+  const list = document.getElementById('designs');
+  const current = storedDesign();
+  const q = new URLSearchParams(location.search);
+  q.delete('choose');
+  const rest = q.toString() ? `?${q}` : '';
+  list.style.setProperty('--count', String(DESIGNS.length));
+  const el = (tag, props, ...children) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
+  for (const d of DESIGNS) {
+    const choose = el('button', { type: 'button', className: 'primary', textContent: 'Выбрать' });
+    choose.addEventListener('click', () => { storeDesign(d.id); location.href = designUrl(d.id, rest); });
+    const frame = el('div', { className: 'frame' });
+    frame.dataset.src = `/${d.id}/${DEMO}&embed=1`;
+    const li = el('li', { className: 'card' }, frame,
+      el('h2', {}, d.name, ' ', el('small', { textContent: d.id.toUpperCase() })),
+      el('p', { textContent: d.hint }),
+      el('div', { className: 'actions' }, el('a', { href: `/${d.id}/${DEMO}`, textContent: 'Демо' }), el('a', { href: `/${d.id}/${rest}`, textContent: 'Открыть' }), choose));
+    if (d.id === current) li.setAttribute('aria-current', 'true');
+    list.append(li);
+  }
+  const wide = matchMedia('(min-width: 1000px)');
+  const frames = () => {
+    if (!wide.matches) return;
+    for (const f of document.querySelectorAll('.frame[data-src]')) {
+      f.append(el('iframe', { src: f.dataset.src, title: 'Демо', loading: 'lazy' }));
+      delete f.dataset.src;
+    }
+  };
+  frames();
+  wide.addEventListener('change', frames);
+</script>
+</body>
+</html>

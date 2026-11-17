@@ -12,7 +12,9 @@ public class User
 
     public const string DefaultTimeZone = "Europe/Moscow";
 
-    public User(long telegramChatId, string displayName, string timeZone, DateTime createdAtUtc)
+    public const int MaxDisplayNameLength = 60;
+
+    public User(long? telegramChatId, string displayName, string timeZone, DateTime createdAtUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
         ArgumentException.ThrowIfNullOrWhiteSpace(timeZone);
@@ -38,7 +40,8 @@ public class User
 
     public Guid Id { get; private set; } = Guid.NewGuid();
 
-    public long TelegramChatId { get; private set; }
+    /// <summary>Чат в Telegram; <c>null</c> — пользователь без Telegram (работает только через web-клиент).</summary>
+    public long? TelegramChatId { get; private set; }
 
     public string DisplayName { get; set; }
 

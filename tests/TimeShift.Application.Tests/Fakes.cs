@@ -167,6 +167,16 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
     public Task<User?> FindByTelegramChatIdAsync(long chatId, CancellationToken cancellationToken) =>
         Task.FromResult(Users.FirstOrDefault(u => u.TelegramChatId == chatId));
 
+    public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Id == userId));
+
+    public Task<User?> FindWithoutTelegramAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(Users.FirstOrDefault(u => u.TelegramChatId is null));
+
+    public Task<int> CountAsync(CancellationToken cancellationToken) => Task.FromResult(Users.Count);
+
+    public Task<User?> FindFirstAsync(CancellationToken cancellationToken) => Task.FromResult(Users.FirstOrDefault());
+
     public Task<IReadOnlyList<User>> ListOnboardedAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<User>>(Users.Where(u => u.IsOnboarded).ToList());
 
@@ -175,6 +185,9 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
     // ITimelineRepository
     public Task<Timeline> LoadAsync(Guid userId, DateTime fromUtc, CancellationToken cancellationToken) =>
         Task.FromResult(new Timeline(SegmentsOf(userId).Where(s => s.EndUtc is null || s.EndUtc > fromUtc)));
+
+    public Task<Segment?> FindSegmentAsync(Guid userId, Guid segmentId, CancellationToken cancellationToken) =>
+        Task.FromResult(SegmentsOf(userId).FirstOrDefault(s => s.Id == segmentId));
 
     public Task<Segment?> FindOpenAsync(Guid userId, CancellationToken cancellationToken) =>
         Task.FromResult(SegmentsOf(userId).FirstOrDefault(s => s.IsOpen && !s.IsParallel));
@@ -221,16 +234,24 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
             .Select(id => Activities.Single(a => a.Id == id))
             .ToList());
 
+    public Task<IReadOnlyDictionary<Guid, DateTime>> LastUsedAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, DateTime>>(SegmentsOf(userId)
+            .Where(s => s.ActivityId is not null)
+            .GroupBy(s => s.ActivityId!.Value)
+            .ToDictionary(g => g.Key, g => g.Max(s => s.StartUtc)));
+
     void IActivityRepository.Add(Activity activity) => Activities.Add(activity);
 
     // IUnitOfWork
     public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     // INotifier
+    public Task<bool> CanReachAsync(User user, CancellationToken cancellationToken) => Task.FromResult(true);
+
     public Task<string?> SendAsync(User user, BotReply reply, CancellationToken cancellationToken)
     {
         var id = (++_messageId).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        Sent.Add((user.TelegramChatId, reply, id));
+        Sent.Add((user.TelegramChatId ?? 0, reply, id));
         return Task.FromResult<string?>(id);
     }
 

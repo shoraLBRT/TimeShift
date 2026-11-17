@@ -62,7 +62,18 @@ public sealed class DailyReview(TrackingService tracking, YellowReview yellow)
             row.Add(new ReplyButton("⚪ Остальное верно", "ev:ok"));
         }
 
-        return new BotReply(text, row.Count == 0 ? [] : [row, [new ReplyButton("✏️ Поправить", "ev:fix")]]);
+        var summary = gaps.Count == 0
+            ? "Под вопросом ничего не осталось."
+            : $"Осталось разобрать участков: {gaps.Count}.";
+        if (assumed.Count > 0)
+        {
+            summary += " Остальное верно?";
+        }
+
+        return new BotReply(text, row.Count == 0 ? [] : [row, [new ReplyButton("✏️ Поправить", "ev:fix")]])
+        {
+            Notice = new ClientNotice(NoticeKind.Evening, "Вечерний разбор", summary),
+        };
     }
 
     /// <summary>Утренний вопрос, если это первое сообщение после сна по шаблону сегодня; иначе <c>null</c>.</summary>

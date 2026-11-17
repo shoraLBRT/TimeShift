@@ -12,6 +12,27 @@ public class UserSettings
     public const int DefaultEveningReviewOffsetMin = 30;
     public const int DefaultRoundingMin = 5;
 
+    /// <summary>Допустимый интервал пингов, минут (spec §5.1, §6).</summary>
+    public const int MinPingIntervalMin = 5;
+
+    public const int MaxPingIntervalMin = 240;
+
+    /// <summary>Интервал пингов в допустимых пределах?</summary>
+    /// <summary>Сколько неотвеченных пингов подряд можно задать до паузы.</summary>
+    public const int MinUnansweredPingsLimit = 1;
+
+    public const int MaxUnansweredPingsLimit = 10;
+
+    /// <summary>За сколько минут до сна начинать вечерний разбор.</summary>
+    public const int MinEveningReviewOffsetMin = 0;
+
+    public const int MaxEveningReviewOffsetMin = 180;
+
+    /// <summary>Допустимое округление границ, минут.</summary>
+    public static IReadOnlyList<int> RoundingOptionsMin { get; } = [1, 5, 10, 15];
+
+    public static bool IsValidPingInterval(int minutes) => minutes is >= MinPingIntervalMin and <= MaxPingIntervalMin;
+
     public Guid UserId { get; private set; }
 
     public int PingIntervalMin { get; set; } = DefaultPingIntervalMin;

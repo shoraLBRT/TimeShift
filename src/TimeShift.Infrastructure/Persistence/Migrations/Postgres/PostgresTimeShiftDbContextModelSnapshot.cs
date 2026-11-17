@@ -211,6 +211,52 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                     b.ToTable("user_facts", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Domain.Push.WebPushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("auth");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("endpoint");
+
+                    b.Property<DateTime?>("LastOkAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_ok_at");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("p256dh");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("push_subscriptions", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Schedule.ScheduleBlock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -371,7 +417,7 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("quiet_until");
 
-                    b.Property<long>("TelegramChatId")
+                    b.Property<long?>("TelegramChatId")
                         .HasColumnType("bigint")
                         .HasColumnName("telegram_chat_id");
 
@@ -395,6 +441,24 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("TimeShift.Infrastructure.Persistence.ServerKey", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("server_keys", (string)null);
                 });
 
             modelBuilder.Entity("TimeShift.Infrastructure.Persistence.TimelineChangeRecord", b =>
@@ -465,6 +529,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                 });
 
             modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TimeShift.Domain.Push.WebPushSubscription", b =>
                 {
                     b.HasOne("TimeShift.Domain.Users.User", null)
                         .WithMany()

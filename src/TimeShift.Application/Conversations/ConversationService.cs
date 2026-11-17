@@ -37,7 +37,7 @@ public sealed partial class ConversationService(
 
     private static readonly string[] SleepPresets = ["23:00-07:00", "00:00-08:00", "01:00-09:00", "02:00-10:00"];
 
-    private static readonly int[] PingIntervals = [30, 45, 60];
+    private static readonly int[] PingIntervals = [15, 30, 45, 60, 90, 120];
 
     public async Task<IReadOnlyList<BotReply>> HandleAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
@@ -57,42 +57,57 @@ public sealed partial class ConversationService(
 
         var now = clock.UtcNow;
         var user = await users.FindByTelegramChatIdAsync(message.ChatId, cancellationToken);
-        IReadOnlyList<BotReply> replies;
-        if (user is null)
+        if (user is not null)
         {
-            var name = string.IsNullOrWhiteSpace(message.DisplayName) ? "друг" : message.DisplayName.Trim();
-            user = new User(message.ChatId, name, User.DefaultTimeZone, now);
-            users.Add(user);
-            user.RegisterActivity(now);
-            replies = StartOnboarding(user);
+            return await HandleKnownAsync(user, message, now, cancellationToken);
         }
-        else
+
+        var name = string.IsNullOrWhiteSpace(message.DisplayName) ? "друг" : message.DisplayName.Trim();
+        user = new User(message.ChatId, name, User.DefaultTimeZone, now);
+        users.Add(user);
+        user.RegisterActivity(now);
+        var replies = StartOnboarding(user);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return replies;
+    }
+
+    /// <summary>
+    /// То же сообщение, но для уже известного пользователя (web-клиент сам находит владельца и идёт мимо чата).
+    /// Голосовые здесь не разбираются — клиент присылает текст или нажатую кнопку.
+    /// </summary>
+    public async Task<IReadOnlyList<BotReply>> HandleAsync(User user, IncomingMessage message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(message);
+        return await HandleKnownAsync(user, message, clock.UtcNow, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<BotReply>> HandleKnownAsync(User user, IncomingMessage message, DateTime now, CancellationToken cancellationToken)
+    {
+        user.RegisterActivity(now);
+        var replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
+            ?? Dispatch(user, message, now);
+
+        // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
+        // Время до начала работы с ботом не разбираем — точка отсчёта 🟡 — первое сообщение после онбординга.
+        if (user.IsOnboarded && user.YellowReviewedUntilUtc is null)
         {
-            user.RegisterActivity(now);
-            replies = (user.IsOnboarded ? await TrackAsync(user, message, now, cancellationToken) : null)
-                ?? Dispatch(user, message);
+            user.MarkYellowReviewed(now);
+        }
 
-            // Уточняющий вопрос — сразу после ответа, по одному, и только когда бот ничего другого не ждёт (spec §5.5).
-            // Время до начала работы с ботом не разбираем — точка отсчёта 🟡 — первое сообщение после онбординга.
-            if (user.IsOnboarded && user.YellowReviewedUntilUtc is null)
-            {
-                user.MarkYellowReviewed(now);
-            }
-
-            // После обычного сообщения или кнопки (не команды): сначала разобрать 🟡 «пока тебя не было» (spec §5.4),
-            // иначе — очередь вопросов.
-            var answersBot = message.ButtonData is { } pressed
-                ? pressed.StartsWith("act:", StringComparison.Ordinal) || pressed.StartsWith("per:", StringComparison.Ordinal)
-                  || pressed.StartsWith("q:", StringComparison.Ordinal)
-                : message.Text?.TrimStart().StartsWith('/') != true;
-            if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
-                && (await daily.MorningAsync(user, now, cancellationToken)
-                    ?? await EveningOnSleepAsync(user, now, cancellationToken)
-                    ?? await yellow.NextAsync(user, now, cancellationToken)
-                    ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
-            {
-                replies = [.. replies, question];
-            }
+        // После обычного сообщения или кнопки (не команды): сначала разобрать 🟡 «пока тебя не было» (spec §5.4),
+        // иначе — очередь вопросов.
+        var answersBot = message.ButtonData is { } pressed
+            ? pressed.StartsWith("act:", StringComparison.Ordinal) || pressed.StartsWith("per:", StringComparison.Ordinal)
+              || pressed.StartsWith("q:", StringComparison.Ordinal)
+            : message.Text?.TrimStart().StartsWith('/') != true;
+        if (user.IsOnboarded && answersBot && user.DialogState is null && !await intents.IsWaitingForFactAsync(user, cancellationToken)
+            && (await daily.MorningAsync(user, now, cancellationToken)
+                ?? await EveningOnSleepAsync(user, now, cancellationToken)
+                ?? await yellow.NextAsync(user, now, cancellationToken)
+                ?? await questions.NextAsync(user, now, cancellationToken)) is { } question)
+        {
+            replies = [.. replies, question];
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -133,11 +148,11 @@ public sealed partial class ConversationService(
         }
     }
 
-    private static IReadOnlyList<BotReply> Dispatch(User user, IncomingMessage message)
+    private IReadOnlyList<BotReply> Dispatch(User user, IncomingMessage message, DateTime now)
     {
         if (message.ButtonData is { } data)
         {
-            return OnButton(user, data);
+            return OnButton(user, data, now);
         }
 
         if (message.Text is null)
@@ -151,12 +166,12 @@ public sealed partial class ConversationService(
             return OnCommand(user, text);
         }
 
-        return OnText(user, text);
+        return OnText(user, text, now);
     }
 
     // ---- Команды ----------------------------------------------------------------------------------------------
 
-    private static IReadOnlyList<BotReply> OnCommand(User user, string text)
+    private IReadOnlyList<BotReply> OnCommand(User user, string text)
     {
         var command = text.Split(' ', 2)[0].Split('@')[0].ToLowerInvariant();
         if (command == "/start" && !user.IsOnboarded)
@@ -179,19 +194,24 @@ public sealed partial class ConversationService(
         };
     }
 
-    private static BotReply Help(User user) => BotReply.Plain(
-        $"Привет, {user.DisplayName}! Я TimeShift — помогаю понять, куда уходит время.\n\n" +
-        $"Раз в {user.Settings.PingIntervalMin} мин я спрашиваю, чем ты занят, — ответь кнопкой. Можно и самому " +
-        "написать занятие («Работаю», «Тренировка») — запишу его с этого момента.\n\n" +
-        "/now — что сейчас идёт, сменить занятие\n" +
-        "/day — лента за сегодня (/day вчера, /day 13.11 — другой день)\n" +
-        "/add — записать прошедшее: «вчера 19-21 Зал»\n" +
-        "/quiet — не беспокоить пару часов\n" +
-        "/undo — отменить последнюю запись\n" +
-        "/facts — что я о тебе знаю: длительности, маршруты, категории\n" +
-        "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
-        "/settings — пинги, продление занятий, часовой пояс\n\n" +
-        "Разбирать фразы вроде «час тренировался, потом поехал домой» и голосовые я научусь чуть позже.");
+    private BotReply Help(User user)
+    {
+        var how = intents.IsEnabled
+            ? "Можно писать свободно: «час тренировался, потом поехал домой» — я разберу фразу и спрошу, всё ли понял верно."
+            : "Можно и самому написать занятие («Работаю», «Тренировка») — запишу его с этого момента; прошедшее — через /add.";
+        var voice = speech.IsEnabled ? " Голосовые тоже понимаю." : string.Empty;
+        return BotReply.Plain(
+            $"Привет, {user.DisplayName}! Я TimeShift — помогаю понять, куда уходит время.\n\n" +
+            $"Раз в {user.Settings.PingIntervalMin} мин я спрашиваю, чем ты занят, — ответь кнопкой. {how}{voice}\n\n" +
+            "/now — что сейчас идёт, сменить занятие\n" +
+            "/day — лента за сегодня (/day вчера, /day 13.11 — другой день)\n" +
+            "/add — записать прошедшее: «вчера 19-21 Зал»\n" +
+            "/quiet — не беспокоить пару часов\n" +
+            "/undo — отменить последнюю запись\n" +
+            "/facts — что я о тебе знаю: длительности, маршруты, категории\n" +
+            "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
+            "/settings — пинги, продление занятий, часовой пояс");
+    }
 
     // ---- Онбординг --------------------------------------------------------------------------------------------
 
@@ -236,8 +256,8 @@ public sealed partial class ConversationService(
             "Есть ещё что-то регулярное? Например «Тренировка вт, чт 19-21» или «Йога каждый день 7-7:30».",
             [[new ReplyButton("Нет / Готово", "next")]]),
         Step.PingInterval => new BotReply(
-            "Как часто спрашивать, чем ты занят?",
-            [PingIntervals.Select(m => new ReplyButton($"Раз в {m} мин", $"ping:{m}")).ToList()]),
+            $"Как часто спрашивать, чем ты занят? Нажми кнопку или напиши число минут — от {UserSettings.MinPingIntervalMin} до {UserSettings.MaxPingIntervalMin}.",
+            Rows(PingIntervals.Select(m => new ReplyButton($"Раз в {m} мин", $"ping:{m}")), 3)),
         Step.Extension => new BotReply(
             "Если ты сказал «тренируюсь» и пропал — сколько считать, что ты всё ещё тренируешься?\n\n" +
             "Рекомендую: до полуторной обычной длительности — в норме ⚪, до двойной — под вопросом 🟡, дальше — фон.",
@@ -294,20 +314,18 @@ public sealed partial class ConversationService(
 
     // ---- Текст ------------------------------------------------------------------------------------------------
 
-    private static IReadOnlyList<BotReply> OnText(User user, string text)
+    private IReadOnlyList<BotReply> OnText(User user, string text, DateTime now)
     {
         if (Parse(user.DialogState) is not { } state)
         {
-            return user.IsOnboarded
-                ? [BotReply.Plain("Записывать занятия я пока не умею — это следующий шаг разработки. Сейчас доступны /blocks и /settings.")]
-                : StartOnboarding(user);
+            return user.IsOnboarded ? [Help(user)] : StartOnboarding(user);
         }
 
         var (mode, step) = state;
         switch (step)
         {
             case Step.TimeZone:
-                return TrySetTimeZone(user, text, mode);
+                return TrySetTimeZone(user, text, mode, now);
 
             case Step.Sleep or Step.SleepWeekend:
                 return ScheduleText.TryParseTimeRange(text, out var start, out var end)
@@ -323,9 +341,9 @@ public sealed partial class ConversationService(
                 return AddBlock(user, mode, step, text);
 
             case Step.PingInterval:
-                return int.TryParse(text.Split(' ')[0], out var minutes) && minutes is >= 30 and <= 60
+                return int.TryParse(text.Split(' ')[0], out var minutes) && UserSettings.IsValidPingInterval(minutes)
                     ? SetPing(user, mode, minutes)
-                    : [BotReply.Plain("Интервал — от 30 до 60 минут."), Ask(step)];
+                    : [BotReply.Plain($"Интервал — от {UserSettings.MinPingIntervalMin} до {UserSettings.MaxPingIntervalMin} минут."), Ask(step)];
 
             case Step.CustomExtension:
                 return SetCustomExtension(user, mode, text);
@@ -340,7 +358,7 @@ public sealed partial class ConversationService(
 
     // ---- Кнопки -----------------------------------------------------------------------------------------------
 
-    private static IReadOnlyList<BotReply> OnButton(User user, string data)
+    private IReadOnlyList<BotReply> OnButton(User user, string data, DateTime now)
     {
         var (kind, value) = data.IndexOf(':') is var i and >= 0 ? (data[..i], data[(i + 1)..]) : (data, string.Empty);
         var state = Parse(user.DialogState);
@@ -349,7 +367,7 @@ public sealed partial class ConversationService(
         switch (kind)
         {
             case "tz":
-                return TrySetTimeZone(user, value, mode);
+                return TrySetTimeZone(user, value, mode, now);
 
             case "sleep" when ScheduleText.TryParseTimeRange(value, out var start, out var end):
                 var sleepStep = state?.Step == Step.SleepWeekend ? Step.SleepWeekend : Step.Sleep;
@@ -374,7 +392,7 @@ public sealed partial class ConversationService(
                     ? [new BotReply($"Убрал: {ScheduleText.Format(removed)}", [], ReplacesSource: true)]
                     : [new BotReply("Этого блока уже нет.", [], ReplacesSource: true)];
 
-            case "ping" when int.TryParse(value, out var minutes) && minutes is >= 30 and <= 60:
+            case "ping" when int.TryParse(value, out var minutes) && UserSettings.IsValidPingInterval(minutes):
                 if (state is { Mode: Mode.Onboarding, Step: Step.PingInterval })
                 {
                     return SetPing(user, Mode.Onboarding, minutes);
@@ -459,14 +477,14 @@ public sealed partial class ConversationService(
 
     // ---- Действия ---------------------------------------------------------------------------------------------
 
-    private static IReadOnlyList<BotReply> TrySetTimeZone(User user, string id, Mode mode)
+    private static IReadOnlyList<BotReply> TrySetTimeZone(User user, string id, Mode mode, DateTime now)
     {
         id = id.Trim();
         try
         {
             var zone = TimeZoneInfo.FindSystemTimeZoneById(id);
             user.TimeZone = id;
-            var offset = zone.GetUtcOffset(DateTime.UtcNow);
+            var offset = zone.GetUtcOffset(now);
             var sign = offset < TimeSpan.Zero ? "−" : "+";
             return Advance(user, mode, Step.TimeZone, BotReply.Plain($"Часовой пояс: {id} (UTC{sign}{offset:hh\\:mm})."));
         }
@@ -652,7 +670,7 @@ public sealed partial class ConversationService(
 
         IReadOnlyList<IReadOnlyList<ReplyButton>> rows =
         [
-            PingIntervals.Select(m => new ReplyButton(Mark(s.PingIntervalMin == m, $"{m} мин"), $"ping:{m}")).ToList(),
+            .. Rows(PingIntervals.Select(m => new ReplyButton(Mark(s.PingIntervalMin == m, $"{m} мин"), $"ping:{m}")), 3),
             .. ExtensionButtons(s.Extension, onboarding: false),
             [
                 new ReplyButton($"Пинг в блоках: {(s.PingDuringBlocks ? "да" : "нет")}", "set:blockping"),
