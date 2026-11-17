@@ -5,6 +5,7 @@ import { configureSheets, openSheet, openSheetCount } from '/core/sheet.js';
 import { layoutDay, describePiece, initialScrollTop, scrollTopFor, questionablePieces, pieceBounds, categoryInfo } from '/core/timeline.js';
 import { h, reconcile, setText, setData, prefersReducedMotion, isTyping } from '/core/dom.js';
 import { swipeHorizontal } from '/core/gestures.js';
+import { timelineDrag } from '/core/drag.js';
 import * as T from '/core/time.js';
 
 const HOUR = 56;          // px per hour
@@ -502,6 +503,12 @@ function renderBar(s) {
 }
 nowBtn.addEventListener('click', () => flows.openSwitcher());
 $('pen').addEventListener('click', () => flows.openAdd());
+
+// Long press: handles on a stored entry's edges, or a new entry dragged out over unrecorded time (core/drag.js).
+timelineDrag(app, flows, {
+  scroller, surface: $('track'), layout: () => layout, ignore: '.a-note, .a-ring',
+  insets: () => ({ top: head.offsetHeight, bottom: $('bar')?.offsetHeight ?? 0 }),
+});
 
 // ---------------------------------------------------------------- render loop
 

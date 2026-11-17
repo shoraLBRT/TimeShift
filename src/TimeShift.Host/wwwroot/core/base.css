@@ -107,6 +107,25 @@ html.ts-keyboard-open .ts-sheet-body { padding-bottom: 8px; }
 .ts-swipe-area { touch-action: pan-y; }
 .ts-long-press { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 
+/* ---------- timeline drag (core/drag.js) ----------
+   The overlay sits on the timeline surface from the entry's start to its end. Only the handles take touches, so
+   the page still scrolls under a selected entry. Designs set left / right, colours and the look of the knobs. */
+.ts-drag { position: absolute; left: 0; right: 0; z-index: 5; pointer-events: none; }
+.ts-drag-handle {
+  position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; pointer-events: auto;
+  touch-action: none; cursor: ns-resize; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+/* Opposite corners: the two 44 px targets never overlap, however short the entry is. */
+.ts-drag-handle[data-edge="start"] { top: 0; left: var(--ts-drag-start-x, 28%); }
+.ts-drag-handle[data-edge="end"] { top: 100%; left: var(--ts-drag-end-x, 72%); }
+/* The time rides above the finger (--ts-drag-x is the finger's x inside the overlay), at the moving edge. */
+.ts-drag-time {
+  position: absolute; top: 0; left: clamp(var(--ts-drag-time-inset, 64px), var(--ts-drag-x, 50%), calc(100% - var(--ts-drag-time-inset, 64px)));
+  transform: translate(-50%, calc(-100% - var(--ts-drag-time-lift, 30px)));
+  display: flex; gap: 6px; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.ts-drag[data-edge="end"] .ts-drag-time { top: 100%; }
+
 /* ---------- settings navigation stack ---------- */
 .ts-nav { display: grid; overflow-x: clip; }
 .ts-page {
