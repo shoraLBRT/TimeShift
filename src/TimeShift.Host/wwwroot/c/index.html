@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TimeShift">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<title>TimeShift</title>
+<script src="/core/boot.js"></script>
+<link rel="stylesheet" href="/core/base.css">
+<link rel="stylesheet" href="/c/style.css">
+</head>
+<body>
+<div id="gate" class="c-gate"></div>
+
+<main id="main" class="c-app" hidden>
+  <header class="c-head" id="head">
+    <div class="c-head-bg" aria-hidden="true"></div>
+    <div class="c-date">
+      <p class="c-weekday"><span id="weekday"></span><span class="c-offline" id="offline" hidden>нет сети</span></p>
+      <h1 class="c-daterow" id="daterow">
+        <span class="c-daynum" id="daynum" aria-hidden="true"></span>
+        <span class="c-month" id="month" aria-hidden="true"></span>
+      </h1>
+      <input type="date" class="c-datepick" id="datepick" aria-label="Перейти к дате">
+    </div>
+    <button type="button" class="c-dots" id="settings" aria-label="Настройки">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    </button>
+    <button type="button" class="c-ring" id="summary" aria-label="Итоги">
+      <svg viewBox="0 0 44 44" width="44" height="44" aria-hidden="true">
+        <circle class="c-ring-track" cx="22" cy="22" r="21"/>
+        <circle class="c-ring-value" id="ring-value" cx="22" cy="22" r="21" pathLength="100"/>
+      </svg>
+      <span class="c-ring-text" aria-hidden="true"><span id="ring-num"></span><span class="c-ring-pct" id="ring-pct">%</span></span>
+    </button>
+    <button type="button" class="c-today" id="today" tabindex="-1" aria-hidden="true">
+      <span id="today-text">Сегодня</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </header>
+
+  <div class="c-scroller" id="scroller">
+    <div class="c-page" id="page">
+      <div class="c-track" id="track"></div>
+    </div>
+  </div>
+
+  <div class="c-island" id="island"></div>
+</main>
+
+<noscript><p style="padding:24px;font:17px system-ui,sans-serif">TimeShift работает только с включённым JavaScript.</p></noscript>
+<script type="module" src="/c/app.js"></script>
+</body>
+</html>
