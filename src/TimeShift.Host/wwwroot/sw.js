@@ -15,7 +15,8 @@ async function currentCache() {
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(await currentCache());
-    await c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png']).catch(() => {});
+    // Only the shell; every design (/<id>/…) is cached on first use, so switching works offline once each was opened.
+    await c.addAll(['/', '/core/designs.js', '/manifest.webmanifest', '/icons/icon-192.png']).catch(() => {});
     await self.skipWaiting();
   })());
 });
@@ -66,9 +67,19 @@ async function fallback(req) {
   const c = await caches.open(await currentCache());
   const hit = await c.match(req, { ignoreSearch: true });
   if (hit) return hit;
-  if (req.mode === 'navigate') return (await c.match('/')) ?? null;
-  return null;
+  if (req.mode !== 'navigate') return null;
+  // A page never opened before (e.g. a design not used yet): say so. Falling back to '/' would bounce back to the
+  // stored design and loop.
+  const path = new URL(req.url).pathname;
+  if (path === '/' || path === '/index.html') return (await c.match('/')) ?? null;
+  return new Response(OFFLINE_PAGE, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
+
+const OFFLINE_PAGE = `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>Нет сети</title>
+<body style="font:17px/1.45 system-ui,sans-serif;padding:48px 24px;max-width:32em;margin:auto">
+<p><b>Нет сети</b></p><p>Этот вид ещё не открывался на устройстве, поэтому без сети его не показать.</p>
+<p><a href="javascript:history.back()">Назад</a></p></body></html>`;
 
 // Refresh protocol: { type: 'refresh', version } with a MessagePort → rebuild every cached file from the network
 // into a new cache, switch to it, drop the old one, answer { ok }.

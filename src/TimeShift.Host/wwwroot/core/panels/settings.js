@@ -6,6 +6,7 @@ import { button, field, radioGroup, switchInput, timeInput, categoryPicker, note
 import { blockList, blockForm, fmtDays, fmtBlockTime } from './blocks.js';
 import { remindersContent } from './reminders.js';
 import { tzPicker } from './tz.js';
+import { DESIGNS } from '../designs.js';
 
 export const EXTENSION_PRESETS = [
   { key: 'typical', label: 'До типичной длительности', hint: 'Дальше — под вопросом', normFactor: 1.0, maxFactor: 1.0 },
@@ -239,6 +240,8 @@ export function settingsPanel(app, opts = {}) {
       const tzValue = h('span', { class: 'ts-menu-value' }, T.fmtTimeZone(s.me.timeZone));
       const tzBtn = h('button', { type: 'button', class: 'ts-menu-item', dataset: { page: 'tz' }, onClick: () => push('tz') }, h('span', { class: 'ts-menu-label' }, 'Часовой пояс'), tzValue);
       const theme = radioGroup('Тема', THEMES, s.theme, (t) => app.actions.setTheme(t));
+      const design = radioGroup('Вид', DESIGNS.map((d) => ({ value: d.id, label: d.name })), s.design, (id) => app.actions.switchDesign(id),
+        { className: 'ts-designs' });
       const install = h('div', { class: 'ts-install' });
       const renderInstall = (info) => {
         install.dataset.kind = info.kind;
@@ -257,7 +260,8 @@ export function settingsPanel(app, opts = {}) {
         el: h('div', null,
           section(null, h('ul', { class: 'ts-menu' }, h('li', null, tzBtn))),
           section('Тема', theme.el),
-          section('Вид', button('Сменить дизайн', { action: 'change-design', onClick: () => app.actions.clearDesign() })),
+          // Вид: the same radio-group markup as «Тема», so every design already styles it. Hidden when embedded.
+          s.embed ? null : section('Вид', design.el),
           section('Установка', install),
           section('О приложении', h('p', { class: 'ts-version' }, version || 'TimeShift'),
             s.me?.telegramLinked ? h('p', { class: 'ts-hint' }, 'Связано с Telegram: записи общие.') : null),

@@ -56,6 +56,24 @@ app.subscribe((s, prev) => { document.getElementById('main').hidden = s.phase !=
 app.start();
 ```
 
+## 1a. The designs and switching between them — `core/designs.js`
+
+All designs stay; the user switches between them in Settings → Прочее → Вид. The single list:
+
+```js
+import { DESIGNS, findDesign, storedDesign, storeDesign, designUrl } from '/core/designs.js';
+// DESIGNS = [{ id: 'a', name: 'Лист', hint: 'Бумажный ежедневник' }, { id: 'b', name: 'Сетка', … }, { id: 'c', name: 'Нить', … }]
+```
+
+It feeds the chooser page and the settings control. A design must pass its id: `createApp({ design: '<id>' })` —
+`state.design` marks the current option. Flow of a switch: the «Вид» radio calls `actions.switchDesign(id)` →
+`localStorage['ts.design'] = id` → `/<id>/?demo=…&at=…` → the new design boots and `createFlows` reopens the
+settings sheet on «Прочее» (intent in `sessionStorage`, consumed once; never in `?embed=1`; independent of
+`autoPing`). Start-up: `/` goes to the stored design; with nothing stored (first run) or with `?choose` it shows the
+chooser. Opening `/<id>/` directly does not change the stored choice. The service worker caches each design on first
+use, so switching works offline for designs opened at least once; a never-opened design offline shows a short
+«Нет сети» page.
+
 ## 2. `createApp({ design, api? })` → `app`
 
 | Member | |
@@ -136,7 +154,8 @@ All return promises. Timeline mutations resolve to `{ ok, result?, error? }`, ne
 | `enablePush()` | **call directly from a tap handler** (the permission prompt needs the gesture) |
 | `disablePush()`, `testPush()`, `promptInstall()` | |
 | `setTheme('auto' \| 'light' \| 'dark')` | persisted (`localStorage['ts.theme']`), applied as `data-theme` |
-| `chooseDesign(x)`, `clearDesign()` | `clearDesign` goes to the chooser (`/?choose`) |
+| `switchDesign(id, { page = 'other' })` | switch the look in place: stores it, opens `/<id>/` keeping `demo` / `at`, and the new design reopens the settings sheet on `page` (once). No-op in `?embed=1`, for an unknown id, or for the current design (still stored). |
+| `chooseDesign(x)`, `clearDesign()` | `chooseDesign` stores and opens a design; `clearDesign` goes to the chooser (`/?choose`) |
 | `requestPing()`, `clearPing()` | flows open the switcher on `ping.requested` |
 
 ## 3. Timeline layout — `core/timeline.js`
@@ -375,7 +394,8 @@ Panels:
   (`.ts-options` with `data-value=typical|default|infinite|custom`, `.ts-extension-custom`), `activities`
   (`ul.ts-activity-list > li.ts-activity-item[data-activity-id][data-group] > button.ts-activity-open`
   (`.ts-activity-name`, `.ts-activity-meta`)), `activity` (`.ts-activity-form`, `[data-action=clear-typical]`),
-  `other` (`[data-action=change-design]`, `.ts-install[data-kind]`, `[data-action=install]`, `.ts-version`,
+  `other` (Тема and Вид: two `.ts-options` radio groups, Вид has the extra class `.ts-designs` and options
+  `[data-value=a|b|c]`; Вид is hidden when embedded; `.ts-install[data-kind]`, `[data-action=install]`, `.ts-version`,
   `[data-action=logout]`), `tz` (`.ts-tz-picker > .ts-search + ul.ts-tz-list > li.ts-tz-item[aria-selected] >
   button.ts-tz-option[data-tz]` (`.ts-tz-label`, `.ts-tz-id`)). Every change saves at once; Escape and the system back
   (gesture / button) inside a sub-page go one page back; from the root they close the sheet.

@@ -9,6 +9,7 @@ import { gapPanel } from './panels/gap.js';
 import { summaryPanel } from './panels/summary.js';
 import { assistantPanel } from './panels/assistant.js';
 import { settingsPanel } from './panels/settings.js';
+import { takeReopen } from './designs.js';
 
 const DEFAULT_SHEETS = {
   switcher: { detent: 'auto' },
@@ -90,6 +91,16 @@ export function createFlows(app, opts = {}) {
       return { destroy() { unsub(); panel?.destroy?.(); } };
     },
   };
+
+  // After a design switch (actions.switchDesign) reopen the settings sheet where the user was. Once, never embedded.
+  let reopenChecked = false;
+  app.subscribe((s) => {
+    if (reopenChecked || s.phase !== 'ready') return;
+    reopenChecked = true;
+    if (s.embed) return;
+    const intent = takeReopen();
+    if (intent?.flow === 'settings') flows.openSettings(intent.page);
+  });
 
   // Pings: ?from=ping, a notification tap (service worker message), or app.actions.requestPing().
   if (opts.autoPing !== false) {

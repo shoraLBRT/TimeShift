@@ -1,23 +1,7 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="ts-deciding">
 <head>
 <meta charset="utf-8">
-<script>
-  // The list of designs. To drop one: delete its folder and its line here.
-  window.TS_DESIGNS = [
-    { key: 'a', name: 'Лист', text: 'Бумажный ежедневник: антиква, чернила, линовка.' },
-    { key: 'b', name: 'Сетка', text: 'Родной календарь iOS: цветные события, полоса недели.' },
-    { key: 'c', name: 'Нить', text: 'Тёмный типографический: светящаяся нить дня и крупный таймер.' },
-  ];
-  (function () {
-    var q = new URLSearchParams(location.search);
-    var chosen = null;
-    try { chosen = localStorage.getItem('ts.design'); } catch (e) { /* private mode */ }
-    var known = window.TS_DESIGNS.some(function (d) { return d.key === chosen; });
-    if (known && !q.has('choose')) location.replace('/' + chosen + '/' + location.search);
-    else if (window.TS_DESIGNS.length === 1 && !q.has('choose')) location.replace('/' + window.TS_DESIGNS[0].key + '/' + location.search);
-  })();
-</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
@@ -27,10 +11,24 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="modulepreload" href="/core/designs.js">
 <title>TimeShift — выбор вида</title>
+<script type="module">
+  // Start: go to the stored design. The chooser shows on first run (nothing stored) and under ?choose.
+  import { DESIGNS, storedDesign } from '/core/designs.js';
+  const q = new URLSearchParams(location.search);
+  const chosen = storedDesign();
+  if (!q.has('choose') && (chosen || DESIGNS.length === 1)) location.replace(`/${chosen ?? DESIGNS[0].id}/${location.search}`);
+  else document.documentElement.classList.remove('ts-deciding');
+</script>
+<script>
+  // If the module cannot load at all, show the page anyway rather than a blank screen.
+  setTimeout(function () { document.documentElement.classList.remove('ts-deciding'); }, 1500);
+</script>
 <style>
   :root { --bg: #f6f5f2; --fg: #1f1d1a; --muted: #6b665e; --line: #dedad2; --card: #fff; --accent: #c8442b; color-scheme: light dark; }
   @media (prefers-color-scheme: dark) { :root { --bg: #161514; --fg: #eeeae3; --muted: #9b958b; --line: #34312d; --card: #201e1c; } }
+  html.ts-deciding body { visibility: hidden; }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -61,50 +59,42 @@
 <body>
 <main>
   <h1>TimeShift</h1>
-  <p class="lead">Учёт прожитого времени. Выбери вид — логика у всех одна, отличается только внешность. Поменять можно в настройках.</p>
+  <p class="lead">Учёт прожитого времени. Выбери вид, который нравится, — поменять его можно в любой момент в настройках.</p>
   <ul class="designs" id="designs"></ul>
   <footer>Демо работает без сервера: данные живут только в этой вкладке.</footer>
 </main>
-<script>
-  (function () {
-    var list = document.getElementById('designs');
-    var designs = window.TS_DESIGNS;
-    var current = null;
-    try { current = localStorage.getItem('ts.design'); } catch (e) { /* ignore */ }
-    var q = new URLSearchParams(location.search);
-    q.delete('choose');
-    var rest = q.toString() ? '?' + q.toString() : '';
-    list.style.setProperty('--count', String(designs.length));
-    var wide = window.matchMedia('(min-width: 1000px)');
-    designs.forEach(function (d) {
-      var li = document.createElement('li');
-      li.className = 'card';
-      if (d.key === current) li.setAttribute('aria-current', 'true');
-      li.innerHTML = '<div class="frame" data-src="/' + d.key + '/?demo=1&amp;embed=1&amp;at=15:40"></div>' +
-        '<h2>' + d.name + ' <small>' + d.key.toUpperCase() + '</small></h2><p></p>' +
-        '<div class="actions"><a href="/' + d.key + '/?demo=1&amp;at=15:40">Демо</a><a href="/' + d.key + '/' + rest + '">Открыть</a>' +
-        '<button type="button" class="primary">Выбрать этот</button></div>';
-      li.querySelector('p').textContent = d.text;
-      li.querySelector('button').addEventListener('click', function () {
-        try { localStorage.setItem('ts.design', d.key); } catch (e) { /* ignore */ }
-        location.href = '/' + d.key + '/' + rest;
-      });
-      list.appendChild(li);
-    });
-    function frames() {
-      if (!wide.matches) return;
-      document.querySelectorAll('.frame[data-src]').forEach(function (f) {
-        var i = document.createElement('iframe');
-        i.src = f.getAttribute('data-src');
-        i.title = 'Демо';
-        i.loading = 'lazy';
-        f.appendChild(i);
-        f.removeAttribute('data-src');
-      });
+<script type="module">
+  import { DESIGNS, storedDesign, storeDesign, designUrl } from '/core/designs.js';
+  const DEMO = '?demo=1&at=15:40'; // previews show a full day
+  const list = document.getElementById('designs');
+  const current = storedDesign();
+  const q = new URLSearchParams(location.search);
+  q.delete('choose');
+  const rest = q.toString() ? `?${q}` : '';
+  list.style.setProperty('--count', String(DESIGNS.length));
+  const el = (tag, props, ...children) => { const e = Object.assign(document.createElement(tag), props); e.append(...children); return e; };
+  for (const d of DESIGNS) {
+    const choose = el('button', { type: 'button', className: 'primary', textContent: 'Выбрать' });
+    choose.addEventListener('click', () => { storeDesign(d.id); location.href = designUrl(d.id, rest); });
+    const frame = el('div', { className: 'frame' });
+    frame.dataset.src = `/${d.id}/${DEMO}&embed=1`;
+    const li = el('li', { className: 'card' }, frame,
+      el('h2', {}, d.name, ' ', el('small', { textContent: d.id.toUpperCase() })),
+      el('p', { textContent: d.hint }),
+      el('div', { className: 'actions' }, el('a', { href: `/${d.id}/${DEMO}`, textContent: 'Демо' }), el('a', { href: `/${d.id}/${rest}`, textContent: 'Открыть' }), choose));
+    if (d.id === current) li.setAttribute('aria-current', 'true');
+    list.append(li);
+  }
+  const wide = matchMedia('(min-width: 1000px)');
+  const frames = () => {
+    if (!wide.matches) return;
+    for (const f of document.querySelectorAll('.frame[data-src]')) {
+      f.append(el('iframe', { src: f.dataset.src, title: 'Демо', loading: 'lazy' }));
+      delete f.dataset.src;
     }
-    frames();
-    wide.addEventListener && wide.addEventListener('change', frames);
-  })();
+  };
+  frames();
+  wide.addEventListener('change', frames);
 </script>
 </body>
 </html>

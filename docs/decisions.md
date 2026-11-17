@@ -307,3 +307,11 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **"Started" means the start of the current open segment.** An activity that began before the block, was
   interrupted inside it and resumed there (`Segment.ResumedAt`) behaves like one started inside the block.
 
+## Three designs stay (#36, 2026-11-17)
+
+- **All three PWA designs are kept** («Лист», «Сетка», «Нить») instead of choosing one (#46 is closed as not
+  planned): the look is a user preference, switched in Настройки → Прочее → Вид, stored per device.
+- **The price is accepted knowingly:** every new screen or state has to be styled three times. It stays cheap
+  only while the rule holds that all logic and markup live in `core/` and a design folder is CSS plus the main
+  screen. A feature that cannot be expressed through the core's panels is a reason to extend the core, not a
+  design.

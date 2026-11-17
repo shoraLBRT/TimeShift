@@ -7,6 +7,7 @@ import { showToast } from './toast.js';
 import * as pwa from './pwa.js';
 import { openSheetCount } from './sheet.js';
 import { isTyping } from './dom.js';
+import { findDesign, storeDesign, designUrl, setReopen } from './designs.js';
 
 const SNAPSHOT_KEY = 'ts.snapshot.v1';
 const THEME_KEY = 'ts.theme';
@@ -643,6 +644,21 @@ export function createApp(opts = {}) {
     chooseDesign(x) {
       ls.set(DESIGN_KEY, x);
       location.href = `/${x}/${demo ? '?demo=1' : ''}`;
+    },
+    /**
+     * Switch to another design in place: store it, open /<id>/ with the demo flags, and reopen the settings sheet
+     * on `page` there. Does nothing in an embedded frame or for an unknown id. Returns true when it navigates.
+     */
+    switchDesign(id, { page = 'other' } = {}) {
+      if (state.embed || !findDesign(id)) return false;
+      storeDesign(id);
+      if (id === state.design) return false;
+      setReopen({ flow: 'settings', page });
+      const q = new URLSearchParams(location.search);
+      if (demo && !q.has('demo')) q.set('demo', '1');
+      if (state.demoAt && !q.has('at')) q.set('at', state.demoAt);
+      location.href = designUrl(id, `?${q}`);
+      return true;
     },
     clearDesign() {
       ls.del(DESIGN_KEY);

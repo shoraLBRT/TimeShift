@@ -41,12 +41,11 @@ server be hosted there. The REST contract is `docs/web-api.md`; the client is `s
 | 3 | [#39](https://github.com/shoraLBRT/TimeShift/issues/39) REST API and the user without Telegram | |
 | 4 | [#40](https://github.com/shoraLBRT/TimeShift/issues/40) Web Push next to Telegram | |
 | 5 | [#41](https://github.com/shoraLBRT/TimeShift/issues/41) PWA core | shared by the three designs |
-| 6 | [#42](https://github.com/shoraLBRT/TimeShift/issues/42) · [#43](https://github.com/shoraLBRT/TimeShift/issues/43) · [#44](https://github.com/shoraLBRT/TimeShift/issues/44) Design MVPs A «Лист», B «Сетка», C «Нить» | equal in function; one is kept |
+| 6 | [#42](https://github.com/shoraLBRT/TimeShift/issues/42) · [#43](https://github.com/shoraLBRT/TimeShift/issues/43) · [#44](https://github.com/shoraLBRT/TimeShift/issues/44) Design MVPs A «Лист», B «Сетка», C «Нить» | equal in function; all three stay, switched in the settings |
 | 7 | [#45](https://github.com/shoraLBRT/TimeShift/issues/45) Deploy with HTTPS, guide for a VPS in Russia | |
-| 8 | [#46](https://github.com/shoraLBRT/TimeShift/issues/46) Choose the design, delete the other two | **blocked:** the maintainer's choice |
-| 9 | [#50](https://github.com/shoraLBRT/TimeShift/issues/50) Voice in the PWA | after the choice |
-| 10 | [#51](https://github.com/shoraLBRT/TimeShift/issues/51) Drag the edges of an entry | after the choice |
-| 11 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | |
+| 8 | [#50](https://github.com/shoraLBRT/TimeShift/issues/50) Voice in the PWA | |
+| 9 | [#51](https://github.com/shoraLBRT/TimeShift/issues/51) Drag the edges of an entry | |
+| 10 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | |
 
 Found while reviewing the current behaviour, need the maintainer's decision:
 [#47](https://github.com/shoraLBRT/TimeShift/issues/47) (unknown time is counted as «Залипание»),

@@ -7,7 +7,7 @@ _Updated 2026-11-17._
 Two tracks, order in `docs/ROADMAP.md`:
 
 - **MVP (Telegram bot)** — stage 8 (images); steps 1–7 of spec §11 are done.
-- **PWA (own mobile client)** — built, waiting for the maintainer to choose one of three designs (#46).
+- **PWA (own mobile client)** — built; all three designs stay and are switched in the app settings.
 
 ## What exists
 
@@ -43,7 +43,8 @@ Two tracks, order in `docs/ROADMAP.md`:
 - **PWA (`src/TimeShift.Host/wwwroot`, no build step, no third-party requests):** shared core (`core/`: API
   client, in-memory demo backend `?demo=1&at=15:40`, state, timeline layout, bottom sheet, toasts, gestures,
   functional panels, push, service worker) and three complete design MVPs on top of it — `a/` «Лист» (paper
-  planner), `b/` «Сетка» (iOS calendar grid), `c/` «Нить» (dark typographic thread). `/` is the chooser.
+  planner), `b/` «Сетка» (iOS calendar grid), `c/` «Нить» (dark typographic thread). All three stay: the look is switched in Настройки → Прочее → Вид;
+  `/` opens the stored one (the chooser on the first run).
   Ping interval is 5–240 minutes.
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
@@ -54,8 +55,7 @@ Two tracks, order in `docs/ROADMAP.md`:
 
 [#16](https://github.com/shoraLBRT/TimeShift/issues/16) — `/week` image and stats. (#2 waits for the LLM key; voice needs a whisper model on the server).
 
-PWA: [#46](https://github.com/shoraLBRT/TimeShift/issues/46) — the maintainer picks a design; the other two
-folders are deleted. Then #50 (voice), #51 (drag the edges of an entry).
+PWA: check on a real phone over HTTPS (#45), then #50 (voice), #51 (drag the edges of an entry).
 
 ## Open questions
 
@@ -63,7 +63,6 @@ folders are deleted. Then #50 (voice), #51 (drag the edges of an entry).
   recorded responses.
 - VPS choice for deploy (#18). With the PWA the server can be in Russia; check from the VPS that the push
   hosts and the LLM aggregator are reachable (`docs/deploy.md`).
-- Which PWA design stays (#46).
 - Unknown time is counted as «Залипание» (#47); pings stop for good after two unanswered (#48) — both change
   the spec and need a decision.
 - Not verified on a real device: the service worker, push delivery and "Add to Home Screen" (need HTTPS and a
@@ -75,6 +74,6 @@ folders are deleted. Then #50 (voice), #51 (drag the edges of an entry).
 dotnet build          # 0 warnings
 dotnet test           # all green (Domain, Application, Infrastructure on SQLite)
 dotnet run --project src/TimeShift.Host
-# http://localhost:5138/            — design chooser (access key for development: appsettings.Development.json)
+# http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/)
 ```
