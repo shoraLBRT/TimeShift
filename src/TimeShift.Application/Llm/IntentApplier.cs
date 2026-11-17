@@ -179,7 +179,7 @@ public sealed partial class IntentApplier(
             {
                 var activity = await tracking.ResolveActivityAsync(user, classify.Activity, ct);
                 activity.CategoryKey = classify.Category;
-                return [BotReply.Plain($"Запомнил: «{activity.Name}» — {CategoryName(classify.Category)}.")];
+                return [BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(classify.Category)}.")];
             }
 
             case SetFactIntent fact:
@@ -316,7 +316,7 @@ public sealed partial class IntentApplier(
         }
 
         var span = $"{TrackingReplies.Clock(replacement.StartUtc, tz)}–{(replacement.EndUtc is { } re ? TrackingReplies.Clock(re, tz) : "…")}";
-        var categoryNote = edit.NewCategory is { } c ? $" ({CategoryName(c)})" : string.Empty;
+        var categoryNote = edit.NewCategory is { } c ? $" ({user.Categories.Name(c)})" : string.Empty;
         return new BotReply($"✏️ Исправил: {span} {replacement.Title}{categoryNote}.", [[new ReplyButton("↩️ Отменить", "tl:undo")]]);
     }
 
@@ -361,14 +361,14 @@ public sealed partial class IntentApplier(
     /// <summary>После ответа на вопрос — пересчитать период с новым фактом.</summary>
     private async Task<BotReply> RetryAsync(User user, PendingPeriod pending, CancellationToken ct)
     {
-        var period = PeriodOf(pending);
+        var period = PeriodOf(user, pending);
         return await ProposeAsync(user, period, pending.Text, pending.ResponseJson, pending.IntentIndex, pending.CreatedAtUtc, ct);
     }
 
     private async Task<IReadOnlyList<Segment>> CommitAsync(User user, PendingPeriod pending, SegmentStatus status, DateTime now, CancellationToken ct)
     {
         await pendings.RemoveAsync(user.Id, ct);
-        if (await PlanAsync(user, PeriodOf(pending), pending.CreatedAtUtc, createActivities: true, ct) is not Plan.Ready ready)
+        if (await PlanAsync(user, PeriodOf(user, pending), pending.CreatedAtUtc, createActivities: true, ct) is not Plan.Ready ready)
         {
             return [];
         }
@@ -380,8 +380,8 @@ public sealed partial class IntentApplier(
         return segments;
     }
 
-    private static DescribePeriodIntent PeriodOf(PendingPeriod pending) =>
-        (DescribePeriodIntent)IntentParser.Parse(pending.ResponseJson).Intents[pending.IntentIndex];
+    private static DescribePeriodIntent PeriodOf(User user, PendingPeriod pending) =>
+        (DescribePeriodIntent)IntentParser.Parse(pending.ResponseJson, user.Categories).Intents[pending.IntentIndex];
 
     private abstract record Plan
     {
@@ -596,6 +596,7 @@ public sealed partial class IntentApplier(
                 .ToList(),
             KnownActivities = recent.Select(a => a.Name).ToList(),
             LastBotQuestion = question,
+            Categories = user.Categories,
         };
     }
 
@@ -631,8 +632,6 @@ public sealed partial class IntentApplier(
     private static string FactName(string key) => UserFact.ParseRouteKey(key) is { } route
         ? $"дорога {route.From} → {route.To}"
         : key;
-
-    private static string CategoryName(string key) => DefaultCategories.Find(key)?.Name ?? key;
 
     private static DateTime NextOccurrence(TimeOnly time, DateTime now, TimeZoneInfo tz)
     {

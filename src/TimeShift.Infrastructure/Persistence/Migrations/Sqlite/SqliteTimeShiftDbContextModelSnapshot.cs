@@ -178,6 +178,55 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                     b.ToTable("activities", (string)null);
                 });
 
+            modelBuilder.Entity("TimeShift.Domain.Categories.UserCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("archived_at");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Group")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("group");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ParentKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_key");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("categories", (string)null);
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -523,6 +572,15 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TimeShift.Domain.Categories.UserCategory", b =>
+                {
+                    b.HasOne("TimeShift.Domain.Users.User", null)
+                        .WithMany("OwnCategories")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TimeShift.Domain.Facts.UserFact", b =>
                 {
                     b.HasOne("TimeShift.Domain.Users.User", null)
@@ -619,6 +677,8 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
             modelBuilder.Entity("TimeShift.Domain.Users.User", b =>
                 {
                     b.Navigation("Blocks");
+
+                    b.Navigation("OwnCategories");
                 });
 #pragma warning restore 612, 618
         }

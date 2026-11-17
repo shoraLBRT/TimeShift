@@ -45,7 +45,7 @@ public sealed class ActivityService(IActivityRepository activities, IUnitOfWork 
             }
         }
 
-        if (patch.Category is { IsSet: true, Value: { } key } && DefaultCategories.Find(key) is null)
+        if (patch.Category is { IsSet: true, Value: { } key } && user.Categories.FindActive(key) is null)
         {
             throw ClientException.Invalid("category", "Нет такой категории.");
         }

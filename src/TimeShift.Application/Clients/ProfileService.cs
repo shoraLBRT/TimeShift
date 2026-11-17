@@ -10,12 +10,9 @@ namespace TimeShift.Application.Clients;
 /// Профиль, настройки и шаблон недели для клиента: те же правила, что в диалоге бота (/settings, /blocks, онбординг),
 /// но по явным полям и с проверкой границ. Каждая операция сохраняет и возвращает обновлённый профиль.
 /// </summary>
-public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
+public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock, Tracking.TrackingService tracking)
 {
     public const int MaxBlockTitleLength = 60;
-
-    private static readonly IReadOnlyList<CategoryModel> Categories =
-        DefaultCategories.All.Select(c => new CategoryModel(c.Key, c.Name, c.Group, c.ParentKey)).ToList();
 
     public MeModel Me(User user)
     {
@@ -41,8 +38,75 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
                 .ThenBy(b => b.Title, StringComparer.Ordinal)
                 .Select(b => new BlockModel(b.Id, b.Kind, b.Title, b.CategoryKey, b.Days.Select(IsoDay).Order().ToList(), b.Start, b.End))
                 .ToList(),
-            Categories);
+            CategoriesOf(user));
     }
+
+    /// <summary>Весь набор пользователя: системные, свои и удалённые свои (их имена нужны старым записям).</summary>
+    private static IReadOnlyList<CategoryModel> CategoriesOf(User user)
+    {
+        var set = user.Categories;
+        return set.All
+            .Select(c => new CategoryModel(c.Key, c.Name, c.Group, c.ParentKey, CategorySet.IsSystem(c.Key), set.IsArchived(c.Key)))
+            .ToList();
+    }
+
+    // ---- Свои категории (spec §4.1) ---------------------------------------------------------------------------
+
+    public async Task<MeModel> AddCategoryAsync(User user, CategoryRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Parent is null && request.Group is null)
+        {
+            throw ClientException.Invalid("group", "Нужна группа или родительская категория.");
+        }
+
+        Checked(() => user.AddCategory(request.Name ?? string.Empty, request.Group ?? default, request.Parent, clock.UtcNow));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Me(user);
+    }
+
+    public async Task<MeModel> UpdateCategoryAsync(User user, string key, CategoryPatch patch, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(patch);
+        var current = user.OwnCategories.FirstOrDefault(c => c.Key == key && !c.IsArchived);
+        var parent = patch.Parent.IsSet ? patch.Parent.Value : current?.ParentKey;
+        Checked(() => user.UpdateCategory(key, patch.Name ?? current?.Name ?? string.Empty, patch.Group ?? current?.Group ?? default, parent));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Me(user);
+    }
+
+    /// <summary>Удаляет свою категорию: записи с ней остаются как были, занятия и блоки с ней — без категории.</summary>
+    public async Task<MeModel> RemoveCategoryAsync(User user, string key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await tracking.RemoveCategoryAsync(user, key, clock.UtcNow, cancellationToken);
+        }
+        catch (CategoryException e)
+        {
+            throw Translate(e);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Me(user);
+    }
+
+    private static void Checked(Action change)
+    {
+        try
+        {
+            change();
+        }
+        catch (CategoryException e)
+        {
+            throw Translate(e);
+        }
+    }
+
+    /// <summary>Нет такой категории — 404, системная — 409, остальное — ошибка поля.</summary>
+    private static ClientException Translate(CategoryException e) => e.Field != "key"
+        ? ClientException.Invalid(e.Field, e.Message)
+        : e.Message.StartsWith("Нет", StringComparison.Ordinal) ? ClientException.NotFound(e.Message) : ClientException.Conflict(e.Message);
 
     public async Task<MeModel> UpdateSettingsAsync(User user, SettingsPatch patch, CancellationToken cancellationToken)
     {
@@ -148,7 +212,7 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
 
     public async Task<MeModel> AddBlockAsync(User user, BlockRequest request, CancellationToken cancellationToken)
     {
-        var block = Build(request, null);
+        var block = Build(user, request, null);
         if (user.TryAddBlock(block) is { } conflict)
         {
             throw ClientException.Conflict($"Пересекается с блоком «{conflict.Title}».");
@@ -163,7 +227,7 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
     {
         var old = user.Blocks.FirstOrDefault(b => b.Id == blockId && b.Kind != ScheduleBlockKind.Sleep)
             ?? throw ClientException.NotFound("Такого блока нет.");
-        var replacement = Build(request, old);
+        var replacement = Build(user, request, old);
         user.RemoveBlock(blockId);
         if (user.TryAddBlock(replacement) is { } conflict)
         {
@@ -205,7 +269,7 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
         return Me(user);
     }
 
-    private static ScheduleBlock Build(BlockRequest request, ScheduleBlock? replaced)
+    private static ScheduleBlock Build(User user, BlockRequest request, ScheduleBlock? replaced)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Kind is not (ScheduleBlockKind.Fixed or ScheduleBlockKind.Custom))
@@ -222,7 +286,7 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock)
         string? category;
         if (request.Category is { } key)
         {
-            category = DefaultCategories.Find(key) is not null ? key : throw ClientException.Invalid("category", "Нет такой категории.");
+            category = user.Categories.FindActive(key) is not null ? key : throw ClientException.Invalid("category", "Нет такой категории.");
         }
         else
         {

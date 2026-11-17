@@ -125,7 +125,7 @@ public sealed partial class QuestionService(
 
         if (open.Kind == QuestionKind.ActivityCategory)
         {
-            return CategoryByName(text) is { } key ? await ResolveCategoryAsync(user, open, key, now, ct) : null;
+            return CategoryByName(user.Categories, text) is { } key ? await ResolveCategoryAsync(user, open, key, now, ct) : null;
         }
 
         return DurationAnswer().IsMatch(text.Trim().ToLowerInvariant()) && Llm.IntentApplier.ParseMinutes(text) is { } minutes
@@ -155,7 +155,7 @@ public sealed partial class QuestionService(
 
         if (question.Kind == QuestionKind.ActivityCategory)
         {
-            return DefaultCategories.Find(value) is null
+            return user.Categories.FindActive(value) is null
                 ? null
                 : (await ResolveCategoryAsync(user, question, value, now, ct)) with { ReplacesSource = true };
         }
@@ -189,6 +189,7 @@ public sealed partial class QuestionService(
             .Where(f => f.Route is not null)
             .ToList();
 
+        var categories = user.Categories;
         var lines = new List<string> { "Что я знаю:" };
         if (known.Count == 0 && routes.Count == 0)
         {
@@ -198,7 +199,7 @@ public sealed partial class QuestionService(
         foreach (var a in known.OrderBy(a => a.Name, StringComparer.CurrentCulture))
         {
             var duration = a.TypicalDuration is { } d ? TrackingReplies.Duration(d) : "длительность ?";
-            var category = a.CategoryKey is { } k ? Domain.Categories.DefaultCategories.Find(k)?.Name ?? k : "категория ?";
+            var category = a.CategoryKey is { } k ? categories.Name(k) : "категория ?";
             lines.Add($"• {a.Name} — {duration}, {category}");
         }
 
@@ -248,11 +249,11 @@ public sealed partial class QuestionService(
         }
 
         activity.CategoryKey = key;
-        return BotReply.Plain($"Запомнил: «{activity.Name}» — {DefaultCategories.Find(key)!.Name}.");
+        return BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(key)}.");
     }
 
     /// <summary>Ответ текстом на вопрос о категории: «учёба», «отдых», «залипание».</summary>
-    private static string? CategoryByName(string text)
+    private static string? CategoryByName(CategorySet categories, string text)
     {
         var t = text.Trim().ToLowerInvariant().Replace('ё', 'е').TrimEnd('.', '!');
         if (t.Length < 3)
@@ -260,18 +261,19 @@ public sealed partial class QuestionService(
             return null;
         }
 
-        return DefaultCategories.All
+        // Точное имя — любая категория, в том числе своя и подвид; иначе — по началу имени среди верхнего уровня.
+        return categories.FindByName(t)?.Key ?? categories.Active
             .Where(c => c.ParentKey is null)
             .FirstOrDefault(c => c.Name.ToLowerInvariant().Replace('ё', 'е').StartsWith(t[..Math.Min(4, t.Length)], StringComparison.Ordinal)
                                  || c.Name.ToLowerInvariant().Replace('ё', 'е').Contains(t, StringComparison.Ordinal))?.Key;
     }
 
-    private static IReadOnlyList<(string Label, string Key)> CategoryOptions(string activity) =>
+    private static IReadOnlyList<(string Label, string Key)> CategoryOptions(CategorySet categories, string activity) =>
         Classifier.IsYouTube(activity)
             ? [("Отдых", DefaultCategories.MindfulRest), ("Учёба", DefaultCategories.Study), ("Залипание", DefaultCategories.WastedYouTube)]
             : Classifier.IsGame(activity)
                 ? [("Синглплеер — отдых", DefaultCategories.MindfulRest), ("Мультиплеер — залипание", DefaultCategories.WastedMultiplayer)]
-                : DefaultCategories.All.Where(c => c.ParentKey is null).Select(c => (c.Name, c.Key)).ToList();
+                : categories.Active.Where(c => c.ParentKey is null).Select(c => (c.Name, c.Key)).ToList();
 
     private async Task<BotReply?> AskAsync(User user, PendingQuestion question, CancellationToken ct)
     {
@@ -283,7 +285,7 @@ public sealed partial class QuestionService(
 
         if (question.Kind == QuestionKind.ActivityCategory)
         {
-            var options = CategoryOptions(activity.Name);
+            var options = CategoryOptions(user.Categories, activity.Name);
             var rows = options.Select(o => new ReplyButton(o.Label, $"q:{question.Id}:{o.Key}"))
                 .Chunk(options.Count <= 3 ? 3 : 2)
                 .Select(c => (IReadOnlyList<ReplyButton>)c)

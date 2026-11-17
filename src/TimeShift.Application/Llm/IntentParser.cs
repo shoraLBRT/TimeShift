@@ -19,8 +19,10 @@ public static class IntentParser
 {
     private static readonly string[] WeekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-    public static IntentParseResult Parse(string json)
+    /// <summary><paramref name="categories"/> — набор пользователя: его ключи допустимы в поле category (без него — только системные).</summary>
+    public static IntentParseResult Parse(string json, CategorySet? categories = null)
     {
+        var set = categories ?? CategorySet.System;
         var errors = new List<string>();
         var intents = new List<Intent>();
         JsonDocument document;
@@ -46,7 +48,7 @@ public static class IntentParser
             var index = 0;
             foreach (var element in list.EnumerateArray())
             {
-                var reader = new Reader(element, $"intents[{index++}]", errors);
+                var reader = new Reader(element, $"intents[{index++}]", errors, set);
                 if (ParseOne(reader) is { } intent)
                 {
                     intents.Add(intent);
@@ -83,7 +85,7 @@ public static class IntentParser
             {
                 var classified = r.RequiredString("activity");
                 var category = r.RequiredString("category");
-                if (category is not null && DefaultCategories.Find(category) is null)
+                if (category is not null && r.Categories.FindActive(category) is null)
                 {
                     r.Error("category", $"неизвестная категория «{category}»");
                     return null;
@@ -218,8 +220,10 @@ public static class IntentParser
     }
 
     /// <summary>Чтение полей одного объекта с накоплением ошибок по пути <c>intents[0].items[1].start</c>.</summary>
-    private sealed class Reader(JsonElement element, string path, List<string> errors)
+    private sealed class Reader(JsonElement element, string path, List<string> errors, CategorySet categories)
     {
+        public CategorySet Categories => categories;
+
         public void Error(string field, string message) => errors.Add($"{path}.{field}: {message}");
 
         public string? RequiredString(string name)
@@ -351,9 +355,9 @@ public static class IntentParser
             var other => Invalid<PartOfDay>(name, $"morning, afternoon, evening или night, а не «{other}»"),
         };
 
-        /// <summary>Ключ категории из стартового набора; неизвестная — отбрасывается без ошибки.</summary>
+        /// <summary>Ключ категории из набора пользователя; неизвестная или удалённая — отбрасывается без ошибки.</summary>
         public string? Category(string name) =>
-            String(name) is { } key && DefaultCategories.Find(key) is not null ? key : null;
+            String(name) is { } key && categories.FindActive(key) is not null ? key : null;
 
         public RouteRef? Route(string name)
         {
@@ -380,7 +384,7 @@ public static class IntentParser
                 return null;
             }
 
-            return new Reader(value, $"{path}.{name}", errors);
+            return new Reader(value, $"{path}.{name}", errors, categories);
         }
 
         public List<Reader>? Items(string name)
@@ -396,7 +400,7 @@ public static class IntentParser
                 return null;
             }
 
-            return value.EnumerateArray().Select((e, i) => new Reader(e, $"{path}.{name}[{i}]", errors)).ToList();
+            return value.EnumerateArray().Select((e, i) => new Reader(e, $"{path}.{name}[{i}]", errors, categories)).ToList();
         }
 
         private T? Invalid<T>(string name, string message)

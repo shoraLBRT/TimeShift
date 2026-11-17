@@ -28,23 +28,28 @@ public sealed record WeekStats(
     public TimeSpan ParallelSum => TimeSpan.FromTicks(Parallel.Sum(p => p.Total.Ticks));
 
     /// <summary>
-    /// Считает прошедшую часть лент. Категории — как в «Итого» дня: подкатегории залипания сложены в «Залипание».
+    /// Считает прошедшую часть лент. Категории — как в «Итого» дня: подвиды сложены в свою категорию («Залипание»);
+    /// <paramref name="categories"/> — набор пользователя (без него — только системные).
     /// <paramref name="previous"/> — основная дорожка того же окна неделей раньше; категория, которая была только
     /// там, остаётся в списке с нулём.
     /// </summary>
     public static WeekStats Of(
-        IEnumerable<TimelinePiece> main, IEnumerable<TimelinePiece> parallel, IEnumerable<TimelinePiece>? previous = null)
+        IEnumerable<TimelinePiece> main,
+        IEnumerable<TimelinePiece> parallel,
+        IEnumerable<TimelinePiece>? previous = null,
+        CategorySet? categories = null)
     {
         ArgumentNullException.ThrowIfNull(main);
         ArgumentNullException.ThrowIfNull(parallel);
+        var set = categories ?? CategorySet.System;
         var past = main.Where(p => !p.IsFuture).ToList();
-        var now = ByCategory(past);
-        var before = previous is null ? null : ByCategory(previous.Where(p => !p.IsFuture));
+        var now = ByCategory(past, set);
+        var before = previous is null ? null : ByCategory(previous.Where(p => !p.IsFuture), set);
         var keys = before is null ? now.Keys : now.Keys.Union(before.Keys);
-        var categories = keys
+        var totals = keys
             .Select(key => new CategoryTotal(
                 key.Length == 0 ? null : key,
-                Name(key),
+                key.Length == 0 ? "Без категории" : set.Name(key),
                 now.GetValueOrDefault(key),
                 before is null ? null : now.GetValueOrDefault(key) - before.GetValueOrDefault(key)))
             .OrderByDescending(c => c.Total)
@@ -61,7 +66,7 @@ public sealed record WeekStats(
             .ToList();
         return new WeekStats(
             Ticks(past),
-            categories,
+            totals,
             Sum(SegmentStatus.Confirmed),
             Sum(SegmentStatus.Assumed),
             Sum(SegmentStatus.Questionable),
@@ -86,11 +91,9 @@ public sealed record WeekStats(
         return (whole[0], whole[1], whole[2]);
     }
 
-    private static Dictionary<string, TimeSpan> ByCategory(IEnumerable<TimelinePiece> pieces) => pieces
-        .GroupBy(p => DefaultCategories.Find(p.CategoryKey ?? string.Empty)?.ParentKey ?? p.CategoryKey ?? string.Empty)
+    private static Dictionary<string, TimeSpan> ByCategory(IEnumerable<TimelinePiece> pieces, CategorySet set) => pieces
+        .GroupBy(p => set.TotalsKey(p.CategoryKey) ?? string.Empty)
         .ToDictionary(g => g.Key, Ticks, StringComparer.Ordinal);
-
-    private static string Name(string key) => key.Length == 0 ? "Без категории" : DefaultCategories.Find(key)?.Name ?? key;
 
     private static TimeSpan Ticks(IEnumerable<TimelinePiece> pieces) => TimeSpan.FromTicks(pieces.Sum(p => p.Duration.Ticks));
 }

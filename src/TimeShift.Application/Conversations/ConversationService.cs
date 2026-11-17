@@ -223,6 +223,7 @@ public sealed partial class ConversationService(
             "/quiet — не беспокоить пару часов\n" +
             "/undo — отменить последнюю запись\n" +
             "/facts — что я о тебе знаю: длительности, маршруты, категории\n" +
+            "/categories — набор категорий и свои категории\n" +
             "/blocks — шаблон недели (сон, работа, учёба, свои блоки)\n" +
             "/settings — пинги, продление занятий, часовой пояс");
     }
@@ -758,6 +759,8 @@ public sealed partial class ConversationService(
         ActivityName,
         AddPast,
         SleepFix,
+        CategoryName,
+        CategoryRename,
     }
 
     private static string State(Mode mode, Step step) => $"{(mode == Mode.Onboarding ? 'O' : 'E')}:{step}";

@@ -1,3 +1,4 @@
+using TimeShift.Domain.Categories;
 using TimeShift.Domain.Schedule;
 
 namespace TimeShift.Domain.Users;
@@ -9,10 +10,14 @@ namespace TimeShift.Domain.Users;
 public class User
 {
     private readonly List<ScheduleBlock> _blocks = [];
+    private readonly List<UserCategory> _categories = [];
 
     public const string DefaultTimeZone = "Europe/Moscow";
 
     public const int MaxDisplayNameLength = 60;
+
+    /// <summary>Сколько своих (не удалённых) категорий может быть у пользователя.</summary>
+    public const int MaxOwnCategories = 50;
 
     public User(long? telegramChatId, string displayName, string timeZone, DateTime createdAtUtc)
     {
@@ -178,6 +183,144 @@ public class User
         _blocks.RemoveAll(b => b.Kind == ScheduleBlockKind.Sleep);
         _blocks.InsertRange(0, sleep);
         return null;
+    }
+
+    // ---- Категории (spec §4.1) ---------------------------------------------------------------------------------
+
+    /// <summary>Свои категории пользователя, включая удалённые (архивные).</summary>
+    public IReadOnlyList<UserCategory> OwnCategories => _categories;
+
+    /// <summary>Набор категорий пользователя: системные и свои.</summary>
+    public CategorySet Categories => new(_categories);
+
+    /// <summary>
+    /// Заводит свою категорию. С <paramref name="parentKey"/> — подвид категории верхнего уровня (группа берётся у
+    /// родителя). Если категория с таким именем была удалена — возвращает её с прежним ключом, и старые отрезки
+    /// снова считаются вместе с новыми.
+    /// </summary>
+    /// <exception cref="CategoryException">Имя пустое, длинное или занято; нет такого родителя; слишком много категорий.</exception>
+    public UserCategory AddCategory(string name, CategoryGroup group, string? parentKey, DateTime nowUtc)
+    {
+        Utc.Ensure(nowUtc, nameof(nowUtc));
+        var (cleanName, effectiveGroup) = CheckCategory(name, group, parentKey, self: null);
+        if (_categories.Count(c => !c.IsArchived) >= MaxOwnCategories)
+        {
+            throw new CategoryException("name", $"Своих категорий может быть не больше {MaxOwnCategories}.");
+        }
+
+        var wanted = CategorySet.Normalize(cleanName);
+        var archived = _categories.FirstOrDefault(c => c.IsArchived && CategorySet.Normalize(c.Name) == wanted
+            && (parentKey is null || _categories.All(child => child.ParentKey != c.Key)));
+        if (archived is not null)
+        {
+            archived.ArchivedAtUtc = null;
+            archived.Name = cleanName;
+            Place(archived, effectiveGroup, parentKey);
+            return archived;
+        }
+
+        var category = new UserCategory(cleanName, effectiveGroup, parentKey, nowUtc);
+        _categories.Add(category);
+        return category;
+    }
+
+    /// <summary>Меняет имя, группу и родителя своей категории. Ключ остаётся прежним, отрезки не трогаются.</summary>
+    /// <exception cref="CategoryException">Категория системная или её нет; имя или родитель не подходят.</exception>
+    public UserCategory UpdateCategory(string key, string name, CategoryGroup group, string? parentKey)
+    {
+        var category = OwnActive(key);
+        var (cleanName, effectiveGroup) = CheckCategory(name, group, parentKey, category);
+        category.Name = cleanName;
+        Place(category, effectiveGroup, parentKey);
+        return category;
+    }
+
+    /// <summary>
+    /// Удаляет свою категорию вместе с её подвидами: они уходят в архив и пропадают из выбора, блоки шаблона с ними
+    /// остаются без категории. Отрезки ленты не меняются — имя и родитель категории по-прежнему известны.
+    /// Возвращает ключи удалённых категорий (чтобы снять их с занятий).
+    /// </summary>
+    /// <exception cref="CategoryException">Категория системная или её нет.</exception>
+    public IReadOnlyList<string> RemoveCategory(string key, DateTime nowUtc)
+    {
+        Utc.Ensure(nowUtc, nameof(nowUtc));
+        var category = OwnActive(key);
+        var removed = _categories.Where(c => !c.IsArchived && (c == category || c.ParentKey == category.Key)).ToList();
+        foreach (var c in removed)
+        {
+            c.ArchivedAtUtc = nowUtc;
+        }
+
+        var keys = removed.Select(c => c.Key).ToList();
+        foreach (var block in _blocks.Where(b => b.CategoryKey is { } k && keys.Contains(k)))
+        {
+            block.ClearCategory();
+        }
+
+        return keys;
+    }
+
+    private UserCategory OwnActive(string key)
+    {
+        if (CategorySet.IsSystem(key))
+        {
+            throw new CategoryException("key", "Системную категорию нельзя изменить или удалить.");
+        }
+
+        return _categories.FirstOrDefault(c => c.Key == key && !c.IsArchived)
+            ?? throw new CategoryException("key", "Нет такой категории.");
+    }
+
+    /// <summary>Проверяет имя, группу и родителя; возвращает очищенное имя и итоговую группу (у подвида — группа родителя).</summary>
+    private (string Name, CategoryGroup Group) CheckCategory(string name, CategoryGroup group, string? parentKey, UserCategory? self)
+    {
+        var cleanName = name?.Trim() ?? string.Empty;
+        if (cleanName.Length is 0 or > UserCategory.MaxNameLength)
+        {
+            throw new CategoryException("name", $"Название — от 1 до {UserCategory.MaxNameLength} символов.");
+        }
+
+        var set = Categories;
+        if (set.FindByName(cleanName) is { } same && same.Key != self?.Key)
+        {
+            throw new CategoryException("name", $"Категория «{same.Name}» уже есть.");
+        }
+
+        if (parentKey is null)
+        {
+            return Enum.IsDefined(group)
+                ? (cleanName, group)
+                : throw new CategoryException("group", "Нет такой группы категорий.");
+        }
+
+        if (set.FindActive(parentKey) is not { ParentKey: null } parent || parent.Key == self?.Key)
+        {
+            throw new CategoryException("parent", "Подвид можно завести только у категории верхнего уровня.");
+        }
+
+        if (self is not null && _categories.Any(c => !c.IsArchived && c.ParentKey == self.Key))
+        {
+            throw new CategoryException("parent", "У этой категории есть свои подвиды — сначала убери или перенеси их.");
+        }
+
+        return (cleanName, parent.Group);
+    }
+
+    /// <summary>Ставит категорию в группу или под родителя; её подвиды (в том числе удалённые) идут следом.</summary>
+    private void Place(UserCategory category, CategoryGroup group, string? parentKey)
+    {
+        category.Group = group;
+        category.ParentKey = parentKey;
+        foreach (var child in _categories.Where(c => c.ParentKey == category.Key))
+        {
+            child.Group = group;
+
+            // Уровней два: если категория сама стала подвидом, её удалённые подвиды переходят к новому родителю.
+            if (parentKey is not null)
+            {
+                child.ParentKey = parentKey;
+            }
+        }
     }
 
     private static ScheduleBlock? Conflict(List<ScheduleBlock> blocks, ScheduleBlock candidate)

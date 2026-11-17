@@ -93,6 +93,20 @@ public static class ApiEndpoints
             Json(await profile.UpdateBlockAsync(Owner(http), id, await ReadBlockAsync(http, ct), ct)));
         api.MapDelete("/schedule/blocks/{id:guid}", async (Guid id, HttpContext http, ProfileService profile, CancellationToken ct) =>
             Json(await profile.RemoveBlockAsync(Owner(http), id, ct)));
+        api.MapPost("/categories", async (HttpContext http, ProfileService profile, CancellationToken ct) =>
+        {
+            var f = await Fields.ReadAsync(http.Request, ct);
+            var request = new CategoryRequest(f.Str("name"), f.Get<Domain.Categories.CategoryGroup>("group"), f.Str("parent"));
+            return Json(await profile.AddCategoryAsync(Owner(http), request, ct));
+        });
+        api.MapPatch("/categories/{key}", async (string key, HttpContext http, ProfileService profile, CancellationToken ct) =>
+        {
+            var f = await Fields.ReadAsync(http.Request, ct);
+            var patch = new CategoryPatch { Name = f.Str("name"), Group = f.Get<Domain.Categories.CategoryGroup>("group"), Parent = f.OptStr("parent") };
+            return Json(await profile.UpdateCategoryAsync(Owner(http), key, patch, ct));
+        });
+        api.MapDelete("/categories/{key}", async (string key, HttpContext http, ProfileService profile, CancellationToken ct) =>
+            Json(await profile.RemoveCategoryAsync(Owner(http), key, ct)));
         api.MapPost("/onboarding/complete", async (HttpContext http, ProfileService profile, CancellationToken ct) =>
             Json(await profile.CompleteOnboardingAsync(Owner(http), ct)));
 

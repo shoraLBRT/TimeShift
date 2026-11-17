@@ -23,6 +23,9 @@ public sealed record IntentContext
 
     /// <summary>Последний вопрос бота, если пользователь, возможно, отвечает на него.</summary>
     public string? LastBotQuestion { get; init; }
+
+    /// <summary>Набор категорий пользователя: в промпт идут действующие, разбор принимает только их ключи.</summary>
+    public CategorySet Categories { get; init; } = CategorySet.System;
 }
 
 /// <summary>
@@ -37,7 +40,7 @@ public static class IntentPrompt
     {
         ArgumentNullException.ThrowIfNull(context);
         var local = LocalTime.ToLocal(context.NowUtc, context.TimeZone);
-        var builder = new StringBuilder(Contract);
+        var builder = new StringBuilder(Contract.Replace(CategoryList, ListOf(context.Categories), StringComparison.Ordinal));
         builder.AppendLine().AppendLine("## Контекст");
         builder.Append("Сейчас: ").Append(local.ToString("dddd, d MMMM yyyy, HH:mm", Ru))
             .Append(" (").Append(local.DayOfWeek.ToString().ToLowerInvariant()).Append("), часовой пояс ")
@@ -76,9 +79,12 @@ public static class IntentPrompt
         return builder.ToString();
     }
 
-    /// <summary>Категории для поля category.</summary>
-    public static string CategoryList =>
-        string.Join(", ", DefaultCategories.All.Select(c => $"{c.Key} ({c.Name})"));
+    /// <summary>Системные категории для поля category.</summary>
+    public static string CategoryList { get; } = ListOf(CategorySet.System);
+
+    /// <summary>Категории для поля category: «ключ (Имя)», только действующие.</summary>
+    private static string ListOf(CategorySet categories) =>
+        string.Join(", ", categories.Active.Select(c => $"{c.Key} ({c.Name})"));
 
     private static string Contract => $$$$"""
         Ты разбираешь сообщения пользователя бота учёта времени. Пользователь пишет по-русски, как ему удобно:
