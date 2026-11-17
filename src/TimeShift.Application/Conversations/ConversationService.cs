@@ -42,17 +42,9 @@ public sealed partial class ConversationService(
     public async Task<IReadOnlyList<BotReply>> HandleAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
-        if (message.Voice is { } voice)
+        if (message.Voice is not null)
         {
-            // Голос → текст, дальше как обычное сообщение; распознанное показываем, чтобы было видно ошибки.
-            var (text, problem) = await TranscribeAsync(voice, message.VoiceDuration, cancellationToken);
-            if (text is null)
-            {
-                return [BotReply.Plain(problem!)];
-            }
-
-            var handled = await HandleAsync(message with { Text = text, Voice = null }, cancellationToken);
-            return [BotReply.Plain($"🎙 «{text}»"), .. handled];
+            return await HandleVoiceAsync(message, text => HandleAsync(text, cancellationToken), cancellationToken);
         }
 
         var now = clock.UtcNow;
@@ -73,13 +65,34 @@ public sealed partial class ConversationService(
 
     /// <summary>
     /// То же сообщение, но для уже известного пользователя (web-клиент сам находит владельца и идёт мимо чата).
-    /// Голосовые здесь не разбираются — клиент присылает текст или нажатую кнопку.
     /// </summary>
     public async Task<IReadOnlyList<BotReply>> HandleAsync(User user, IncomingMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(message);
+        if (message.Voice is not null)
+        {
+            return await HandleVoiceAsync(message, text => HandleAsync(user, text, cancellationToken), cancellationToken);
+        }
+
         return await HandleKnownAsync(user, message, clock.UtcNow, cancellationToken);
+    }
+
+    /// <summary>
+    /// Голос → текст, дальше как обычное сообщение; распознанное идёт первым ответом, чтобы были видны ошибки
+    /// распознавания. Если распознать не вышло — один ответ с причиной, лента не меняется.
+    /// </summary>
+    private async Task<IReadOnlyList<BotReply>> HandleVoiceAsync(
+        IncomingMessage message, Func<IncomingMessage, Task<IReadOnlyList<BotReply>>> handleText, CancellationToken cancellationToken)
+    {
+        var (text, problem) = await TranscribeAsync(message.Voice!, message.VoiceDuration, cancellationToken);
+        if (text is null)
+        {
+            return [BotReply.Plain(problem!)];
+        }
+
+        var handled = await handleText(message with { Text = text, Voice = null });
+        return [BotReply.Plain($"🎙 «{text}»"), .. handled];
     }
 
     private async Task<IReadOnlyList<BotReply>> HandleKnownAsync(User user, IncomingMessage message, DateTime now, CancellationToken cancellationToken)

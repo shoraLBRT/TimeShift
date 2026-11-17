@@ -40,6 +40,30 @@ internal sealed class FakeWebPushSender : IWebPushSender
     }
 }
 
+/// <summary>Вместо whisper: по умолчанию выключено (как сервер без модели); запоминает присланные записи.</summary>
+internal sealed class FakeSpeech : ISpeechToText
+{
+    public bool Enabled { get; set; }
+
+    public string Text { get; set; } = string.Empty;
+
+    public Exception? Failure { get; set; }
+
+    public List<byte[]> Received { get; } = [];
+
+    public bool IsEnabled => Enabled;
+
+    public TimeSpan MaxDuration { get; set; } = TimeSpan.FromSeconds(120);
+
+    public async Task<string> TranscribeAsync(Stream audio, CancellationToken cancellationToken)
+    {
+        using var copy = new MemoryStream();
+        await audio.CopyToAsync(copy, cancellationToken);
+        Received.Add(copy.ToArray());
+        return Failure is not null ? throw Failure : Text;
+    }
+}
+
 internal sealed record ApiResponse(HttpStatusCode Status, JsonNode? Body, HttpResponseMessage Raw)
 {
     public JsonNode Json => Body ?? throw new InvalidOperationException($"No JSON body ({(int)Status}).");
@@ -84,6 +108,8 @@ internal sealed class TestApp : IAsyncDisposable
                 services.AddSingleton<IClock>(Clock);
                 services.RemoveAll<IWebPushSender>();
                 services.AddSingleton<IWebPushSender>(Push);
+                services.RemoveAll<ISpeechToText>();
+                services.AddSingleton<ISpeechToText>(Speech);
             });
         });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
@@ -92,6 +118,8 @@ internal sealed class TestApp : IAsyncDisposable
     public FakeClock Clock { get; } = new();
 
     public FakeWebPushSender Push { get; } = new();
+
+    public FakeSpeech Speech { get; } = new();
 
     public IServiceProvider Services => _factory.Services;
 
@@ -102,7 +130,11 @@ internal sealed class TestApp : IAsyncDisposable
         HttpMethod method, string path, object? body = null, bool authenticated = true, bool csrf = true, string? cookie = null)
     {
         using var request = new HttpRequestMessage(method, path);
-        if (body is not null)
+        if (body is HttpContent payload)
+        {
+            request.Content = payload;
+        }
+        else if (body is not null)
         {
             var json = body is string text ? text : System.Text.Json.JsonSerializer.Serialize(body, ApiJson.Options);
             request.Content = new StringContent(json, Encoding.UTF8, new MediaTypeHeaderValue("application/json"));
@@ -126,6 +158,14 @@ internal sealed class TestApp : IAsyncDisposable
     public Task<ApiResponse> GetAsync(string path, bool authenticated = true) => SendAsync(HttpMethod.Get, path, null, authenticated);
 
     public Task<ApiResponse> PostAsync(string path, object? body = null) => SendAsync(HttpMethod.Post, path, body ?? new { });
+
+    /// <summary>Тело — запись целиком, как её шлёт PWA.</summary>
+    public Task<ApiResponse> PostAudioAsync(string path, byte[] audio, string contentType = "audio/wav")
+    {
+        var content = new ByteArrayContent(audio);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        return SendAsync(HttpMethod.Post, path, content);
+    }
 
     public Task<ApiResponse> PatchAsync(string path, object body) => SendAsync(HttpMethod.Patch, path, body);
 
