@@ -103,8 +103,12 @@ public static class TimelineBuilder
         {
             if (range.StartUtc <= start && end <= range.EndUtc)
             {
-                // Продление внутри блока шаблона или сна — всегда под вопросом (spec §3.3, последний абзац).
-                var effective = occurrence is null ? status : SegmentStatus.Questionable;
+                // Продление, которое УПЁРЛОСЬ в блок шаблона или сон (блок начался позже занятия), — под вопросом
+                // (spec §3.3, последний абзац). Если занятие начато уже внутри блока («созвон» в разгар работы),
+                // действует обычная норма/предел. Считаем от начала ТЕКУЩЕГО открытого отрезка: занятие, начатое
+                // до блока, прерванное в нём и возобновлённое (Segment.ResumedAt), ведёт себя как начатое внутри.
+                var ranIntoBlock = occurrence is not null && occurrence.Range.StartUtc > open!.StartUtc;
+                var effective = ranIntoBlock ? SegmentStatus.Questionable : status;
                 return new TimelinePiece(
                     start, end, open!.Title, open.ActivityId, open.CategoryKey, effective, SegmentSource.Extension, isFuture);
             }

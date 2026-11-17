@@ -299,3 +299,11 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   TTL: 1 h for pings (a stale «what are you doing?» is useless), 3 h for the evening review, 5 min for the test;
   urgency high; 404/410 delete the subscription.
 
+## Activity inside a template block (#54)
+
+- **A block makes the extension questionable only when the extension runs into it** (the block starts after the
+  open activity started), as spec §3.3 says. An activity named inside a block («созвон» at 14:35 during work) uses
+  the usual norm and maximum from its first minute.
+- **"Started" means the start of the current open segment.** An activity that began before the block, was
+  interrupted inside it and resumed there (`Segment.ResumedAt`) behaves like one started inside the block.
+
