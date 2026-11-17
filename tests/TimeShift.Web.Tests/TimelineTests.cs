@@ -269,6 +269,29 @@ public class TimelineTests
     }
 
     [Fact]
+    public async Task Moving_one_edge_of_an_entry_displaces_the_neighbour_and_undo_returns_both()
+    {
+        await using var app = new TestApp();
+        await app.OnboardAsync();
+        await app.PostAsync("/api/entries", new { start = app.Local(9, 0), end = app.Local(10, 0), title = "Тренировка" });
+        var added = await app.PostAsync("/api/entries", new { start = app.Local(10, 0), end = app.Local(11, 0), title = "Чтение" });
+        var id = PieceTitled(added.Json["day"]!, "Чтение")!["segment"]!["id"]!.GetValue<string>();
+
+        // What dragging a boundary on the timeline sends: the moved edge alone.
+        var moved = await app.PatchAsync($"/api/entries/{id}", new { start = app.Local(9, 40) });
+        Assert.Equal(HttpStatusCode.OK, moved.Status);
+        var reading = PieceTitled(moved.Json["day"]!, "Чтение")!;
+        Assert.Equal(580, reading["startMin"]!.GetValue<int>());
+        Assert.Equal(660, reading["endMin"]!.GetValue<int>());
+        Assert.Equal(580, PieceTitled(moved.Json["day"]!, "Тренировка")!["endMin"]!.GetValue<int>());
+
+        var undone = await app.PostAsync("/api/undo");
+        Assert.Equal("undone", undone.Json["result"]!.GetValue<string>());
+        Assert.Equal(600, PieceTitled(undone.Json["day"]!, "Чтение")!["startMin"]!.GetValue<int>());
+        Assert.Equal(600, PieceTitled(undone.Json["day"]!, "Тренировка")!["endMin"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Quiet_sets_and_clears_quiet_hours()
     {
         await using var app = new TestApp();

@@ -3,6 +3,7 @@
 import { layoutDay, describePiece, initialScrollTop } from '/core/timeline.js';
 import { h, reconcile, setText, setData } from '/core/dom.js';
 import * as T from '/core/time.js';
+import { timelineDrag } from '/core/drag.js';
 
 export const HOUR = 72;                 // px per hour
 export const HEAD_EXT = 34;             // the «Сегодня» band under the header on other days (px)
@@ -296,6 +297,12 @@ export function createThread(app, flows, { scroller, track, head, onOpened }) {
     const hit = e.target.closest('.c-hit, .c-par-hit');
     const b = hit?.parentElement.__b;
     if (b) flows.openPiece(b.piece, { parallel: hit.classList.contains('c-par-hit') });
+  });
+
+  // Long press: handles on a stored entry's edges, or a new entry dragged out over unrecorded time (core/drag.js).
+  timelineDrag(app, flows, {
+    scroller, surface: track, layout: () => L, ignore: '.c-confirm, .c-par',
+    insets: () => ({ top: head.offsetHeight, bottom: document.getElementById('island')?.offsetHeight ?? 0 }),
   });
 
   return { render };

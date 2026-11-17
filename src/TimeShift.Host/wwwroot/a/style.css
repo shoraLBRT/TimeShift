@@ -956,3 +956,19 @@ html[data-theme="dark"] .ts-toast[data-kind="error"] .ts-toast-message::before {
   .a-menu { transform: none; transition: opacity 120ms linear; }
   .ts-progress::before, .ts-switch-input::after, .ts-option::after, .a-ring-o::after { transition-duration: 1ms; }
 }
+
+/* --- dragging boundaries on the timeline (core/drag.js) --- */
+.ts-drag { left: 68px; right: var(--gutter); border: 1.5px solid var(--ink); border-radius: 2px 7px 7px 2px; background: var(--press); }
+.ts-drag[data-mode="new"] { border-style: dashed; border-color: var(--ribbon); background: var(--hatch); }
+.ts-drag-handle::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); transition: transform 140ms var(--ease);
+}
+.ts-drag[data-edge="start"] .ts-drag-handle[data-edge="start"]::before,
+.ts-drag[data-edge="end"] .ts-drag-handle[data-edge="end"]::before { background: var(--ink); transform: scale(1.25); }
+.ts-drag-time {
+  padding: 5px 11px; border-radius: 9px; background: var(--ink); color: var(--paper); box-shadow: var(--shadow-pop);
+  font: 400 19px/24px var(--serif); font-variant-numeric: lining-nums tabular-nums;
+}
+.ts-drag-duration { font: 400 12px/16px var(--sans); opacity: .72; }
+@media (prefers-reduced-motion: reduce) { .ts-drag-handle::before { transition: none; } }

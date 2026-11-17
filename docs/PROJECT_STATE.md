@@ -53,6 +53,11 @@ Two tracks, order in `docs/ROADMAP.md`:
   with `MediaRecorder` and re-encodes on the device to WAV 16 kHz mono; `core/panels/mic.js` is the button, styled
   in each design. The button exists only when `/api/meta` says `speech: true` (a model on the server) and the
   browser can record. The demo has it and "hears" a fixed phrase; `?demo=1&speech=0` shows the composer without it.
+- **Dragging on the timeline (#51, code complete, not yet tried with a finger):** `core/drag.js`, one call per
+  design. Long press a stored entry → handles on its edges; dragging one moves that boundary in steps of the
+  rounding setting, with the time above the finger, and saves it on release (`PATCH /api/entries/{id}` — the
+  server displaces the neighbours, the toast's «Отменить» returns the previous bounds). Long press unrecorded
+  time and drag → the entry sheet opens for that interval. Works in all three designs; no API change.
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -71,7 +76,8 @@ the maintainer to choose and pay for the VPS. (#2 waits for the LLM key; voice n
 
 PWA: check on a real phone over HTTPS (#45) — that now includes the one open item of #50: say a 10–30 s phrase
 on an iPhone and on Android against a server with a whisper model (`Speech:ModelPath` or `Speech:AutoDownload`;
-the microphone needs HTTPS). Then #51 (drag the edges of an entry).
+the microphone needs HTTPS) and of #51: long press and drag on the timeline with a finger, in each design,
+watching that it does not fight scrolling. Then #52 (user-defined categories).
 
 ## Open questions
 
@@ -86,6 +92,11 @@ the microphone needs HTTPS). Then #51 (drag the edges of an entry).
   `GET /api/summary`.
 - Not verified on a real device: the service worker, push delivery and "Add to Home Screen" (need HTTPS and a
   phone); motion smoothness of the three designs was checked by state, not watched on an iPhone.
+- Dragging on the timeline (#51) was run in Chromium with pointer and touch events dispatched from script, never
+  with a finger. To watch on the phones: that a slow scroll does not turn into a long press, that the page stays
+  still once the handles or the new interval appear (iOS Safari is the risky one — it relies on the non-passive
+  `touchmove` listener), that the system text-selection / context menu does not show up, and whether the 44 px
+  handles are easy to hit. iOS has no vibration API, so the "tick" per step exists on Android only.
 - Voice (#50) has never met a real microphone or a real model: no whisper model is configured on the development
   machine, so recognition itself was not run; the browser part was run in Chromium with a synthetic microphone
   (recording → WAV 16 kHz mono → request), the server part with a fake recogniser and synthetic WAV files. Safari
@@ -97,8 +108,8 @@ the microphone needs HTTPS). Then #51 (drag the edges of an entry).
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 337 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 337, 0 skipped (README)
+dotnet test           # all green: 338 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 338, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone
