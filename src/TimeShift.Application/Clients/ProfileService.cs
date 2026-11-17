@@ -104,9 +104,12 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock, Trackin
     }
 
     /// <summary>Нет такой категории — 404, системная — 409, остальное — ошибка поля.</summary>
-    private static ClientException Translate(CategoryException e) => e.Field != "key"
-        ? ClientException.Invalid(e.Field, e.Message)
-        : e.Message.StartsWith("Нет", StringComparison.Ordinal) ? ClientException.NotFound(e.Message) : ClientException.Conflict(e.Message);
+    private static ClientException Translate(CategoryException e) => e.Field switch
+    {
+        CategoryException.UnknownKey => ClientException.NotFound(e.Message),
+        CategoryException.SystemKey => ClientException.Conflict(e.Message),
+        _ => ClientException.Invalid(e.Field, e.Message),
+    };
 
     public async Task<MeModel> UpdateSettingsAsync(User user, SettingsPatch patch, CancellationToken cancellationToken)
     {

@@ -587,6 +587,20 @@ export function createApp(opts = {}) {
     deleteBlock(id) {
       return meMutation(() => api.deleteBlock(id), (me) => ({ ...me, blocks: me.blocks.filter((b) => b.id !== id) }), { refreshDay: state.phase === 'ready' });
     },
+    // ----- own categories (the server returns the whole Me; deleted ones stay in it as archived) -----
+    addCategory(category, o = {}) {
+      return meMutation(() => api.addCategory(category), null, { inlineErrors: o.inlineErrors });
+    },
+    updateCategory(key, patch, o = {}) {
+      return meMutation(() => api.updateCategory(key, patch), null, { inlineErrors: o.inlineErrors });
+    },
+    /** Old entries keep the category; activities and template blocks that had it lose it, so both are re-read. */
+    deleteCategory(key) {
+      return meMutation(() => api.deleteCategory(key), null, { refreshDay: state.phase === 'ready' }).then((r) => {
+        if (r.ok) refreshActivities();
+        return r;
+      });
+    },
     async updateActivity(id, patch) {
       const prev = state.activities;
       set({ activities: prev.map((a) => (a.id === id ? { ...a, ...patch } : a)) });

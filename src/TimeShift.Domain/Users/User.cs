@@ -264,11 +264,11 @@ public class User
     {
         if (CategorySet.IsSystem(key))
         {
-            throw new CategoryException("key", "Системную категорию нельзя изменить или удалить.");
+            throw new CategoryException(CategoryException.SystemKey, "Системную категорию нельзя изменить или удалить.");
         }
 
         return _categories.FirstOrDefault(c => c.Key == key && !c.IsArchived)
-            ?? throw new CategoryException("key", "Нет такой категории.");
+            ?? throw new CategoryException(CategoryException.UnknownKey, "Нет такой категории.");
     }
 
     /// <summary>Проверяет имя, группу и родителя; возвращает очищенное имя и итоговую группу (у подвида — группа родителя).</summary>

@@ -84,7 +84,9 @@ export function weekdayChips(days, onChange) {
  * @param {object} me
  * @param {string|null} value
  * @param {(key: string|null) => void} onChange
- * @param {{ noneLabel?: string }} [o] noneLabel adds a first chip for "no explicit category" (null)
+ * @param {{ noneLabel?: string, caption?: string, filter?: (c: { key, name, parent, depth, system }) => boolean }} [o]
+ *   noneLabel adds a first chip for "no explicit category" (null); filter narrows the offered categories
+ *   (the settings use it to offer only top-level ones as a parent)
  */
 export function categoryPicker(me, value, onChange, o = {}) {
   let current = value ?? null;
@@ -97,7 +99,10 @@ export function categoryPicker(me, value, onChange, o = {}) {
     chips.push([key, c]);
     return c;
   };
-  const groups = categoriesByGroup(me).map((g) => h('div', { class: 'ts-category-group', dataset: { group: g.group }, role: 'group', 'aria-label': g.name },
+  const offered = categoriesByGroup(me)
+    .map((g) => ({ ...g, categories: o.filter ? g.categories.filter(o.filter) : g.categories }))
+    .filter((g) => g.categories.length);
+  const groups = offered.map((g) => h('div', { class: 'ts-category-group', dataset: { group: g.group }, role: 'group', 'aria-label': g.name },
     h('span', { class: 'ts-category-group-name' }, g.name),
     h('div', { class: 'ts-chips' }, g.categories.map((c) => mk(c.key, c.name, { group: g.group, depth: c.depth })))));
   const el = h('details', { class: 'ts-category-picker' }, summary,

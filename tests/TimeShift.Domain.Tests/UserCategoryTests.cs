@@ -129,9 +129,9 @@ public class UserCategoryTests
     {
         var user = NewUser();
 
-        Assert.Equal("key", Assert.Throws<CategoryException>(() => user.UpdateCategory("work", "Труд", CategoryGroup.Useful, null)).Field);
-        Assert.Equal("key", Assert.Throws<CategoryException>(() => user.RemoveCategory("work", Now)).Field);
-        Assert.Equal("key", Assert.Throws<CategoryException>(() => user.RemoveCategory("u.nope", Now)).Field);
+        Assert.Equal(CategoryException.SystemKey, Assert.Throws<CategoryException>(() => user.UpdateCategory("work", "Труд", CategoryGroup.Useful, null)).Field);
+        Assert.Equal(CategoryException.SystemKey, Assert.Throws<CategoryException>(() => user.RemoveCategory("work", Now)).Field);
+        Assert.Equal(CategoryException.UnknownKey, Assert.Throws<CategoryException>(() => user.RemoveCategory("u.nope", Now)).Field);
     }
 
     [Fact]

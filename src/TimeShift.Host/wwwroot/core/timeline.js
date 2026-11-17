@@ -20,26 +20,28 @@ export const SOURCE_LABELS = {
 };
 export const UNKNOWN_TITLE = 'Не записано';
 
-/** Category key → { key, name, group, parent, parentName }. Unknown or null → group 'none'. */
+/** Category key → { key, name, group, parent, parentName, system, archived }. Unknown or null → group 'none'.
+ *  A deleted (archived) own category still resolves here, so old entries keep their name and colour. */
 export function categoryInfo(key, me) {
-  if (!key) return { key: null, name: 'Без категории', group: 'none', parent: null, parentName: null };
+  if (!key) return { key: null, name: 'Без категории', group: 'none', parent: null, parentName: null, system: true, archived: false };
   const list = me?.categories ?? [];
   const c = list.find((x) => x.key === key);
-  if (!c) return { key, name: key, group: 'none', parent: null, parentName: null };
+  if (!c) return { key, name: key, group: 'none', parent: null, parentName: null, system: false, archived: false };
   const parent = c.parent ? list.find((x) => x.key === c.parent) : null;
-  return { key: c.key, name: c.name, group: c.group ?? 'none', parent: c.parent ?? null, parentName: parent?.name ?? null };
+  return { key: c.key, name: c.name, group: c.group ?? 'none', parent: c.parent ?? null, parentName: parent?.name ?? null, system: c.system !== false, archived: !!c.archived };
 }
 
-/** Categories grouped for a picker: [{ group, name, categories: [{ key, name, parent, depth }] }]. */
+/** Categories that can be chosen, grouped for a picker: [{ group, name, categories: [{ key, name, parent, depth, system }] }].
+ *  Deleted (archived) own categories are left out. */
 export function categoriesByGroup(me) {
-  const list = me?.categories ?? [];
+  const list = (me?.categories ?? []).filter((c) => !c.archived);
   return GROUPS.filter((g) => g.key !== 'none')
     .map((g) => {
       const top = list.filter((c) => c.group === g.key && !c.parent);
       const categories = [];
       for (const c of top) {
-        categories.push({ key: c.key, name: c.name, parent: null, depth: 0 });
-        for (const ch of list.filter((x) => x.parent === c.key)) categories.push({ key: ch.key, name: ch.name, parent: c.key, depth: 1 });
+        categories.push({ key: c.key, name: c.name, parent: null, depth: 0, system: c.system !== false });
+        for (const ch of list.filter((x) => x.parent === c.key)) categories.push({ key: ch.key, name: ch.name, parent: c.key, depth: 1, system: ch.system !== false });
       }
       return { group: g.key, name: g.name, categories };
     })

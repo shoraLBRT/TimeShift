@@ -155,6 +155,9 @@ public class CategoryTests
         Assert.True(Category(removed.Json, "Гитара")["archived"]!.GetValue<bool>());
         Assert.Equal(key, Category(removed.Json, "Гитара")["parent"]!.GetValue<string>());
         Assert.Null(removed.Json["blocks"]![0]!["category"]);
+        var reread = (await app.GetAsync("/api/me")).Json;
+        Assert.Equal(removed.Json["categories"]!.ToJsonString(), reread["categories"]!.ToJsonString());
+        Assert.Null(reread["blocks"]![0]!["category"]);
 
         // Старые записи не изменились: те же куски, та же категория, те же итоги.
         var after = (await app.GetAsync("/api/day/2026-11-17")).Json;

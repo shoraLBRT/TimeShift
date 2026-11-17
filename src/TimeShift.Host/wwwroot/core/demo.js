@@ -4,6 +4,7 @@
 import { ApiError } from './api.js';
 import * as T from './time.js';
 
+/** The system set; own categories are added per user (`system: false`) and are archived instead of deleted. */
 export const DEFAULT_CATEGORIES = [
   { key: 'work', name: 'Работа', group: 'useful', parent: null },
   { key: 'study', name: 'Учёба', group: 'useful', parent: null },
@@ -21,7 +22,9 @@ export const DEFAULT_CATEGORIES = [
   { key: 'wasted.multiplayer', name: 'Мультиплеер-игры', group: 'lost', parent: 'wasted' },
   { key: 'wasted.lying', name: 'Валялся', group: 'lost', parent: 'wasted' },
   { key: 'wasted.other', name: 'Прочее', group: 'lost', parent: 'wasted' },
-];
+].map((c) => ({ ...c, system: true, archived: false }));
+const CATEGORY_GROUPS = ['useful', 'necessary', 'people', 'rest', 'lost'];
+const MAX_OWN_CATEGORIES = 50;
 
 const SEED_ACTIVITIES = [
   ['Утро', 'household', 40], ['Дорога', 'commute', 40], ['Обед', 'household', 40], ['Тренировка', 'sport', 60],
@@ -81,7 +84,7 @@ export function createDemoApi(opts = {}) {
       limits: { pingIntervalMin: { min: 5, max: 240 }, maxUnansweredPings: { min: 1, max: 10 }, eveningReviewOffsetMin: { min: 0, max: 180 }, roundingMin: [1, 5, 10, 15] },
       sleep: opts.fresh ? null : { start: '00:30', end: '08:30', weekend: null },
       blocks: opts.fresh ? [] : [{ id: 'b1', kind: 'fixed', title: 'Работа', category: 'work', days: [1, 2, 3, 4, 5], start: '10:00', end: '19:00' }],
-      categories: DEFAULT_CATEGORIES,
+      categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     },
     acts: [],
     segs: [], // { id, start, end|null, title, activityId, category, status, source, parallel, confirmedUntil }
@@ -461,6 +464,40 @@ export function createDemoApi(opts = {}) {
 
   // ---------- transport ----------
   const [lo, hi] = opts.latency ?? [80, 200];
+  // ----- own categories: the same rules as User.AddCategory / UpdateCategory / RemoveCategory on the server -----
+  const normName = (s) => String(s ?? '').trim().toLowerCase().replaceAll('ё', 'е');
+  function ownCategory(key) {
+    const c = db.me.categories.find((x) => x.key === key);
+    if (c?.system) throw err(409, 'conflict', 'Системную категорию нельзя изменить или удалить.');
+    if (!c || c.archived) throw err(404, 'not_found', 'Нет такой категории.');
+    return c;
+  }
+  function checkCategory(body, self) {
+    const name = String(body.name ?? '').trim();
+    if (!name || name.length > 40) throw err(422, 'validation', 'Название — от 1 до 40 символов.', 'name');
+    const same = db.me.categories.find((x) => !x.archived && x !== self && normName(x.name) === normName(name));
+    if (same) throw err(422, 'validation', `Категория «${same.name}» уже есть.`, 'name');
+    if (body.parent == null) {
+      if (body.group == null) throw err(422, 'validation', 'Нужна группа или родительская категория.', 'group');
+      if (!CATEGORY_GROUPS.includes(body.group)) throw err(400, 'bad_request', 'Нет такой группы категорий.');
+      return { name, group: body.group, parent: null };
+    }
+    const parent = db.me.categories.find((x) => x.key === body.parent && !x.archived && !x.parent);
+    if (!parent || parent === self) throw err(422, 'validation', 'Подвид можно завести только у категории верхнего уровня.', 'parent');
+    if (self && db.me.categories.some((x) => !x.archived && x.parent === self.key)) throw err(422, 'validation', 'У этой категории есть свои подвиды — сначала убери или перенеси их.', 'parent');
+    return { name, group: parent.group, parent: parent.key };
+  }
+  /** Puts a category into a group or under a parent; its subcategories (deleted ones too) follow. */
+  function placeCategory(c, group, parent) {
+    c.group = group;
+    c.parent = parent;
+    for (const ch of db.me.categories) {
+      if (ch.parent !== c.key) continue;
+      ch.group = group;
+      if (parent) ch.parent = parent;
+    }
+  }
+
   async function call(fn, { anonymous = false } = {}) {
     await wait(lo + Math.random() * (hi - lo));
     if (!anonymous && !db.authed) { opts.onUnauthorized?.(); throw err(401, 'unauthorized', 'Нужно войти заново.'); }
@@ -527,6 +564,32 @@ export function createDemoApi(opts = {}) {
     deleteBlock: (bid) => call(() => {
       if (!db.me.blocks.some((x) => x.id === bid)) throw err(404, 'not_found', 'Такого блока нет.');
       db.me.blocks = db.me.blocks.filter((x) => x.id !== bid);
+      return meOut();
+    }),
+    addCategory: (body) => call(() => {
+      const c = checkCategory(body ?? {}, null);
+      if (db.me.categories.filter((x) => !x.system && !x.archived).length >= MAX_OWN_CATEGORIES) throw err(422, 'validation', `Своих категорий может быть не больше ${MAX_OWN_CATEGORIES}.`, 'name');
+      // The same name again brings a deleted category back with its key, so old and new entries count together.
+      const old = db.me.categories.find((x) => x.archived && normName(x.name) === normName(c.name) && (!c.parent || !db.me.categories.some((ch) => ch.parent === x.key)));
+      if (old) { old.archived = false; old.name = c.name; placeCategory(old, c.group, c.parent); }
+      else db.me.categories.push({ key: `u.${id('c')}`, name: c.name, group: c.group, parent: c.parent, system: false, archived: false });
+      return meOut();
+    }),
+    updateCategory: (key, patch) => call(() => {
+      const cur = ownCategory(key);
+      const c = checkCategory({ name: patch.name ?? cur.name, group: patch.group ?? cur.group, parent: 'parent' in patch ? patch.parent : cur.parent }, cur);
+      cur.name = c.name;
+      placeCategory(cur, c.group, c.parent);
+      return meOut();
+    }),
+    deleteCategory: (key) => call(() => {
+      const cur = ownCategory(key);
+      const gone = db.me.categories.filter((x) => !x.archived && (x === cur || x.parent === cur.key));
+      for (const x of gone) x.archived = true;
+      const keys = new Set(gone.map((x) => x.key));
+      // Stored entries keep the category; activities and template blocks lose it.
+      for (const a of db.acts) if (keys.has(a.category)) a.category = null;
+      db.me.blocks = db.me.blocks.map((b) => (keys.has(b.category) ? { ...b, category: null } : b));
       return meOut();
     }),
     completeOnboarding: () => call(() => {

@@ -52,8 +52,15 @@ public sealed class UserCategory
     public Category ToCategory() => new(Key, Name, Group, ParentKey);
 }
 
-/// <summary>Правка набора категорий нарушает правило. <see cref="Field"/> — что не так: <c>name</c>, <c>group</c>, <c>parent</c> или <c>key</c>.</summary>
+/// <summary>
+/// Правка набора категорий нарушает правило. <see cref="Field"/> — что не так: <c>name</c>, <c>group</c>,
+/// <c>parent</c>; <see cref="UnknownKey"/> — такой своей категории нет; <see cref="SystemKey"/> — категория системная.
+/// </summary>
 public sealed class CategoryException(string field, string message) : Exception(message)
 {
+    public const string UnknownKey = "key";
+
+    public const string SystemKey = "system";
+
     public string Field { get; } = field;
 }
