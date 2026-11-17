@@ -173,7 +173,8 @@ export function createDemoApi(opts = {}) {
           if (t < run.confirmedUntil) return { key: `r${run.id}c`, title: run.title, category: run.category, status: 'confirmed', source: 'user', seg: run, open: true, activityId: run.activityId };
           const el = (t - run.start) / MIN;
           if (el < maxMin) {
-            const status = o || el >= normMin ? 'questionable' : 'assumed';
+            // Questionable when over the norm, or when it ran into a block / sleep that began after the activity (#54).
+            const status = (o && o.s > run.start) || el >= normMin ? 'questionable' : 'assumed';
             return { key: `r${run.id}${status}`, title: run.title, category: run.category, status, source: 'extension', seg: run, open: true, activityId: run.activityId };
           }
         }

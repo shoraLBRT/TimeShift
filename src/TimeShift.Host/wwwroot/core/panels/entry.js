@@ -21,7 +21,7 @@ export function entryPanel(app, opts = {}) {
   const d = piece ? describePiece(piece, me, { parallel: opts.parallel }) : null;
   const step = me?.settings?.roundingMin ?? 5;
   const tz = me?.timeZone ?? T.deviceTimeZone();
-  const date = day?.date ?? s.viewDate ?? s.today;
+  const date = day?.date ?? s.viewDate ?? s.today ?? T.todayIn(tz, app.nowMs()); // never null (rangeControl needs it)
   const nowDayMin = day?.nowMin ?? (date < s.today ? day?.dayMinutes ?? 1440 : 0);
 
   // Initial values.

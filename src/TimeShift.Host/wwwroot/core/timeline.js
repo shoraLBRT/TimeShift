@@ -52,7 +52,10 @@ export const pieceKind = (p) => (p.future ? 'future' : p.status);
 /** Stable key for keyed rendering and animations. */
 export function pieceKey(p, prefix = 'm') {
   if (p.segment?.id) return `${prefix}:s:${p.segment.id}:${p.future ? 'f' : 'p'}`;
-  return `${prefix}:c:${p.source}:${p.category ?? ''}:${p.title}:${p.startMin}:${p.future ? 'f' : 'p'}`;
+  // Only "now" moves: a past piece grows at its end, a future piece shrinks at its start — key by the fixed edge.
+  return p.future
+    ? `${prefix}:c:${p.source}:${p.category ?? ''}:${p.title}:e${p.endMin}:f`
+    : `${prefix}:c:${p.source}:${p.category ?? ''}:${p.title}:${p.startMin}:p`;
 }
 
 /**
@@ -130,7 +133,8 @@ export function layoutDay(day, opts = {}) {
 
   // Parallel track: greedy lanes for overlapping parallel entries.
   const laneEnds = [];
-  const parallel = (day?.parallel ?? []).slice().sort((a, b) => a.startMin - b.startMin).map((p, i) => {
+  // index stays the position in day.parallel (the list is laid out in start order).
+  const parallel = (day?.parallel ?? []).map((p, i) => ({ p, i })).sort((a, b) => a.p.startMin - b.p.startMin).map(({ p, i }) => {
     let lane = laneEnds.findIndex((end) => end <= p.startMin);
     if (lane < 0) { lane = laneEnds.length; laneEnds.push(0); }
     laneEnds[lane] = p.endMin;
@@ -377,7 +381,11 @@ export function rangeSummary(summary, me) {
   if (!summary) return null;
   const days = summary.days.map((d) => {
     const t = summarizeTotals(d.totals, me, MINUTES_PER_DAY);
-    return { date: d.date, minutes: t.minutes, groups: t.groups, categories: t.categories, status: summarizeStatus(d.status), parallelMin: d.parallelMin };
+    const status = summarizeStatus(d.status);
+    const confirmedShare = status.minutes ? (d.status?.confirmedMin ?? 0) / status.minutes : 0;
+    // confirmedShare / confirmedText: how much of the day's past is confirmed — the meaningful per-day figure.
+    return { date: d.date, minutes: t.minutes, groups: t.groups, categories: t.categories, status, parallelMin: d.parallelMin,
+      confirmedShare, confirmedText: `${Math.round(confirmedShare * 100)}%` };
   });
   const maxMinutes = Math.max(1, ...days.map((d) => d.minutes));
   const status = summarizeStatus(summary.status);

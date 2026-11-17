@@ -54,7 +54,7 @@ export function blockList(app, o = {}) {
  * Block form. New block: presets + «Добавить». Existing block: every change saves at once, plus «Удалить блок».
  * <form class="ts-block-form" data-mode="new|edit">
  */
-export function blockForm(app, { block = null, onSaved, onDeleted } = {}) {
+export function blockForm(app, { block = null, onSaved, onDeleted, submitVariant = 'primary' } = {}) {
   const editing = !!block;
   let draft = { ...(block ?? BLOCK_PRESETS[0].block) };
   const title = textInput({ value: draft.title, placeholder: 'Например, «Работа»', enterkeyhint: 'done' });
@@ -67,7 +67,7 @@ export function blockForm(app, { block = null, onSaved, onDeleted } = {}) {
   const error = h('p', { class: 'ts-field-error', role: 'alert', hidden: true });
   const presetChips = editing ? null : h('div', { class: 'ts-chips', dataset: { kind: 'preset' }, role: 'group', 'aria-label': 'Шаблон' },
     BLOCK_PRESETS.map((p) => chip(p.label, { pressed: p.key === 'work', data: { preset: p.key }, onClick: () => applyPreset(p) })));
-  const submit = editing ? null : button('Добавить', { variant: 'primary', type: 'submit', action: 'add' });
+  const submit = editing ? null : button('Добавить', { variant: submitVariant, type: 'submit', action: 'add' });
   const del = editing ? button('Удалить блок', { variant: 'danger', action: 'delete', onClick: async () => { const r = await app.actions.deleteBlock(block.id); if (r.ok) onDeleted?.(); } }) : null;
   const form = h('form', { class: 'ts-block-form', dataset: { mode: editing ? 'edit' : 'new' }, novalidate: true },
     presetChips, titleField.el, h('div', { class: 'ts-field' }, h('span', { class: 'ts-field-label' }, 'Дни'), days.el),

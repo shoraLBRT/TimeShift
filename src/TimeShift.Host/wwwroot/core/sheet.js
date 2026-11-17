@@ -58,6 +58,7 @@ export function openSheet(opts) {
   const s = {
     el, backdrop, body, dismissible, closing: false, hist: false, prevFocus: document.activeElement, opts, panel,
     handle: null,
+    subs: [], // in-sheet history steps: [{ index, onBack }]
   };
   const closed = new Promise((r) => { resolveClosed = r; });
   s.handle = {
@@ -69,6 +70,25 @@ export function openSheet(opts) {
       if (text) { el.setAttribute('aria-labelledby', titleId); el.removeAttribute('aria-label'); }
     },
     close: (reason = 'program') => closeSheet(s, reason),
+    /**
+     * Make the system back action undo one step inside this sheet (e.g. a settings sub-page) instead of closing it.
+     * onBack runs when the user goes back; call release() when the step is undone from the UI instead.
+     * Without history (iframe, non-dismissible sheet) it does nothing and release() is a no-op.
+     */
+    pushHistoryEntry(onBack) {
+      if (!s.hist || s.closing || pendingBack || stack.at(-1) !== s) return { release() {} };
+      histDepth += 1;
+      const sub = { index: histDepth, onBack };
+      s.subs.push(sub);
+      history.pushState({ ...(history.state ?? {}), tsSheet: histDepth }, '');
+      return {
+        release() {
+          if (s.closing || s.subs.at(-1) !== sub) { const i = s.subs.indexOf(sub); if (i >= 0 && !s.closing) s.subs.splice(i, 1); return; }
+          s.subs.pop();
+          popHistory(1);
+        },
+      };
+    },
   };
   s.finish = (reason) => resolveClosed(reason);
 
@@ -107,7 +127,10 @@ function closeSheet(s, reason, { fromHistory = false, velocity = 0, from = null 
   const above = stack.slice(stack.indexOf(s) + 1).filter((x) => !x.closing);
   for (const x of above.reverse()) closeSheet(x, 'parent', { fromHistory: true });
   s.closing = true;
-  if (s.hist && !fromHistory) popHistory(1 + above.filter((x) => x.hist).length);
+  const entries = (x) => (x.hist ? 1 + x.subs.length : 0);
+  if (s.hist && !fromHistory) popHistory(entries(s) + above.reduce((n, x) => n + entries(x), 0));
+  s.subs.length = 0;
+  for (const x of above) x.subs.length = 0;
   const { el, backdrop } = s;
   const full = durationMs(el);
   if (from != null && velocity > 0) {
@@ -197,9 +220,22 @@ window.addEventListener('popstate', (e) => {
     return;
   }
   const depth = e.state?.tsSheet ?? 0;
-  const toClose = stack.filter((s) => s.hist && !s.closing && s.histIndex > depth);
+  // Undo, from the top, every sheet and every in-sheet step (pushHistoryEntry) above the new history position.
+  const items = [];
+  for (const s of stack) {
+    if (!s.hist || s.closing) continue;
+    if (s.histIndex > depth) items.push({ index: s.histIndex, sheet: s });
+    for (const sub of s.subs) if (sub.index > depth) items.push({ index: sub.index, sheet: s, sub });
+  }
   histDepth = Math.min(histDepth, depth);
-  for (const s of toClose.reverse()) closeSheet(s, 'back', { fromHistory: true });
+  items.sort((a, b) => b.index - a.index);
+  for (const it of items) {
+    if (it.sheet.closing) continue;
+    if (it.sub) {
+      it.sheet.subs.splice(it.sheet.subs.indexOf(it.sub), 1);
+      try { it.sub.onBack(); } catch (err) { console.error(err); }
+    } else closeSheet(it.sheet, 'back', { fromHistory: true });
+  }
 });
 
 // ---------- keyboard: Escape, Tab trap ----------

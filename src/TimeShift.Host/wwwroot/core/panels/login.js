@@ -3,7 +3,7 @@ import { h, setText } from '../dom.js';
 import { button, field } from './common.js';
 
 export function loginPanel(app) {
-  const input = h('input', { type: 'password', class: 'ts-input', name: 'key', autocomplete: 'current-password', required: true, enterkeyhint: 'go', autocapitalize: 'off', spellcheck: 'false' });
+  const input = h('input', { type: 'password', class: 'ts-input', name: 'key', autocomplete: 'current-password', placeholder: 'Ключ доступа', required: true, enterkeyhint: 'go', autocapitalize: 'off', spellcheck: 'false' });
   const f = field('Ключ доступа', input, { hint: 'Его задают в настройках сервера (Web:AccessKey). Вводится один раз на устройстве.' });
   const submit = button('Войти', { variant: 'primary', type: 'submit', action: 'login' });
   const status = h('p', { class: 'ts-login-status', 'aria-live': 'polite' });

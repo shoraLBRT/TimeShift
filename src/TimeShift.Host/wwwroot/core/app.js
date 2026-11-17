@@ -696,6 +696,12 @@ export function createApp(opts = {}) {
     start,
     actions,
     nowMs,
+    /** The cached (or prefetched) day for a date, projected to "now" for today; null when not cached. Never fetches. */
+    peekDay(date) {
+      const raw = cache.get(date)?.day ?? null;
+      if (!raw) return null;
+      return date === state.today ? advanceDay(raw, nowMinFor(raw)) : raw;
+    },
     api,
   };
   return app;

@@ -51,7 +51,10 @@ export function createFlows(app, opts = {}) {
     /** "What are you doing?" — { ping: true } when answering a notification. */
     openSwitcher({ ping = false } = {}) { return open('switcher', (o) => switcherPanel(app, { ...o, ping })); },
     /** New past entry; draft = { startMin, endMin, title?, category?, parallel? } on the viewed day. */
-    openAdd(draft) { return open('entry', (o) => entryPanel(app, { ...o, draft })); },
+    openAdd(draft) {
+      if (app.state.phase !== 'ready') return null;
+      return open('entry', (o) => entryPanel(app, { ...o, draft }));
+    },
     openEntry(piece, o2 = {}) { return open('entry', (o) => entryPanel(app, { ...o, piece, ...o2 })); },
     openGap(piece) { return open('gap', (o) => gapPanel(app, { ...o, piece })); },
     openAssistant(text) { return open('assistant', (o) => assistantPanel(app, { ...o, text })); },

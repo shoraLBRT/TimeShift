@@ -50,7 +50,7 @@ export function switcherPanel(app, opts = {}) {
   });
 
   const current = h('div', { class: 'ts-current' },
-    h('span', { class: 'ts-current-label' }, 'Сейчас'), curTitle, curElapsed, curSince,
+    h('span', { class: 'ts-current-label', hidden: true }) /* kept as a hook; the sheet title already says «Сейчас» */, curTitle, curElapsed, curSince,
     h('div', { class: 'ts-current-actions' }, cont, stop), earlierToggle, earlier);
 
   // Start something: recent chips + text.
@@ -92,7 +92,9 @@ export function switcherPanel(app, opts = {}) {
       const over = c.typicalMin && c.elapsedMin > c.typicalMin;
       current.dataset.overTypical = over ? 'true' : 'false';
     }
-    setText(question, c ? (opts.ping ? `Всё ещё «${c.title}»?` : 'Что делаешь?') : 'Что делаешь сейчас?');
+    // Ask only when there is something to ask: a ping about the running activity, or nothing runs.
+    setText(question, c ? (opts.ping ? `Всё ещё «${c.title}»?` : '') : 'Что делаешь сейчас?');
+    question.hidden = !question.textContent;
     if (s.activities !== lastActs || (c?.activityId ?? null) !== lastCurId) {
       lastActs = s.activities;
       lastCurId = c?.activityId ?? null;

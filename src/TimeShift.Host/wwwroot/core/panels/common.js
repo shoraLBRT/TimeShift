@@ -176,7 +176,8 @@ export function recentChips(activities, onPick, { exclude, limit = 8, me } = {})
  * quick duration chips. Values are minutes relative to `date` (start may be negative for a segment begun the day
  * before). Output: local time strings.
  */
-export function rangeControl({ date, startMin, endMin, step = 5, openEnd = false, durations = [15, 30, 60, 90, 120], onChange }) {
+export function rangeControl({ date: dateIn, startMin, endMin, step = 5, openEnd = false, durations = [15, 30, 60, 90, 120], onChange }) {
+  const date = dateIn ?? T.todayIn(T.deviceTimeZone()); // guard: called before the app knows its day
   const startDayShift = Math.floor(startMin / 1440);
   const anchor = T.addDays(date, startDayShift);
   const start = timeInput(T.fmtClock(startMin), { step, className: 'ts-time-start' });

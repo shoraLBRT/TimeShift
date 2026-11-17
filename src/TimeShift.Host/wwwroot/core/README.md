@@ -65,6 +65,7 @@ app.start();
 | `app.start()` | boots: snapshot from `localStorage` (instant start), `/api/meta`, user, today; timers and listeners |
 | `app.actions.*` | everything a user can do (below) |
 | `app.nowMs()` | server-corrected clock (ms) — use it instead of `Date.now()` |
+| `app.peekDay(date)` | the cached or prefetched Day for `date` (today projected to "now"), or `null`; never fetches. Use it to preview the neighbouring day while the finger drags (±1 day of `viewDate` is prefetched). |
 | `app.api` | the client (live or demo) — normally not needed |
 
 Demo: `?demo=1` (remembered for the tab; `?demo=0` leaves it), `&fresh=1` starts at onboarding, `&login=1` at the
@@ -146,11 +147,13 @@ const L = layoutDay(state.day, { hourHeight: 64, minBlockHeight: 18, shortHeight
 // L.height, L.pxPerMin, L.dayMinutes (1380 / 1500 on clock-change days), L.yOf(min), L.minOf(y), L.nowY (null when not today)
 // L.hours:    [{ hour, min, label: '09:00', y }]
 // L.blocks:   main track [{ key, index, piece, kind, startMin, endMin, y, height, short, tiny, hitY, hitHeight }]
-// L.parallel: parallel track, same fields + lane (0…L.lanes-1)
+// L.parallel: parallel track, same fields + lane (0…L.lanes-1); laid out in start order, index = position in day.parallel
 scroller.scrollTop = initialScrollTop(L, scroller.clientHeight, { day: state.day, offsetTop: headerHeightInsideScroller });
 ```
 
-- `key` is stable between renders (segment id, or source + start for computed pieces) — use it for keyed DOM
+- `block.piece` is the piece itself (preferred); `index` is its position in `day.pieces` / `day.parallel`.
+- `key` is stable between renders and across ticks (segment id; computed pieces by their fixed edge — start for past
+  pieces, end for future ones, since only "now" moves) — use it for keyed DOM
   (`reconcile` in `dom.js`) so pieces animate instead of being rebuilt.
 - `tiny` — too small for any label; `short` — one line only. Render tiny pieces as a thin bar and put a transparent
   hit area at `hitY` / `hitHeight` (≥ 44 px, neighbours split the contested space). `blockAt(L.blocks, y)` finds the
@@ -217,6 +220,7 @@ nobody answered: highlight your now control.
 ```js
 const s = openSheet({ content: nodeOrPanel, title, className, detent: 'auto' | 'large', dismissible: true, onClose(reason) {}, initialFocus, footer, label });
 s.el; s.body; s.header; s.close(reason); s.setTitle(text); await s.closed; s.isOpen();
+const step = s.pushHistoryEntry(() => goBackOneStep()); step.release(); // in-sheet steps for the system back
 configureSheets({ closeContent: () => myIconNode, closeLabel: 'Закрыть', history: true });
 openSheetCount(); topSheet(); closeAllSheets();
 ```
@@ -319,7 +323,9 @@ Panels:
     (`.ts-tz-current`, `[data-action=change-tz]`, `.ts-tz-picker`; sleep fields, `.ts-sleep-weekend`; `.ts-block-form`,
     `.ts-blocks`; interval chips, `.ts-push`; `ul.ts-onboarding-summary`); `footer.ts-onboarding-nav` >
     `[data-action=back]`, `[data-action=next|finish]`.
-- **Switcher** `section.ts-switcher[data-running][data-ping][data-busy]` > `p.ts-switcher-question`;
+- **Switcher** `section.ts-switcher[data-running][data-ping][data-busy]` > `p.ts-switcher-question` (only for a ping
+  «Всё ещё «…»?» or when nothing runs; otherwise `hidden`); `.ts-current-label` is kept empty and `hidden` (the sheet
+  title says «Сейчас»);
   `.ts-current[data-over-typical]` > `.ts-current-label`, `.ts-current-title`, `.ts-current-elapsed`,
   `.ts-current-since`, `.ts-current-actions` > `[data-action=continue]` (primary), `[data-action=stop]`;
   `.ts-link[data-action=stop-earlier][aria-expanded]` → `.ts-stop-earlier` > ago chips, `.ts-stop-at` (time +
@@ -340,7 +346,9 @@ Panels:
   li.ts-total[data-group][data-category][style=--share]` (`.ts-total-name`, `.ts-total-value`, `.ts-total-share`,
   `.ts-bar`); `ol.ts-week > li.ts-week-day[data-date][data-weekday][aria-current=date] > button.ts-week-open`
   (`.ts-week-label`, `.ts-week-bar[style=--fill]` > `.ts-week-seg[data-group][style=--share]`, `.ts-week-total`);
-  `.ts-summary-parallel`. `--share` / `--fill` are 0…1: e.g. `width: calc(var(--share) * 100%)` or `flex: var(--share)`.
+  `.ts-summary-parallel`. `.ts-week-total` shows the confirmed share of that day's past (`days[i].confirmedText`,
+  e.g. «73%»; `confirmedShare` 0…1, also `data-confirmed-share`) — not the tracked time, which is 24 h for every past day.
+  `--share` / `--fill` are 0…1: e.g. `width: calc(var(--share) * 100%)` or `flex: var(--share)`.
   To draw your own chart, use the panel's `data` (`{ day: daySummary, range: rangeSummary }`) or the two functions.
   Unknown time: in the day model the questionable background minutes (`daySummary(...).unknownMin`, also
   `unknownMinutes(day)`) are taken out of `wasted` and shown as their own neutral row «Не записано»
@@ -369,8 +377,8 @@ Panels:
   (`.ts-activity-name`, `.ts-activity-meta`)), `activity` (`.ts-activity-form`, `[data-action=clear-typical]`),
   `other` (`[data-action=change-design]`, `.ts-install[data-kind]`, `[data-action=install]`, `.ts-version`,
   `[data-action=logout]`), `tz` (`.ts-tz-picker > .ts-search + ul.ts-tz-list > li.ts-tz-item[aria-selected] >
-  button.ts-tz-option[data-tz]` (`.ts-tz-label`, `.ts-tz-id`)). Every change saves at once; Escape inside a sub-page
-  goes back instead of closing the sheet.
+  button.ts-tz-option[data-tz]` (`.ts-tz-label`, `.ts-tz-id`)). Every change saves at once; Escape and the system back
+  (gesture / button) inside a sub-page go one page back; from the root they close the sheet.
 
 ## 12. Checklist of states to style
 
@@ -392,7 +400,6 @@ Panels:
 - Server totals count background time under `wasted`: the day summary separates it using the pieces, the 7-day
   summary can only label it (see Summary above).
 - No offline queue: mutations made offline fail with a toast.
-- Settings sub-pages are not history entries: the system back closes the whole settings sheet.
 - `state.day` between refreshes is a projection; status changes caused by passing a norm appear on the next refresh
   (≤ 60 s).
 - The demo's message engine understands only short activity names and «[вчера] 19-21 зал»-style lines.

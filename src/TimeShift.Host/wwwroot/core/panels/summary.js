@@ -61,11 +61,11 @@ export function summaryPanel(app, opts = {}) {
     data.range = r;
     weekEl.append(
       h('ol', { class: 'ts-week' }, r.days.map((dd) => h('li', { class: 'ts-week-day', dataset: { date: dd.date, weekday: T.weekday(dd.date) }, 'aria-current': dd.date === end ? 'date' : null },
-        h('button', { type: 'button', class: 'ts-week-open', onClick: () => { app.actions.goToDay(dd.date); opts.close?.(); }, 'aria-label': `${T.fmtDateLabel(dd.date, app.state.today)}: ${T.fmtDuration(dd.minutes)}` },
+        h('button', { type: 'button', class: 'ts-week-open', onClick: () => { app.actions.goToDay(dd.date); opts.close?.(); }, 'aria-label': `${T.fmtDateLabel(dd.date, app.state.today)}: подтверждено ${dd.confirmedText}` },
           h('span', { class: 'ts-week-label' }, T.WEEKDAYS_SHORT[T.weekday(dd.date) - 1]),
           h('span', { class: 'ts-week-bar', style: { '--fill': (dd.minutes / r.maxMinutes).toFixed(4) }, 'aria-hidden': 'true' },
             dd.groups.map((g) => h('span', { class: 'ts-week-seg', dataset: { group: g.group }, style: { '--share': (g.minutes / Math.max(1, dd.minutes)).toFixed(4) } }))),
-          h('span', { class: 'ts-week-total' }, T.fmtCompact(dd.minutes)))))),
+          h('span', { class: 'ts-week-total', title: 'Подтверждено', dataset: { confirmedShare: dd.confirmedShare.toFixed(4) } }, dd.confirmedText))))),
       statusBar(r.status), h('p', { class: 'ts-hint ts-summary-note' }, r.note),
       h('h4', { class: 'ts-summary-subtitle' }, 'По группам'), totalsList(r.totals.groups.map((g) => ({ ...g, key: null })), 'group'),
       h('h4', { class: 'ts-summary-subtitle' }, 'По категориям'), totalsList(r.totals.categories, 'category'));

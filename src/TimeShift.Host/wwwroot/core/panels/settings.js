@@ -49,7 +49,10 @@ export function settingsPanel(app, opts = {}) {
       h('div', { class: 'ts-page-body' }, def.el));
     const prev = stack.at(-1);
     if (prev) prev.scroll = scroller()?.scrollTop ?? 0;
-    stack.push({ el, destroy: def.destroy, title: def.title });
+    const item = { el, destroy: def.destroy, title: def.title, entry: null };
+    stack.push(item);
+    // The system back (gesture / button) goes one page back instead of closing the sheet.
+    if (prev && sheet?.pushHistoryEntry) item.entry = sheet.pushHistoryEntry(() => pop(true));
     nav.append(el);
     root.dataset.depth = String(stack.length);
     if (prev) {
@@ -62,9 +65,10 @@ export function settingsPanel(app, opts = {}) {
       back?.focus({ preventScroll: true });
     }
   }
-  function pop() {
+  function pop(fromHistory = false) {
     if (stack.length < 2) return false;
     const top = stack.pop();
+    if (!fromHistory) top.entry?.release();
     const prev = stack.at(-1);
     prev.el.dataset.state = 'below';
     void prev.el.offsetWidth;
@@ -276,7 +280,11 @@ export function settingsPanel(app, opts = {}) {
   return {
     el: root,
     title: 'Настройки',
-    onShow(handle) { sheet = handle; },  // the sheet handle, for designs that want it
+    onShow(handle) {
+      sheet = handle;
+      // Pages pushed before the sheet existed (opts.page) get their history step now.
+      for (const it of stack.slice(1)) if (!it.entry && handle.pushHistoryEntry) it.entry = handle.pushHistoryEntry(() => pop(true));
+    },  // the sheet handle, for designs that want it
     back: pop,
     destroy() { while (stack.length) stack.pop().destroy?.(); },
   };

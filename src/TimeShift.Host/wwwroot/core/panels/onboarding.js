@@ -123,7 +123,7 @@ export function onboardingPanel(app) {
     blocks() {
       const list = blockList(app, { onEdit: null });
       cleanups.push(list.destroy);
-      const form = blockForm(app, { onSaved: () => form.reset() });
+      const form = blockForm(app, { onSaved: () => form.reset(), submitVariant: 'secondary' }); // «Далее» is the primary action
       cleanups.push(form.destroy);
       leave = async () => true;
       return [...title('Постоянные дела', 'Работа, учёба, свои регулярные блоки. Они предполагаются в ленте, пока ты не скажешь иначе. Можно пропустить.'),
