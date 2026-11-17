@@ -332,3 +332,23 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **The picture shows numbers, not only strips:** a strip per day, a bar per category with hours and the
   difference, one bar for the status shares. Differences are neutral grey: whether more sleep or less work is
   good is not the bot's call.
+
+## Postgres in tests and CI (#17)
+
+- **One suite, two databases — not a second set of Postgres tests.** Tests take their database from
+  `TestDatabase`; the environment variable `TIMESHIFT_TEST_POSTGRES` switches the same tests from SQLite to
+  Postgres. A provider difference then shows up in whichever existing test touches it, and a new test covers both
+  without extra work. Without the variable nothing needs Postgres or Docker, so the local loop stays as it was.
+- **A database per test, created and dropped by the test** (`CREATE DATABASE timeshift_test_<guid>`, then
+  `DROP DATABASE … WITH (FORCE)`), with the Postgres migrations applied from scratch each time — the same
+  isolation the SQLite file gives, and tests keep running in parallel. Connections to these databases are not
+  pooled: a pool per database would leave idle connections and hit the server's `max_connections`.
+- **CI runs the suite twice in the one `build` job** (SQLite, then Postgres on a `postgres:17` service
+  container, the image of `docker-compose.yml`) instead of a matrix: the required check keeps its name, and the
+  second run adds about 20 s (measured locally). The Postgres run uses `--fail-skips on`, so a test that needs Postgres cannot be
+  skipped there unnoticed (a misspelt variable fails the job instead of quietly testing SQLite again).
+- **No Testcontainers.** A service container in CI and an optional connection string locally do the same job
+  without a package and without requiring Docker for `dotnet test`.
+- **Persistence tests moved from in-memory SQLite to a temporary file**, the same as the web tests: one helper,
+  one kind of SQLite database. The file is deleted after the test (the connection pool is cleared first, which
+  the old web-test cleanup did not do on Windows).

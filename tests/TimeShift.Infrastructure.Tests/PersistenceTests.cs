@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,17 +7,17 @@ using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
 using TimeShift.Infrastructure.Persistence;
+using TimeShift.TestSupport;
 
 namespace TimeShift.Infrastructure.Tests;
 
 /// <summary>
-/// Настоящий SQLite в памяти через миграции: маппинг агрегата, отрезков, журнала /undo и UTC при чтении.
-/// Каждый шаг — в своём scope, как одно сообщение в боте.
+/// Настоящая база через миграции — SQLite, а с <see cref="TestDatabase.PostgresVariable"/> Postgres: маппинг
+/// агрегата, отрезков, журнала /undo и UTC при чтении. Каждый шаг — в своём scope, как одно сообщение в боте.
 /// </summary>
-public sealed class SqlitePersistenceTests : IAsyncLifetime
+public sealed class PersistenceTests : IAsyncLifetime
 {
-    private readonly string _connectionString = $"Data Source=file:{Guid.NewGuid():N}?mode=memory&cache=shared";
-    private SqliteConnection _keepAlive = null!;
+    private TestDatabase _database = null!;
     private ServiceProvider _services = null!;
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -27,24 +26,25 @@ public sealed class SqlitePersistenceTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _keepAlive = new SqliteConnection(_connectionString);
-        await _keepAlive.OpenAsync(Ct);
+        _database = TestDatabase.Create();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:Provider"] = "Sqlite",
-                ["ConnectionStrings:Default"] = _connectionString,
+                ["Database:Provider"] = _database.Provider,
+                ["ConnectionStrings:Default"] = _database.ConnectionString,
             })
             .Build();
         _services = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
         await using var scope = _services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<TimeShiftDbContext>().Database.MigrateAsync(Ct);
+        var db = scope.ServiceProvider.GetRequiredService<TimeShiftDbContext>();
+        Assert.Equal(TestDatabase.IsPostgres, db.Database.IsNpgsql());
+        await db.Database.MigrateAsync(Ct);
     }
 
     public async ValueTask DisposeAsync()
     {
         await _services.DisposeAsync();
-        await _keepAlive.DisposeAsync();
+        await _database.DisposeAsync();
     }
 
     private async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)

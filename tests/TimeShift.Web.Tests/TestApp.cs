@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TimeShift.Application.Abstractions;
+using TimeShift.TestSupport;
 using TimeShift.Web;
 
 namespace TimeShift.Web.Tests;
@@ -46,29 +47,29 @@ internal sealed record ApiResponse(HttpStatusCode Status, JsonNode? Body, HttpRe
     public string? Error => Body?["error"]?.GetValue<string>();
 }
 
-/// <summary>Приложение на временной SQLite-базе с настраиваемыми часами; по умолчанию уже «вошло» (cookie подделан тем же алгоритмом).</summary>
+/// <summary>Приложение на временной базе (<see cref="TestDatabase"/>: SQLite или Postgres) с настраиваемыми часами; по умолчанию уже «вошло» (cookie подделан тем же алгоритмом).</summary>
 internal sealed class TestApp : IAsyncDisposable
 {
     public const string AccessKey = "test-key";
 
-    private readonly string _dbPath;
+    private readonly TestDatabase _database;
 
-    private readonly bool _deleteDb;
+    private readonly bool _ownsDatabase;
 
     private readonly WebApplicationFactory<Program> _factory;
 
     private readonly HttpClient _client;
 
-    public TestApp(string accessKey = AccessKey, string? telegramChatId = null, string? dbPath = null, bool deleteDb = true, Dictionary<string, string?>? extra = null)
+    public TestApp(string accessKey = AccessKey, string? telegramChatId = null, TestDatabase? database = null, Dictionary<string, string?>? extra = null)
     {
-        _dbPath = dbPath ?? Path.Combine(Path.GetTempPath(), $"timeshift-web-{Guid.NewGuid():N}.db");
-        _deleteDb = deleteDb;
+        _ownsDatabase = database is null;
+        _database = database ?? TestDatabase.Create();
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
-            builder.UseSetting("Database:Provider", "Sqlite");
+            builder.UseSetting("Database:Provider", _database.Provider);
             builder.UseSetting("Database:MigrateOnStartup", "true");
-            builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath}");
+            builder.UseSetting("ConnectionStrings:Default", _database.ConnectionString);
             builder.UseSetting("Web:AccessKey", accessKey);
             builder.UseSetting("Web:TelegramChatId", telegramChatId);
             builder.UseSetting("Telegram:BotToken", string.Empty);
@@ -91,8 +92,6 @@ internal sealed class TestApp : IAsyncDisposable
     public FakeClock Clock { get; } = new();
 
     public FakeWebPushSender Push { get; } = new();
-
-    public string DbPath => _dbPath;
 
     public IServiceProvider Services => _factory.Services;
 
@@ -149,21 +148,9 @@ internal sealed class TestApp : IAsyncDisposable
     {
         _client.Dispose();
         await _factory.DisposeAsync();
-        if (!_deleteDb)
+        if (_ownsDatabase)
         {
-            return;
-        }
-
-        foreach (var file in Directory.GetFiles(Path.GetTempPath(), Path.GetFileName(_dbPath) + "*"))
-        {
-            try
-            {
-                File.Delete(file);
-            }
-            catch (IOException)
-            {
-                // Временный файл — не страшно.
-            }
+            await _database.DisposeAsync();
         }
     }
 }
