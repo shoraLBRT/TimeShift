@@ -19,7 +19,8 @@ internal sealed record ApiError(string Error, string Message, [property: JsonIgn
 internal sealed record PushInfo(bool Enabled, string? PublicKey);
 
 internal sealed record MetaResponse(
-    string Version, string AssetsVersion, bool WebEnabled, bool Authenticated, bool Onboarded, bool Llm, bool Speech, PushInfo Push);
+    string Version, string AssetsVersion, bool WebEnabled, bool Authenticated, bool Onboarded, bool Llm, bool Speech, int SpeechMaxSec,
+    PushInfo Push);
 
 internal sealed record DayResponse(DayModel Day);
 
@@ -183,9 +184,19 @@ public static class ApiEndpoints
 
         api.MapPost("/messages", async (HttpContext http, MessageService messages, DayService days, CancellationToken ct) =>
         {
-            var f = await Fields.ReadAsync(http.Request, ct);
             var user = Owner(http);
-            var replies = await messages.HandleAsync(user, f.Str("text"), f.Str("button"), ct);
+            IReadOnlyList<BotReply> replies;
+            if (IsWav(http.Request))
+            {
+                // Запись голоса — тело запроса целиком; длиннее предела не читаем, сервис ответит «слишком длинная».
+                replies = await messages.HandleVoiceAsync(user, await ReadBodyAsync(http.Request, messages.MaxVoiceBytes + 1, ct), ct);
+            }
+            else
+            {
+                var f = await Fields.ReadAsync(http.Request, ct);
+                replies = await messages.HandleAsync(user, f.Str("text"), f.Str("button"), ct);
+            }
+
             return Json(new MessagesResponse(
                 replies.Select(r => new ReplyDto(r.Text, r.ReplacesSource, r.Image is not null, r.Buttons)).ToList(),
                 await days.GetAsync(user, View(http), ct)));
@@ -246,6 +257,24 @@ public static class ApiEndpoints
     private static async Task<IResult> DayAfterAsync(HttpContext http, DayService days, CancellationToken ct) =>
         Json(new DayResponse(await days.GetAsync(Owner(http), View(http), ct)));
 
+    private static bool IsWav(HttpRequest request) =>
+        request.ContentType?.Split(';')[0].Trim().ToLowerInvariant() is "audio/wav" or "audio/x-wav" or "audio/wave" or "audio/vnd.wave";
+
+    /// <summary>Тело запроса, но не больше <paramref name="limit"/> байт (остальное не читается).</summary>
+    private static async Task<byte[]> ReadBodyAsync(HttpRequest request, int limit, CancellationToken ct)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while (buffer.Length < limit
+            && (read = await request.Body.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, limit - buffer.Length)), ct)) > 0)
+        {
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
+    }
+
     private static async Task<BlockRequest> ReadBlockAsync(HttpContext http, CancellationToken ct)
     {
         var f = await Fields.ReadAsync(http.Request, ct);
@@ -260,15 +289,15 @@ public static class ApiEndpoints
 
     private static async Task<IResult> MetaAsync(
         HttpContext http, WebOptions options, WebAppInfo info, AssetsVersion assets, IClock clock,
-        Application.Llm.IntentApplier intents, ISpeechToText speech, OwnerService owners, PushService push, CancellationToken ct)
+        Application.Llm.IntentApplier intents, MessageService messages, OwnerService owners, PushService push, CancellationToken ct)
     {
         var authenticated = options.IsEnabled
             && SessionTokens.IsValid(options.AccessKey, http.Request.Cookies[SessionTokens.CookieName], clock.UtcNow);
         var onboarded = authenticated && (await owners.ResolveAsync(options.TelegramChatId, ct)).IsOnboarded;
         var pushKey = options.IsEnabled ? await push.PublicKeyAsync(ct) : null;
         return Json(new MetaResponse(
-            info.Version, assets.Current, options.IsEnabled, authenticated, onboarded, intents.IsEnabled, speech.IsEnabled,
-            new PushInfo(options.IsEnabled, pushKey)));
+            info.Version, assets.Current, options.IsEnabled, authenticated, onboarded, intents.IsEnabled, messages.VoiceEnabled,
+            (int)messages.MaxVoiceDuration.TotalSeconds, new PushInfo(options.IsEnabled, pushKey)));
     }
 
     private static async Task<IResult> LoginAsync(HttpContext http, WebOptions options, IClock clock, CancellationToken ct)

@@ -32,6 +32,7 @@ const SEED_ACTIVITIES = [
 ];
 
 const MIN = 60000;
+const DEMO_PHRASE = 'Прогулка';
 const BACKGROUND = 'Залипание';
 const err = (status, code, message, field = null) => new ApiError(status, code, message, field);
 const clone = (v) => (v == null ? v : structuredClone(v));
@@ -470,7 +471,7 @@ export function createDemoApi(opts = {}) {
 
   return {
     demo: true,
-    meta: () => call(() => ({ version: '0.0.0-demo', assetsVersion: null, webEnabled: true, authenticated: db.authed, onboarded: db.me.onboarded, llm: false, speech: false, push: { enabled: true, publicKey: null } }), { anonymous: true }),
+    meta: () => call(() => ({ version: '0.0.0-demo', assetsVersion: null, webEnabled: true, authenticated: db.authed, onboarded: db.me.onboarded, llm: false, speech: opts.speech !== false, speechMaxSec: 120, push: { enabled: true, publicKey: null } }), { anonymous: true }),
     login: (key) => call(() => {
       if (!String(key ?? '').trim()) throw err(401, 'unauthorized', 'Неверный ключ.');
       db.authed = true; return null;
@@ -628,6 +629,11 @@ export function createDemoApi(opts = {}) {
     }),
 
     message: (body, view) => call(() => ({ replies: message(body ?? {}), day: buildDay(view || T.todayIn(tz, now())) })),
+    // The demo does not listen: whatever was said, it "hears" the same phrase.
+    voice: (wav, view) => call(() => ({
+      replies: [{ text: `🎙 «${DEMO_PHRASE}»`, replacesSource: false, hasImage: false, buttons: [] }, ...message({ text: DEMO_PHRASE })],
+      day: buildDay(view || T.todayIn(tz, now())),
+    })),
 
     pushInfo: () => call(() => ({ enabled: true, publicKey: null, subscriptions: db.pushSubs })),
     subscribePush: () => call(() => { db.pushSubs = 1; return null; }),

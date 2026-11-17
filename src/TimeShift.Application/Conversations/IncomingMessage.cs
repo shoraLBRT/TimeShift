@@ -6,7 +6,7 @@ namespace TimeShift.Application.Conversations;
 /// </summary>
 public sealed record IncomingMessage(long ChatId, string DisplayName, string? Text = null, string? ButtonData = null)
 {
-    /// <summary>Голосовое (OGG/Opus) и его длительность — распознаётся в текст до разбора (spec §5.3).</summary>
+    /// <summary>Голосовое (OGG/Opus или WAV) и его длительность — распознаётся в текст до разбора (spec §5.3).</summary>
     public byte[]? Voice { get; init; }
 
     public TimeSpan VoiceDuration { get; init; }

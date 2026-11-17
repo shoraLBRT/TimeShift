@@ -389,6 +389,23 @@ public class TrackingTests
     }
 
     [Fact]
+    public async Task Voice_from_a_client_that_knows_the_user_goes_the_same_way()
+    {
+        await OnboardAsync();
+        var user = (await _store.FindByTelegramChatIdAsync(ChatId, Ct))!;
+        _store.Speech.Text = "Тренировка";
+
+        var replies = await Conversation.HandleAsync(user, IncomingMessage.FromVoice(0, "Тест", [1, 2, 3], TimeSpan.FromSeconds(3)), Ct);
+
+        Assert.Equal("🎙 «Тренировка»", replies[0].Text);
+        Assert.Equal(["09:00-… Тренировка"], Lines());
+
+        _store.Speech.Text = string.Empty;
+        var silence = await Conversation.HandleAsync(user, IncomingMessage.FromVoice(0, "Тест", [1], TimeSpan.FromSeconds(3)), Ct);
+        Assert.Contains("Не расслышал", Assert.Single(silence).Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Voice_problems_are_explained_without_touching_the_timeline()
     {
         await OnboardAsync();

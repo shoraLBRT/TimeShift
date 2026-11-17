@@ -49,6 +49,7 @@ Single owner. `Web:AccessKey` (config / env `Web__AccessKey`) is the key the own
   "onboarded": false,
   "llm": true,
   "speech": false,
+  "speechMaxSec": 120,
   "push": { "enabled": true, "publicKey": "BPm…" }
 }
 ```
@@ -56,6 +57,9 @@ Single owner. `Web:AccessKey` (config / env `Web__AccessKey`) is the key the own
 Until Web Push (#40) is implemented, `push` is `{ "enabled": false, "publicKey": null }`.
 
 `assetsVersion` changes whenever a file under `wwwroot` changes; the client uses it to refresh its cache.
+
+`speech` — the server has a speech model and accepts voice in `POST /api/messages`; the client shows the microphone
+only then. `speechMaxSec` — the longest recording it takes (`Speech:MaxSeconds`).
 
 ## Profile, settings, week template
 
@@ -206,7 +210,30 @@ intents, without it a short text starts an activity and `/add`-style lines recor
 }
 ```
 
-Exactly one of `text` / `button`. Voice is not accepted here. `409` when the owner has not finished onboarding (the PWA has its own onboarding screens).
+Exactly one of `text` / `button`. `409` when the owner has not finished onboarding (the PWA has its own onboarding screens).
+
+### Voice
+
+`POST /api/messages` with `Content-Type: audio/wav` — the body is the recording itself, not JSON: **WAV, PCM 16-bit,
+mono, 16 kHz** (the PWA re-encodes on the device, `core/voice.js`). `X-TimeShift: 1` and `?view=` work as for text.
+The recording is recognised and then handled exactly like a text message; the response has the same shape and
+**starts with what was heard**:
+
+```json
+{
+  "replies": [ { "text": "🎙 «час тренировался, потом поехал домой»", "replacesSource": false, "hasImage": false, "buttons": [] },
+               { "text": "Записать так?\n14:00–15:00 Тренировка…", "replacesSource": false, "hasImage": false, "buttons": [ [ ] ] } ],
+  "day": { }
+}
+```
+
+- Nothing heard, or recognition failed — still `200` with a single reply that says so («Не расслышал…»,
+  «Не получилось распознать…»); the timeline is not touched.
+- `409 conflict` — no speech model on the server (`meta.speech` is `false`), or onboarding is not finished.
+- `422 validation`, `field: "audio"` — an empty body, not a WAV file, or longer than `meta.speechMaxSec` (the size
+  limit is 44 + `speechMaxSec` × 32 000 bytes; the rest of a larger body is not read).
+- Other content types (`audio/x-wav`, `audio/wave`, `audio/vnd.wave` are synonyms) go the JSON way.
+- Recognition takes seconds to tens of seconds; recordings are recognised one at a time.
 
 ## Push
 

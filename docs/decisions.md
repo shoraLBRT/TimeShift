@@ -352,3 +352,36 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **Persistence tests moved from in-memory SQLite to a temporary file**, the same as the web tests: one helper,
   one kind of SQLite database. The file is deleted after the test (the connection pool is cleared first, which
   the old web-test cleanup did not do on Windows).
+
+## Voice in the PWA (#50)
+
+- **The recording is the request body: `POST /api/messages` with `Content-Type: audio/wav`**, not multipart and not
+  base64 inside JSON. One file and nothing else to send; no form parser, no 33 % base64 overhead, and the JSON
+  contract of the route stays as it was. The answer has the same shape as for text.
+- **One format on the wire — WAV PCM 16-bit mono 16 kHz, made on the device** (`MediaRecorder` → `decodeAudioData`
+  → `OfflineAudioContext`). The server needs no FFmpeg and no AAC/WebM decoders; 32 kB per second is acceptable
+  for 10–30 s phrases (a 30 s phrase is about 1 MB). The server-side WAV reader is nevertheless tolerant (PCM 16 /
+  float 32, any channel count and rate), because it costs little and a second client will not have to match the
+  PWA exactly.
+- **The port takes "audio" and recognises the format by its signature** (`RIFF` → WAV, otherwise OGG/Opus) instead
+  of a format parameter: Telegram and the web call the same `ISpeechToText.TranscribeAsync(Stream)`.
+- **What was heard comes back as the first reply («🎙 «…»»)**, exactly as in Telegram — the same
+  `ConversationService` code path — rather than as a separate `transcript` field. In the PWA thread the user's own
+  message is «🎙 Голосовое · 0:12», then the bot's echo, then the result.
+- **Silence and a recognition failure are ordinary replies (`200`)**, not errors: they are answers of the dialog,
+  shown in the thread like in Telegram. Request errors are only what the client could have avoided: no model
+  (`409`), not a WAV or too long (`422`).
+- **The length limit is checked three times, cheaply:** the client stops recording at `meta.speechMaxSec` and cuts
+  the WAV to it; the route reads at most the bytes of that many seconds plus one; the adapter counts decoded
+  samples (a WAV of another rate could be longer than its size suggests).
+- **No microphone without a model:** the button is built only when `meta.speech` is true (and the browser can
+  record). The server answers `409` to voice in that state anyway.
+- **Hold to talk, release to send, slide away to cancel; a tap only explains.** Holding shorter than 0.6 s sends
+  nothing. Keyboard: hold Space / Enter on the button, Escape cancels.
+- **One slot in the composer:** the microphone while the field is empty, «Отправить» once there is text — the
+  button under the finger never moves and nothing is squeezed on a 320 px screen.
+- **The microphone is opened per phrase and released at once** (no indicator left on between phrases). The price
+  is a short start-up delay on every press; if it loses the first word on real phones, the alternative is to keep
+  the stream while the sheet is open.
+- **The demo has the microphone** (it "hears" a fixed phrase) so that the three designs can be reviewed without a
+  model; `?demo=1&speech=0` shows the composer of a server without one.

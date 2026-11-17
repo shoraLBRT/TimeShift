@@ -57,21 +57,27 @@ internal sealed partial class WhisperSpeechToText(SpeechOptions options, ILogger
 
     public TimeSpan MaxDuration => TimeSpan.FromSeconds(options.MaxSeconds);
 
-    public async Task<string> TranscribeAsync(Stream oggOpus, CancellationToken cancellationToken)
+    public async Task<string> TranscribeAsync(Stream audio, CancellationToken cancellationToken)
     {
         float[] pcm;
         try
         {
-            pcm = OggOpusDecoder.ToWhisperPcm(oggOpus);
+            pcm = await DecodeAsync(audio, cancellationToken);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            throw new SpeechException("Не смог прочитать голосовое (ожидается OGG/Opus).", e);
+            throw new SpeechException("Не смог прочитать голосовое (ожидается OGG/Opus или WAV).", e);
         }
 
         if (pcm.Length < OggOpusDecoder.WhisperRate / 4)
         {
             return string.Empty;
+        }
+
+        // Длительность проверяет и вызывающий, но по заявленной; здесь — по тому, что реально пришло (секунда запаса).
+        if (pcm.Length > (options.MaxSeconds + 1) * OggOpusDecoder.WhisperRate)
+        {
+            throw new SpeechException($"Запись длиннее {options.MaxSeconds} с.");
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -107,6 +113,21 @@ internal sealed partial class WhisperSpeechToText(SpeechOptions options, ILogger
     {
         _factory?.Dispose();
         _gate.Dispose();
+    }
+
+    /// <summary>Формат — по сигнатуре: «RIFF» — WAV (web-клиент), иначе OGG/Opus (Telegram).</summary>
+    private static async Task<float[]> DecodeAsync(Stream audio, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(audio);
+        using var buffer = new MemoryStream();
+        await audio.CopyToAsync(buffer, cancellationToken);
+        if (WavDecoder.LooksLikeWav(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)))
+        {
+            return WavDecoder.ToWhisperPcm(buffer.GetBuffer().AsSpan(0, (int)buffer.Length));
+        }
+
+        buffer.Position = 0;
+        return OggOpusDecoder.ToWhisperPcm(buffer);
     }
 
     private async Task<WhisperFactory> FactoryAsync(CancellationToken cancellationToken)

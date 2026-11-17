@@ -909,6 +909,24 @@ html.ts-keyboard-open .ts-compose { padding-bottom: 8px; }
   -webkit-mask: var(--arrow-up) center / contain no-repeat; mask: var(--arrow-up) center / contain no-repeat;
 }
 .ts-compose > .ts-button::after { content: ""; position: absolute; inset: -4px; }
+.ts-mic {
+  width: 36px; height: 36px; margin-bottom: 2px; border: 0; border-radius: 50%; background: var(--quiet-strong); color: var(--label);
+  transition: background-color .2s var(--ease), color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.ts-mic::before { -webkit-mask-size: 22px 22px; mask-size: 22px 22px; }
+.ts-mic::after { content: ""; position: absolute; inset: -4px; }
+.ts-mic:disabled { opacity: .38; }
+.ts-mic[data-phase="starting"], .ts-mic[data-phase="sending"] { opacity: .5; }
+.ts-mic[data-phase="recording"] { background: var(--red); color: #fff; transform: scale(1.18); box-shadow: 0 0 0 8px color-mix(in srgb, var(--red) 18%, transparent); }
+.ts-mic[data-cancel="true"] { background: var(--label-3); box-shadow: none; transform: none; }
+.ts-voice-status { min-height: 40px; padding: 0 14px; column-gap: 8px; font-size: 15px; line-height: 20px; letter-spacing: -.016em; color: var(--label-2); }
+.ts-voice-time { color: var(--label); font-size: 17px; line-height: 22px; letter-spacing: -.024em; }
+.ts-voice-time::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--red);
+  animation: b-rec 1.2s ease-in-out infinite;
+}
+.ts-compose:not([data-voice="recording"]) .ts-voice-time::before, .ts-voice-status[data-cancel="true"] .ts-voice-time::before { background: var(--label-3); animation: none; }
+@keyframes b-rec { 50% { opacity: .2; } }
 
 /* ================================================================ settings */
 
