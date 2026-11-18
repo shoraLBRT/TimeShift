@@ -67,6 +67,18 @@ Two tracks, order in `docs/ROADMAP.md`:
   category leaves every choice, activities and template blocks that had it lose it; adding the same name again
   brings it back. Edited in the PWA (Настройки → Категории, all three designs) and in Telegram (`/categories`);
   REST: `POST / PATCH / DELETE /api/categories` (`docs/web-api.md`). Decisions: `docs/decisions.md`.
+- **Classification rules by time of day (#52, last part; spec §4.2):** a rule says "this activity in this part
+  of the day is this category" — «YouTube по вечерам — отдых». The parts are fixed, in the user's time zone:
+  morning 06–12, day 12–18, evening 18–24, night 00–06 (`PartsOfDay`, the same hours «вечером» means in text); the
+  part is taken by the start of the entry. A rule is a user fact (`user_facts`: key `rule:<activity>:<part>`,
+  new column `value` = category key; `minutes` is nullable now). The category of a new entry: named for the
+  entry → the rule → the activity's default → nothing (the bot asks). `TrackingService.CategoryAsync` applies it
+  on every recording path (dialog, pings, `/add`, 🟡 review, LLM intents and periods, the PWA); stored entries are
+  never re-classified. Created in Telegram by the button «Только вечером (18:00–24:00)» under a category answer
+  (no LLM needed; the bot then asks again at another time of day) or by a phrase through the LLM (`classify` with
+  `when`); listed and removed in `/facts`; in the PWA — on the activity page (Настройки → Занятия, all three
+  designs), REST `PUT / DELETE /api/activities/{id}/rules/{part}`. Deleting an own category drops the rules that
+  led to it. Decisions: `docs/decisions.md`, «Classification rules by time of day».
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -87,11 +99,6 @@ PWA: check on a real phone over HTTPS (#45) — that now includes the one open i
 on an iPhone and on Android against a server with a whisper model (`Speech:ModelPath` or `Speech:AutoDownload`;
 the microphone needs HTTPS) and of #51: long press and drag on the timeline with a finger, in each design,
 watching that it does not fight scrolling.
-
-[#52](https://github.com/shoraLBRT/TimeShift/issues/52) stays open for its third item — classification rules as
-user facts (spec §4.2: «YouTube по вечерам — отдых»). Today a category answer is remembered on the activity; a
-rule with a condition has no model yet (what a condition is, where it is stored, how the LLM states it, how
-`/facts` shows and removes it) — the options are in the issue.
 
 ## Open questions
 
@@ -122,13 +129,20 @@ rule with a condition has no model yet (what a condition is, where it is stored,
   colour of its own (it takes its parent's or its group's) — both left out on purpose (`docs/decisions.md`), say
   if they are wanted. The settings page was checked in Chromium at phone size in the three designs (demo and a
   local server), not on a phone; `/categories` was run through the dialog engine, not in the Telegram app.
+- Classification rules (#52): the entry that is running when a category question is answered keeps no category
+  — the answer (plain or «Только вечером») goes to the activity or the rule and to later entries only. This was
+  so before the rules; it is most visible on the very first entry of a new activity. Fixing it means rewriting
+  the running entry on an answer, which becomes a step of `/undo` — needs a decision. The phrase «ютуб по
+  вечерам — отдых» was run with a scripted model only (no LLM key yet, #2): the contract, two eval cases and the
+  prompt example are in place, a real model has not been asked. The rule pickers were checked in Chromium at phone
+  size on demo data in the three designs, not on a phone; `/facts` — through the dialog engine, not in Telegram.
 
 ## Verify
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 366 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 366, 0 skipped (README)
+dotnet test           # all green: 389 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 389, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone

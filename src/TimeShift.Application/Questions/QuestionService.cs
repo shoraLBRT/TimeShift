@@ -214,11 +214,13 @@ public sealed partial class QuestionService(
         var note = removed
             ? "Правило убрал — новые записи пойдут по категории занятия. Уже записанное не трогаю."
             : "Этого правила уже нет.";
-        return (await FactsAsync(user, ct, note)) with { ReplacesSource = true };
+        return (await FactsAsync(user, note, ct)) with { ReplacesSource = true };
     }
 
     /// <summary>/facts (spec §5.7): что бот знает — длительности и категории занятий, правила классификации, маршруты.</summary>
-    public async Task<BotReply> FactsAsync(User user, CancellationToken ct, string? note = null)
+    public Task<BotReply> FactsAsync(User user, CancellationToken ct) => FactsAsync(user, null, ct);
+
+    private async Task<BotReply> FactsAsync(User user, string? note, CancellationToken ct)
     {
         var known = await activities.ListAsync(user.Id, ct);
         var rules = await tracking.RulesAsync(user, ct);

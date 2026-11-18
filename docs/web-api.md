@@ -130,7 +130,7 @@ Own categories:
 - Standard categories cannot be changed or deleted — `409`; an unknown or already deleted key — `404`.
 - `DELETE` archives the category and its own subcategories (see `archived` above). Stored entries are not
   touched; activities that had it as their default category lose it (the next `GET /api/activities` shows
-  `category: null`), week-template blocks with it stay without a category.
+  `category: null`) and lose the rules that led to it, week-template blocks with it stay without a category.
 - `POST` with the name of a deleted category brings that category back with its old key, so old and new entries
   are counted together again (its deleted subcategories stay deleted).
 
@@ -210,15 +210,38 @@ Every request below returns `{ "day": Day }` — the refreshed day. Which day: q
 
 - `start` / `end` are local times; `end > start`; the future is rejected with `422` ("Будущее не записывается").
 - `category` is the key of a category that is not deleted (standard or own), otherwise `422` with
-  `field: "category"`; omitted for a known activity — its default category.
+  `field: "category"`; omitted for a known activity — the category of its rule for the part of the day the entry
+  starts in, otherwise its default category (see "Activities"). `now/start` takes no category and follows the
+  same order. A `PATCH` that changes `title` to another activity takes that activity's category the same way
+  unless `category` is sent too.
 - `title` is 1–60 characters.
 
 ## Activities
 
-- `GET /api/activities` → `[ { "id", "name", "category", "typicalMin", "lastUsedUtc" } ]`, most recently used
-  first (at most 200).
+- `GET /api/activities` → `[ { "id", "name", "category", "typicalMin", "lastUsedUtc", "rules" } ]`, most recently
+  used first (at most 200). `rules` — `[ { "part": "evening", "category": "rest" } ]`, at most one per part of
+  the day, from morning to night; empty when the activity has none.
 - `PATCH /api/activities/{id}` `{ "name"?, "category"?, "typicalMin"? }` → the activity. `typicalMin: null`
   clears the typical duration; otherwise 1…1440.
+- `PUT /api/activities/{id}/rules/{part}` `{ "category" }` → the activity. Sets (or replaces) the classification
+  rule "in this part of the day this activity is this category" (spec §4.2: «YouTube по вечерам — отдых»).
+- `DELETE /api/activities/{id}/rules/{part}` → the activity; no error when there was no such rule.
+
+A rule depends on the time of day only. `part` is one of four fixed parts of the day in the user's time zone:
+
+| `part` | local time |
+|---|---|
+| `morning` | 06:00–12:00 |
+| `afternoon` | 12:00–18:00 |
+| `evening` | 18:00–24:00 |
+| `night` | 00:00–06:00 |
+
+The part is taken by the **start** of an entry (17:30–18:30 is `afternoon`). When an entry of the activity is
+recorded without a category — by any client, the bot included — it gets the rule's category, and only without a
+matching rule the activity's `category`. Rules act on new entries: adding, changing or removing one never
+rewrites stored entries. An unknown `part` → `422` with `field: "part"`; a category that does not exist or is
+deleted → `422` with `field: "category"`; an unknown activity → `404`. The same rules are listed and removed in
+the bot's `/facts`.
 
 ## Free text
 

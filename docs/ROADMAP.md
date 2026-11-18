@@ -45,7 +45,7 @@ server be hosted there. The REST contract is `docs/web-api.md`; the client is `s
 | 7 | [#45](https://github.com/shoraLBRT/TimeShift/issues/45) Deploy with HTTPS, guide for a VPS in Russia | |
 | 8 | [#50](https://github.com/shoraLBRT/TimeShift/issues/50) Voice in the PWA | built; stays open only for the check on an iPhone and Android |
 | 9 | [#51](https://github.com/shoraLBRT/TimeShift/issues/51) Drag the edges of an entry | built; stays open only for the check with a finger on an iPhone and Android |
-| 10 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | own categories built (table, REST, PWA settings, `/categories`); stays open for classification rules as user facts |
+| 10 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | built: own categories (table, REST, PWA settings, `/categories`) and classification rules by time of day as user facts (`/facts`, the activity page in the PWA) |
 
 Found while reviewing the current behaviour, need the maintainer's decision:
 [#47](https://github.com/shoraLBRT/TimeShift/issues/47) (unknown time is counted as «Залипание»),

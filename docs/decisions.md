@@ -462,8 +462,61 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **`/categories` in Telegram**: the set by group, own ones marked 🔹 and listed as buttons (rename / delete);
   «➕» asks for the group, then the name; «Работа: Созвоны» makes a subcategory. Moving a category to another
   group or parent is in the PWA only — in the chat it is delete and add again.
-- **Not in this step: classification rules as user facts** (spec §4.2 — «YouTube по вечерам — отдых»). Today the
-  answer to a category question is stored on the activity (`activities.category_key`), which covers "this
-  activity is always X". A rule with a condition needs its own shape (what the condition is, where it is stored —
-  `user_facts` holds only minutes, how the LLM states it, how `/facts` shows and removes it) and is left for the
-  next pull request of #52.
+- **Classification rules as user facts** (spec §4.2 — «YouTube по вечерам — отдых») came in a separate pull
+  request; see the next section.
+
+## Classification rules by time of day (#52)
+
+- **A rule is conditioned on the time of day only — morning / day / evening / night. No day-of-week conditions.**
+  It is stored as a user fact, applied when recording, and shown and removable in `/facts`. This is the
+  maintainer's decision (2026-11-18); everything below is how it was carried out.
+- **A rule is (activity, part of the day) → category**, at most one per activity and part. It is tied to the
+  activity by id, not by name, so it survives a rename; "YouTube" in a rule means the activity called so, not
+  every title that contains the word. The answer to a category question without a condition stays what it was:
+  the activity's default category (`activities.category_key`).
+- **The parts of the day are fixed and are the ones the text parser already used for «вечером»**: morning
+  06:00–12:00, day 12:00–18:00, evening 18:00–24:00, night 00:00–06:00, in the user's time zone. They moved from
+  `PastTime` to the Domain (`PartOfDay`, `PartsOfDay`) so there is one definition. The hours are shown wherever a
+  rule is created or listed («вечером (18:00–24:00)», «Вечером, 18–24» in the PWA). Not configurable: a setting
+  nobody asked for, and "evening" in a rule and in «вечером смотрел сериал» should mean the same hours.
+- **The part is decided by the start of the entry.** 17:30–18:30 is "day". An entry is not split at a boundary
+  and a running activity does not change category when the clock passes one.
+- **Precedence** for the category of a new entry: a category named for that entry (the PWA picker, «этот ютуб был
+  учёбой») → the rule for its part of the day → the activity's default category (where the `Classifier` guess of
+  spec §4.2 lands when the activity is created). A category the LLM attaches to `start_activity` / a period item
+  is still only a suggestion for an activity that has none, so a rule beats it too.
+- **One place applies it**: `TrackingService.CategoryAsync` (Application) over `CategoryRules.Resolve` (Domain).
+  Every path that records goes through it — the dialog and its buttons, pings, `/add`, the 🟡 review, LLM starts,
+  parallel entries, periods and renames, and the client use cases (`EntryService`) — so the adapters know nothing
+  about rules. A period gets its rules after `PeriodResolver` has placed the items, because only then the starts
+  are known; the proposal the user confirms already shows the result.
+- **Existing entries are never re-classified** — not when a rule is added, changed or removed, and not when an
+  entry's bounds are edited across a boundary. Changing the title of an entry to another activity takes that
+  activity's category by the same order (it is a new statement about what it was).
+- **Stored in `user_facts`, with one schema change.** The table held `key → minutes`; a rule needs a category
+  key as its value, and encoding it into the key or into the integer would have been a trick. So `user_facts`
+  got a nullable text column `value` and `minutes` became nullable: a fact is either a duration (`route:…`,
+  minutes) or a rule (`rule:<activity id>:<part>`, value = category key). The unique index on (user, key) is what
+  keeps one rule per activity and part. Migrations `ClassificationRules` for both providers; the down migration
+  deletes the rules, the old shape has no room for them.
+- **Two ways to create a rule in Telegram, one of them without the LLM.** (1) Under the reply to a category answer
+  («Запомнил: «Ютуб» — Учёба.») there is a button «Только утром (06:00–12:00)» for the part of the day the
+  activity started in: it turns the answer just given into a rule, clears the default again and forgets the
+  question, so at another time of day the bot asks once more — that is how "YouTube: ask" of spec §4.2 becomes a
+  set of rules. A plain answer is not changed by this: without the button it is the default, as before. (2) With
+  the LLM, `classify` got an optional `when` (`morning | afternoon | evening | night`): «ютуб по вечерам — отдых»
+  makes the rule and leaves the default alone; without `when` it is the old "this activity is X".
+- **`/facts`** lists an activity's rules under it («↳ вечером (18:00–24:00) — Осознанный отдых») and has a «✖»
+  button per rule (the first ten). Removing a rule does not bring the category question back by itself; the
+  activity falls back to its default, and if it has none the bot asks when the activity is next started (it asks
+  at most once per activity unless the answer was narrowed, as above).
+- **A rule that points at a deleted own category is dropped with the category**, like the default category of an
+  activity is cleared — not kept as a stale line in `/facts`. `CategoryRules.Match` also ignores a category that
+  is not offered any more, so a leftover could never classify anything.
+- **In the PWA rules live on the activity page** (Настройки → Занятия → занятие → «По времени суток»): four
+  category pickers, «Как обычно» removes the rule. REST: `PUT / DELETE /api/activities/{id}/rules/{part}`, and
+  `rules` on every activity (`docs/web-api.md`). The entry form shows, for a picked activity, the category the
+  entry will get at its start time and follows the time while the picker is untouched.
+- **Not done on purpose:** rules by substring or for a whole category («любые игры ночью»), day-of-week
+  conditions (the maintainer's decision above), and a rule when the entry itself is corrected («этот ютуб был
+  учёбой» changes that entry only, as spec §4.2 says).

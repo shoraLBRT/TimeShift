@@ -74,6 +74,12 @@ public class LlmEvalSetTests
         Assert.Contains(IntentMatcher.Compare(expected, P("""{"intents":[{"type":"start_activity","activity":"Зал"}]}""")),
             p => p.Contains("вместо", StringComparison.Ordinal));
 
+        // Правило на часть суток — не то же, что категория занятия: потерянное или лишнее when — ошибка.
+        var rule = P("""{"intents":[{"type":"classify","activity":"YouTube","category":"rest","when":"evening"}]}""");
+        Assert.Empty(IntentMatcher.Compare(rule, P("""{"intents":[{"type":"classify","activity":"YouTube видео","category":"rest","when":"evening"}]}""")));
+        Assert.Contains(IntentMatcher.Compare(rule, P("""{"intents":[{"type":"classify","activity":"YouTube","category":"rest"}]}""")),
+            p => p.Contains("when", StringComparison.Ordinal));
+
         Assert.True(IntentMatcher.NameMatches("Dota 2|Дота", "дота 2"));
         Assert.True(IntentMatcher.NameMatches("Тренировка", "Тренировка в зале"));
         Assert.False(IntentMatcher.NameMatches("Работа", "Сериал"));
