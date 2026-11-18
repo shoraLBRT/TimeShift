@@ -514,7 +514,7 @@ public class TrackingTests
 
         // Ответ — и следом вопрос о длительности того же занятия.
         var answered = await Press(youtube.Buttons[0][1].Data);
-        Assert.Contains(answered, r => r.Text == "Запомнил: «Ютуб» — Учёба.");
+        Assert.Contains(answered, r => r.Text == "Запомнил: «Ютуб» — Учёба. Текущая запись теперь — Учёба (отменить — /undo).");
         Assert.Contains("Сколько обычно длится «Ютуб»", Question(answered).Text, StringComparison.Ordinal);
         await Text("полчаса");
 
@@ -528,7 +528,7 @@ public class TrackingTests
         Advance(30);
         var guitar = Question(await Text("Гитара"));
         Assert.Contains("К чему отнести?", guitar.Text, StringComparison.Ordinal);
-        Assert.Contains(await Text("отдых"), r => r.Text == "Запомнил: «Гитара» — Осознанный отдых.");
+        Assert.Contains(await Text("отдых"), r => r.Text == "Запомнил: «Гитара» — Осознанный отдых. Текущая запись теперь — Осознанный отдых (отменить — /undo).");
 
         // Очевидное не спрашивается.
         Advance(30);

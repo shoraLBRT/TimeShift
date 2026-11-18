@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TimeShift.Application.Abstractions;
+using TimeShift.Application.Tracking;
 using TimeShift.Domain.Activities;
+using TimeShift.Domain.Categories;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -241,4 +243,57 @@ public sealed class PersistenceTests : IAsyncLifetime
         Assert.True(open.IsOpen);
         Assert.Equal("Работа", open.Title);
     }
+
+    [Fact]
+    public async Task A_category_answer_rewrites_the_running_segment_and_undo_restores_it()
+    {
+        var userId = await CreateUserAsync();
+        var guitar = await CreateActivityAsync(userId, "Гитара");
+        await StartAsync(userId, guitar, Utc(9));
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<ITimelineRepository>();
+            var timeline = await repo.LoadAsync(userId, Utc(0), Ct);
+            repo.Record(userId, timeline.Continue(Utc(9, 30)), Utc(9, 30));
+        });
+
+        // Ответ о категории (#62): категория занятия и — тем же сохранением — идущей записи; прожитое время при ней.
+        var changed = await InScopeAsync(async sp =>
+        {
+            var user = (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+            var activity = (await sp.GetRequiredService<IActivityRepository>().GetAsync(userId, guitar.Id, Ct))!;
+            activity.CategoryKey = DefaultCategories.Study;
+            return await Tracking(sp).CategorizeCurrentAsync(user, activity, Utc(9, 40), Ct);
+        });
+        Assert.Equal(DefaultCategories.Study, changed!.CategoryKey);
+
+        var loaded = await LoadAsync(userId);
+        Assert.Equal(["09:00-09:30 Гитара", "09:30-… Гитара"], loaded.Segments.Select(Describe));
+        Assert.Equal([null, DefaultCategories.Study], loaded.Segments.Select(s => s.CategoryKey));
+        Assert.Equal(TimeSpan.FromMinutes(30), loaded.OpenSegment!.ElapsedBefore);
+
+        // У записи категория уже есть — второй раз менять нечего.
+        Assert.Null(await InScopeAsync(async sp =>
+        {
+            var user = (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+            var activity = (await sp.GetRequiredService<IActivityRepository>().GetAsync(userId, guitar.Id, Ct))!;
+            return await Tracking(sp).CategorizeCurrentAsync(user, activity, Utc(9, 45), Ct);
+        }));
+
+        // /undo: категория снята с записи, у занятия осталась.
+        Assert.Equal(UndoResult.Undone, await InScopeAsync(async sp =>
+        {
+            var user = (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+            return await Tracking(sp).UndoAsync(user, Ct);
+        }));
+        loaded = await LoadAsync(userId);
+        Assert.Equal(["09:00-09:30 Гитара", "09:30-… Гитара"], loaded.Segments.Select(Describe));
+        Assert.Null(loaded.OpenSegment!.CategoryKey);
+        Assert.Equal(TimeSpan.FromMinutes(30), loaded.OpenSegment.ElapsedBefore);
+        var kept = await InScopeAsync(sp => sp.GetRequiredService<IActivityRepository>().GetAsync(userId, guitar.Id, Ct));
+        Assert.Equal(DefaultCategories.Study, kept!.CategoryKey);
+    }
+
+    private static TrackingService Tracking(IServiceProvider sp) => new(
+        sp.GetRequiredService<ITimelineRepository>(), sp.GetRequiredService<IActivityRepository>(), sp.GetRequiredService<IFactRepository>());
 }

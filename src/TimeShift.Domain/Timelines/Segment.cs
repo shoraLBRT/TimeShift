@@ -110,6 +110,13 @@ public sealed record Segment
     public Segment WithRange(DateTime startUtc, DateTime? endUtc) =>
         new(startUtc, endUtc, Title, Status, Source, ActivityId, CategoryKey, endUtc is null ? ElapsedBefore : default, IsParallel);
 
+    /// <summary>
+    /// Тот же отрезок с другой категорией — новый отрезок с новым Id, как и <see cref="WithRange"/>; уже прожитое
+    /// время открытого отрезка сохраняется.
+    /// </summary>
+    public Segment WithCategory(string? categoryKey) =>
+        new(StartUtc, EndUtc, Title, Status, Source, ActivityId, categoryKey, ElapsedBefore, IsParallel);
+
     /// <summary>Открытое продолжение этого отрезка после перерыва.</summary>
     internal Segment ResumedAt(DateTime startUtc, TimeSpan elapsedBefore) =>
         new(startUtc, null, Title, Status, Source, ActivityId, CategoryKey, elapsedBefore, IsParallel);

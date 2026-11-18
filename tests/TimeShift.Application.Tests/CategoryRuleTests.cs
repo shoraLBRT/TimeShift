@@ -81,7 +81,7 @@ public class CategoryRuleTests
         // Утро: ответ на вопрос о категории — как раньше, категория занятия; под ним — «только утром».
         var asked = Question(await Text("Ютуб"));
         var answered = await Press(Button(asked, "Учёба").Data);
-        var remembered = Assert.Single(answered, r => r.Text == "Запомнил: «Ютуб» — Учёба.");
+        var remembered = Assert.Single(answered, r => r.Text == "Запомнил: «Ютуб» — Учёба. Текущая запись теперь — Учёба (отменить — /undo).");
         var youtube = Assert.Single(_store.Activities);
         Assert.Equal(DefaultCategories.Study, youtube.CategoryKey);
         var only = Button(remembered, "Только утром (06:00–12:00)");
@@ -105,16 +105,17 @@ public class CategoryRuleTests
         var again = Question(await Text("Ютуб"));
         Assert.Contains("YouTube бывает разным", again.Text, StringComparison.Ordinal);
         Assert.Null(CategoryAt(Msk(13), "Ютуб"));
-        var plain = Assert.Single(await Press(Button(again, "Отдых").Data), r => r.Text == "Запомнил: «Ютуб» — Осознанный отдых.");
+        var plain = Assert.Single(await Press(Button(again, "Отдых").Data), r => r.Text == "Запомнил: «Ютуб» — Осознанный отдых. Текущая запись теперь — Осознанный отдых (отменить — /undo).");
         Button(plain, "Только днём (12:00–18:00)");
         Assert.Equal(DefaultCategories.MindfulRest, youtube.CategoryKey);
 
-        // Запись задним числом: утром — по правилу, днём — по категории занятия. Записанное раньше не меняется.
+        // Запись задним числом: утром — по правилу, днём — по категории занятия. Идущая запись получила категорию
+        // вместе с ответом (#62), остальное записанное не меняется.
         _clock.UtcNow = Msk(13, 30);
         await Text("/add 9-10 Ютуб\n12-12:20 Ютуб");
         Assert.Equal(DefaultCategories.Study, CategoryAt(Msk(9), "Ютуб"));
         Assert.Equal(DefaultCategories.MindfulRest, CategoryAt(Msk(12), "Ютуб"));
-        Assert.Null(CategoryAt(Msk(13), "Ютуб"));
+        Assert.Equal(DefaultCategories.MindfulRest, CategoryAt(Msk(13), "Ютуб"));
 
         // /facts показывает правило с часами и даёт его убрать.
         var facts = Assert.Single(await Text("/facts"));
@@ -198,7 +199,7 @@ public class CategoryRuleTests
         var music = Assert.Single(Me.OwnCategories);
 
         var asked = Question(await Text("Гитара"));
-        var remembered = Assert.Single(await Press(Button(asked, "Музыка").Data), r => r.Text == "Запомнил: «Гитара» — Музыка.");
+        var remembered = Assert.Single(await Press(Button(asked, "Музыка").Data), r => r.Text == "Запомнил: «Гитара» — Музыка. Текущая запись теперь — Музыка (отменить — /undo).");
         await Press(Button(remembered, "Только днём (12:00–18:00)").Data);
         Assert.Equal([(PartOfDay.Afternoon, music.Key)], Rules());
         Assert.Contains("↳ днём (12:00–18:00) — Музыка", Assert.Single(await Text("/facts")).Text, StringComparison.Ordinal);

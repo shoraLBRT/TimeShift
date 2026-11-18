@@ -86,7 +86,7 @@ public sealed partial class IntentApplier(
         var response = extraction.RawResponses[^1];
         for (var i = 0; i < extraction.Intents.Count; i++)
         {
-            replies.AddRange(await ApplyAsync(user, extraction.Intents[i], text, response, i, pending, now, ct));
+            replies.AddRange(await ApplyAsync(user, extraction.Intents[i], text, response, i, pending, now, ct, alone: extraction.Intents.Count == 1));
         }
 
         return replies;
@@ -136,7 +136,8 @@ public sealed partial class IntentApplier(
     }
 
     private async Task<IReadOnlyList<BotReply>> ApplyAsync(
-        User user, Intent intent, string text, string response, int index, PendingPeriod? pending, DateTime now, CancellationToken ct)
+        User user, Intent intent, string text, string response, int index, PendingPeriod? pending, DateTime now, CancellationToken ct,
+        bool alone = false)
     {
         var tz = user.TimeZoneInfo;
         switch (intent)
@@ -182,13 +183,15 @@ public sealed partial class IntentApplier(
                 {
                     // «Ютуб по вечерам — отдых»: правило на часть суток, категория самого занятия остаётся как была.
                     await tracking.SetRuleAsync(user, activity, part, classify.Category, ct);
+                    var ruled = await CategorizeCurrentAsync(user, activity, alone, now, ct);
                     return [BotReply.Plain(
-                        $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(classify.Category)}. " +
+                        $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(classify.Category)}.{ruled} " +
                         "Действует на новые записи; убрать правило — в /facts.")];
                 }
 
                 activity.CategoryKey = classify.Category;
-                return [BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(classify.Category)}.")];
+                var categorized = await CategorizeCurrentAsync(user, activity, alone, now, ct);
+                return [BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(classify.Category)}.{categorized}")];
             }
 
             case SetFactIntent fact:
@@ -260,6 +263,16 @@ public sealed partial class IntentApplier(
         var started = await tracking.StartAsync(user, activity, now, ct, at);
         return TrackingReplies.Started(started, tz);
     }
+
+    /// <summary>
+    /// «Дота — залипание» про идущее занятие без категории — тот же ответ о категории, только своими словами:
+    /// категорию получает и текущая запись (#62). Только когда это единственное намерение сообщения — после других
+    /// намерений лента в этой единице работы уже могла измениться. Возвращает приписку к ответу или пустую строку.
+    /// </summary>
+    private async Task<string> CategorizeCurrentAsync(User user, Activity activity, bool alone, DateTime now, CancellationToken ct) =>
+        alone && await tracking.CategorizeCurrentAsync(user, activity, now, ct) is { } entry
+            ? " " + TrackingReplies.CurrentEntryCategorized(entry, user.Categories)
+            : string.Empty;
 
     // ---- Правка --------------------------------------------------------------------------------------------
 

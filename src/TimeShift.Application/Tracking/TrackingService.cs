@@ -84,6 +84,27 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
     public async Task<string?> CategoryAsync(User user, Activity activity, DateTime startUtc, CancellationToken cancellationToken) =>
         (await facts.RulesAsync(user.Id, cancellationToken)).Resolve(activity, startUtc, user.TimeZoneInfo, user.Categories);
 
+    /// <summary>
+    /// Ответ о категории занятия доходит и до идущей записи (#62): открытый отрезок этого занятия, у которого
+    /// категории ещё нет, получает ту, что дал бы ему сейчас <see cref="CategoryAsync"/> — правило на часть суток
+    /// его начала, иначе категория занятия. Отрезок с категорией и уже закрытые записи не трогаются. Это правка
+    /// ленты — отдельный шаг <c>/undo</c>: он снимает категорию с записи, а сам ответ (категория занятия или
+    /// правило) остаётся. Возвращает исправленный отрезок или <c>null</c>, если менять нечего.
+    /// Вызывать, пока в этой единице работы лента не менялась: открытый отрезок читается из хранилища.
+    /// </summary>
+    public async Task<Segment?> CategorizeCurrentAsync(User user, Activity activity, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var open = await timelines.FindOpenAsync(user.Id, cancellationToken);
+        if (open is not { CategoryKey: null } || open.ActivityId != activity.Id
+            || await CategoryAsync(user, activity, open.StartUtc, cancellationToken) is not { } category)
+        {
+            return null;
+        }
+
+        var replacement = open.WithCategory(category);
+        return await EditAsync(user, open, replacement, nowUtc, cancellationToken) is null ? null : replacement;
+    }
+
     /// <summary>Заводит правило или заменяет правило того же занятия на ту же часть суток.</summary>
     public Task SetRuleAsync(User user, Activity activity, PartOfDay part, string categoryKey, CancellationToken cancellationToken) =>
         facts.SetRuleAsync(user.Id, new CategoryRule(activity.Id, part, categoryKey), cancellationToken);
