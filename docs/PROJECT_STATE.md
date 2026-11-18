@@ -80,14 +80,16 @@ Two tracks, order in `docs/ROADMAP.md`:
   designs), REST `PUT / DELETE /api/activities/{id}/rules/{part}`. Deleting an own category drops the rules that
   led to it. Decisions: `docs/decisions.md`, «Classification rules by time of day».
 - **The category answer reaches the running entry (#62):** when the bot's category question is answered — a
-  button or a name, «Только вечером», or a single `classify` phrase through the LLM — the running entry of that
-  activity gets the category too, if it has none, so the first entry of a new activity is counted in `/day`,
+  button or a name, «Только вечером», or a `classify` phrase through the LLM, alone or among other intents of the
+  message (#67) — the running entry of that activity gets the category too, if it has none, so the first entry of a new activity is counted in `/day`,
   `/week` and the PWA summary under the answer and not in «Без категории». What is written is what
   `TrackingService.CategoryAsync` gives that entry (a rule only when the entry started in its part of the day).
   It is a timeline edit and its own `/undo` step: `/undo` takes the category off the entry, the answer (the
   activity's default or the rule) stays. An entry that already has a category, closed entries and other
-  activities are not touched; the reply says when the entry was changed. Decisions: `docs/decisions.md`, «The
-  category answer reaches the running entry».
+  activities are not touched; the reply says when the entry was changed. «Начал гитару, гитара — это учёба» in
+  one message: the entry it starts is counted under «Учёба»; with `start` first that is the start plus an edit
+  (two `/undo` steps), with `classify` first the entry takes the category at its start (one step). Decisions:
+  `docs/decisions.md`, «The category answer reaches the running entry».
 - **Reads inside one message see what the message has recorded (#65):** a message is saved once, at its end, and
   the EF repositories used to answer reads from the database alone. Now timeline reads (`LoadAsync`,
   `FindOpenAsync`, `FindSegmentAsync`), an activity by id / in the list, and the question queue answer as the
@@ -155,13 +157,18 @@ watching that it does not fight scrolling.
   phone; `/facts` — through the dialog engine, not in Telegram.
 - #65, left as it was: `IActivityRepository.RecentAsync` / `LastUsedAsync` (the order of the suggestion buttons)
   are still computed from saved entries, so inside the message that starts a brand-new activity the buttons do
-  not list it yet. `classify` among several intents of one message still only records the fact and does not
-  touch the running entry: the technical reason is gone with #65, lifting the restriction is a behaviour
-  decision — say if it is wanted. The dialog tests of `TimeShift.Application.Tests` still run on the in-memory
+  not list it yet. The dialog tests of `TimeShift.Application.Tests` still run on the in-memory
   store, which cannot show this class of error; the scenarios that depend on it are in `DialogTests` on a real
   database — moving more dialog tests there (or running them on both stores) is an option, not done. Two
   requests of the same user handled at the very same moment can still get the same journal time (nothing
   serialises a user's requests); not seen, the owner is one person.
+- #67: when an activity already has a category and one message both starts it and re-classifies it («начал
+  ютуб, ютуб — это учёба» for a «Ютуб» that was «Отдых»), the entry's category depends on the order the model
+  lists the intents in: `start` first — the old one stays on the entry (it is not empty, #62), `classify` first —
+  the new one. Same as two separate messages, and not new; say if `classify` should replace the category of an
+  entry started by the same message. Likewise «закончил гитару, гитара — это учёба» with `stop` first leaves the
+  closed entry without a category (closed entries are not touched, #62). The phrase was run with a scripted
+  model only (no LLM key yet, #2).
 - #62: the category answer changes the running entry only. The part of the same activity that «Всё ещё занят»
   confirmed before the answer, and an entry that ended before the answer came, stay without a category (an edit
   fixes them) — say if the answer should reach those too. The new reply line and `/undo` after an answer were run
@@ -171,8 +178,8 @@ watching that it does not fight scrolling.
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 402 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 402, 0 skipped (README)
+dotnet test           # all green: 407 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 407, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone

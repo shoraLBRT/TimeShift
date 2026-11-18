@@ -225,34 +225,65 @@ public class CategoryAnswerTests
     }
 
     [Fact]
-    public async Task A_phrase_through_the_llm_reaches_the_running_entry_too_when_it_is_the_only_intent()
+    public async Task A_phrase_through_the_llm_reaches_the_running_entry_too_alone_or_among_other_intents()
     {
         _llm = new ScriptedLlm(enabled: true);
         await OnboardAsync(Msk(20, 30));
 
-        await Say("играю на гитаре","""{"intents":[{"type":"start_activity","activity":"Guitar"}]}""");
-        Assert.Null(Running.CategoryKey);
-
-        // Вместе с другим намерением — только факт о занятии: лента в этом сообщении уже могла измениться.
-        _clock.UtcNow = Msk(20, 40);
-        await Say(
-            "гитара — это отдых, обычно час",
-            """{"intents":[{"type":"classify","activity":"Guitar","category":"rest"},{"type":"set_fact","activity":"Guitar","minutes":60}]}""");
-        var guitar = Assert.Single(_store.Activities);
-        Assert.Equal(DefaultCategories.MindfulRest, guitar.CategoryKey);
+        await Say("играю на гитаре", """{"intents":[{"type":"start_activity","activity":"Guitar"}]}""");
         Assert.Null(Running.CategoryKey);
 
         // Одна фраза о категории — как ответ на вопрос: категория и у занятия, и у идущей записи.
-        _clock.UtcNow = Msk(20, 50);
+        _clock.UtcNow = Msk(20, 40);
         var saved = Remembered(await Say(
-            "нет, гитара — учёба","""{"intents":[{"type":"classify","activity":"Guitar","category":"study"}]}"""));
+            "гитара — это отдых", """{"intents":[{"type":"classify","activity":"Guitar","category":"rest"}]}"""));
         Assert.StartsWith("Запомнил: «Guitar» — ", saved.Text, StringComparison.Ordinal);
         Assert.EndsWith("(отменить — /undo).", saved.Text, StringComparison.Ordinal);
-        Assert.Equal(DefaultCategories.Study, guitar.CategoryKey);
-        Assert.Equal((Msk(20, 30), DefaultCategories.Study), (Running.StartUtc, Running.CategoryKey));
+        var guitar = Assert.Single(_store.Activities);
+        Assert.Equal(DefaultCategories.MindfulRest, guitar.CategoryKey);
+        Assert.Equal((Msk(20, 30), DefaultCategories.MindfulRest), (Running.StartUtc, Running.CategoryKey));
 
         await Text("/undo");
         Assert.Null(Running.CategoryKey);
+        Assert.Equal(DefaultCategories.MindfulRest, guitar.CategoryKey);
+
+        // Вместе с другим намерением — так же (#67): категория и у занятия, и у идущей записи, шаг /undo — один.
+        _clock.UtcNow = Msk(20, 50);
+        saved = Assert.Single(
+            await Say(
+                "нет, гитара — учёба, обычно час",
+                """{"intents":[{"type":"classify","activity":"Guitar","category":"study"},{"type":"set_fact","activity":"Guitar","minutes":60}]}"""),
+            r => r.Text.StartsWith("Запомнил: «Guitar» — ", StringComparison.Ordinal));
+        Assert.EndsWith("Текущая запись теперь — Учёба (отменить — /undo).", saved.Text, StringComparison.Ordinal);
+        Assert.Equal((DefaultCategories.Study, TimeSpan.FromHours(1)), (guitar.CategoryKey, guitar.TypicalDuration));
+        Assert.Equal((Msk(20, 30), DefaultCategories.Study), (Running.StartUtc, Running.CategoryKey));
+
+        await Text("/undo");
+        Assert.Equal((Msk(20, 30), (string?)null), (Running.StartUtc, Running.CategoryKey));
         Assert.Equal(DefaultCategories.Study, guitar.CategoryKey);
+    }
+
+    [Fact]
+    public async Task A_rule_among_other_intents_reaches_the_entry_only_when_it_started_in_that_part_of_day()
+    {
+        _llm = new ScriptedLlm(enabled: true);
+        await OnboardAsync(Msk(14));
+
+        // Запись началась днём, правило — на вечер: правило записано, запись остаётся без категории.
+        var said = await Say(
+            "включил ютуб, ютуб по вечерам — отдых",
+            """{"intents":[{"type":"start_activity","activity":"Ютуб"},{"type":"classify","activity":"Ютуб","category":"rest","when":"evening"}]}""");
+        Assert.DoesNotContain(said, r => r.Text.Contains("Текущая запись", StringComparison.Ordinal));
+        Assert.Equal([(PartOfDay.Evening, DefaultCategories.MindfulRest)], Rules());
+        Assert.Equal((Msk(14), (string?)null), (Running.StartUtc, Running.CategoryKey));
+
+        // Правило на часть суток, в которую запись началась, — доходит до неё; у самого занятия категории так и нет.
+        _clock.UtcNow = Msk(14, 10);
+        said = await Say(
+            "ютуб днём — учёба, обычно полчаса",
+            """{"intents":[{"type":"set_fact","activity":"Ютуб","minutes":30},{"type":"classify","activity":"Ютуб","category":"study","when":"afternoon"}]}""");
+        Assert.Contains(said, r => r.Text.Contains("Текущая запись теперь — Учёба (отменить — /undo).", StringComparison.Ordinal));
+        Assert.Equal((Msk(14), DefaultCategories.Study), (Running.StartUtc, Running.CategoryKey));
+        Assert.Null(Assert.Single(_store.Activities).CategoryKey);
     }
 }

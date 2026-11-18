@@ -547,12 +547,26 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **The reply says so**: «Запомнил: «Гитара» — Учёба. Текущая запись теперь — Учёба (отменить — /undo).» — an
   edit of the timeline that `/undo` and the «↩️ Отменить» buttons will now hit first should not happen silently.
   Without a changed entry the reply is as before.
-- **The same through the LLM, when the phrase is the whole message.** «Дота — залипание» said about the running
-  activity is the same answer in other words (it is also how a free-form reply to the question arrives), so
-  `classify` — with or without `when` — writes to the running entry too. It does so only when it is the single
-  intent of the message: after another intent of the same message the timeline may already have changed inside
-  the unit of work, and the stored open entry is read before that change is saved. In a message with several
-  intents `classify` only records the fact, as before.
+- **The same through the LLM, alone or among other intents of the message (#67).** «Дота — залипание» said about
+  the running activity is the same answer in other words (it is also how a free-form reply to the question
+  arrives), so `classify` — with or without `when` — writes to the running entry too. At first (#62) it did so
+  only as the single intent of a message, because a read after another intent of the same message did not see
+  that intent's unsaved change; #65 removed that reason, and the maintainer decided (2026-11-18) to lift the
+  restriction. How it was carried out:
+  - Intents are applied in the model's order, and "the running entry" is the one open when `classify` is reached —
+    a message with several intents does what the same intents sent one by one would do. Nothing is postponed to
+    the end of the message, so «гитара — учёба, всё, закончил» still reaches the entry before it is closed.
+  - «Начал гитару, гитара — это учёба», `start` first: the entry is started without a category and `classify`
+    puts it on — two `/undo` steps, the first takes the category off, the second reverts the start. `classify`
+    first: the activity already has the category when the entry starts, the entry takes it at its start
+    (`CategoryAsync`, as any later entry would) — no edit, no «Текущая запись теперь…» line, one `/undo` step.
+    The timeline and the totals are the same in both orders; only the number of undo steps differs.
+  - The rules above are unchanged: only the open entry of that activity, only when its category is empty, a rule
+    only when the entry started in its part of the day. `classify` about another activity changes no entry.
+  - Left as it is, and it does depend on the order: when the activity *already had* a category (an earlier answer,
+    or a guess from the name), `start` then `classify` leaves the new entry with the old one (it is not empty),
+    while `classify` then `start` gives it the new one. This is what two separate messages do as well, and it was
+    so before #67; changing it means letting an answer replace a category on an entry, which #62 does not do.
 - **Not done on purpose:** the activity page of the PWA (`PATCH /api/activities/{id}`, the rule pickers) does not
   touch the running entry — that is editing a setting, not answering about what is happening now, and the entry
   form is where the PWA sets a category of an entry; past entries of the activity are not re-classified by an
@@ -595,9 +609,9 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **Undoing a change that is not saved yet works on the same rules:** an entry added in the unit of work is
   simply dropped from it, and an entry the unit of work removed from the database is un-removed rather than
   inserted again (entries are immutable, the row is the same).
-- **`classify` among several intents (#62) is unchanged.** Its reason there — "the stored open entry is read
-  before that change is saved" — no longer holds; it now stays only as behaviour (in a message with several
-  intents `classify` records the fact and leaves the running entry alone). Lifting it is a separate decision.
+- **`classify` among several intents (#62) was left unchanged here and lifted in #67.** Its reason there — "the
+  stored open entry is read before that change is saved" — stopped holding with this fix; the restriction itself
+  was removed as a separate decision (the section above).
 - **The `/undo` reply is «Отменил последнее изменение ленты»** instead of «…последнюю запись»: the last step can
   be a category put on an entry (#62) or a «закончил», not an entry.
 - **Tests:** the in-memory store of `TimeShift.Application.Tests` applies a change at once and cannot show this
