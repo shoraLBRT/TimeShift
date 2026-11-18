@@ -242,4 +242,32 @@ public class DialogTests
         Assert.Empty(Recorded(undone));
         Assert.Null(Current(undone));
     }
+
+    [Fact]
+    public async Task A_category_said_with_the_stop_reaches_the_entry_only_while_it_is_still_running()
+    {
+        await using var app = new TestApp();
+        await app.OnboardAsync();
+
+        // Намерения применяются по порядку: категория названа раньше «закончил» — запись ещё шла и получила её.
+        await SayAsync(app, "с десяти играю на гитаре", """{"intents":[{"type":"start_activity","activity":"Гитара","at":"10:00"}]}""");
+        var said = await SayAsync(
+            app,
+            "гитара — это учёба, закончил в одиннадцать",
+            """{"intents":[{"type":"classify","activity":"Гитара","category":"study"},{"type":"stop_activity","at":"11:00"}]}""");
+        Assert.Contains("Текущая запись теперь — Учёба", Texts(said), StringComparison.Ordinal);
+        Assert.Equal(["600-660 Гитара"], Recorded(said));
+        Assert.Equal((null, "study"), (Current(said), EntryCategory(said, "Гитара")));
+
+        // «Закончил» раньше категории — запись уже закрыта, а закрытые ответ не трогает (#62).
+        await SayAsync(app, "с одиннадцати вяжу", """{"intents":[{"type":"start_activity","activity":"Вязание","at":"11:00"}]}""");
+        said = await SayAsync(
+            app,
+            "закончил, вязание — это отдых",
+            """{"intents":[{"type":"stop_activity"},{"type":"classify","activity":"Вязание","category":"rest"}]}""");
+        Assert.DoesNotContain("Текущая запись теперь", Texts(said), StringComparison.Ordinal);
+        Assert.Equal(["600-660 Гитара", "660-690 Вязание"], Recorded(said));
+        Assert.Equal((null, null), (Current(said), EntryCategory(said, "Вязание")));
+        Assert.Equal("rest", await ActivityCategoryAsync(app, "Вязание"));
+    }
 }
