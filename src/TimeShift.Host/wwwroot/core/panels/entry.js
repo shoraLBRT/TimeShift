@@ -1,7 +1,7 @@
 // Entry editor: edit a piece (stored segment or computed piece) or record a new past entry.
 import { h, setText } from '../dom.js';
 import * as T from '../time.js';
-import { describePiece, pieceBounds } from '../timeline.js';
+import { describePiece, pieceBounds, activityCategory } from '../timeline.js';
 import { button, field, textInput, categoryPicker, activitySuggest, rangeControl, switchInput } from './common.js';
 
 /**
@@ -52,11 +52,20 @@ export function entryPanel(app, opts = {}) {
   const titleField = field('Занятие', title);
   let categoryTouched = false;
   const cat = categoryPicker(me, initial.category, () => { categoryTouched = true; refresh(); }, { noneLabel: mode === 'edit' ? null : 'По занятию' });
+  // A picked activity brings its category: the rule for the part of the day the entry starts in, else its own.
+  let picked = null;
+  const expected = (a) => activityCategory(a, range.value().startMin);
+  const followPicked = () => {
+    if (categoryTouched || !picked || title.value.trim().toLowerCase() !== picked.name.toLowerCase()) return;
+    const c = expected(picked);
+    if (c && c !== cat.get()) cat.set(c);
+  };
   const suggest = activitySuggest(title, () => app.state.activities, (a) => {
-    if (!categoryTouched && a.category) cat.set(a.category);
+    picked = a;
+    followPicked();
     refresh();
   });
-  const range = rangeControl({ date, startMin, endMin, step, openEnd, onChange: () => refresh() });
+  const range = rangeControl({ date, startMin, endMin, step, openEnd, onChange: () => { followPicked(); refresh(); } });
   const rangeError = h('p', { class: 'ts-field-error', role: 'alert', hidden: true });
   const parallelSw = mode === 'new' ? switchInput('Параллельно с основным', !!opts.draft?.parallel, () => refresh(), { hint: 'Например, ел во время работы: основное занятие не сдвинется.' }) : null;
 
@@ -130,7 +139,7 @@ export function entryPanel(app, opts = {}) {
       r = await app.actions.updateEntry(segment.id, patch, { inlineErrors: true, title: v.title || initial.title, category: v.category, parallel: opts.parallel, range: openEnd ? null : { start: v.range.start, end: v.range.end } });
     } else {
       const entry = { start: v.range.start, end: v.range.end, ...(known ? { activityId: known.id } : { title: v.title }) };
-      if (v.category && (categoryTouched || mode === 'computed' || !known || v.category !== known.category)) entry.category = v.category;
+      if (v.category && (categoryTouched || mode === 'computed' || !known || v.category !== activityCategory(known, v.range.startMin))) entry.category = v.category;
       if (v.parallel) entry.parallel = true;
       r = await app.actions.addEntry(entry, { inlineErrors: true });
     }

@@ -3,6 +3,7 @@
 // entries displace what they cover, undo reverts the last change. Data lives only in this tab.
 import { ApiError } from './api.js';
 import * as T from './time.js';
+import { activityCategory } from './timeline.js';
 
 /** The system set; own categories are added per user (`system: false`) and are archived instead of deleted. */
 export const DEFAULT_CATEGORIES = [
@@ -104,11 +105,15 @@ export function createDemoApi(opts = {}) {
     if (!t || t.length > 60) throw err(422, 'validation', 'Название — от 1 до 60 символов.', 'title');
     let a = actByName(t);
     if (!a) {
-      a = { id: id('a'), name: t, category: category ?? guessCategory(t), typicalMin: null, lastUsedUtc: null };
+      a = { id: id('a'), name: t, category: category ?? guessCategory(t), typicalMin: null, lastUsedUtc: null, rules: [] };
       db.acts.push(a);
     }
     return a;
   }
+  // Classification rules, as TrackingService.CategoryAsync on the server: the rule for the part of the day the entry
+  // starts in, otherwise the activity's own category. An explicit category always wins.
+  const categoryFor = (a, startMs) => activityCategory(a, T.nowMinIn(tz, startMs));
+  const partIndex = (part) => T.PARTS_OF_DAY.findIndex((x) => x.part === part);
   const touch = (a, ms = now()) => { a.lastUsedUtc = iso(ms); };
 
   function guessCategory(t) {
@@ -281,7 +286,7 @@ export function createDemoApi(opts = {}) {
     const a = ensureActivity(body);
     closeRunning(at);
     if (at < now()) displace(at, now());
-    db.segs.push({ id: id('s'), start: at, end: null, title: a.name, activityId: a.id, category: a.category, status: 'assumed', source: 'extension', parallel: false, confirmedUntil: at });
+    db.segs.push({ id: id('s'), start: at, end: null, title: a.name, activityId: a.id, category: categoryFor(a, at), status: 'assumed', source: 'extension', parallel: false, confirmedUntil: at });
     touch(a);
     return a;
   }
@@ -290,7 +295,7 @@ export function createDemoApi(opts = {}) {
     const [a, b] = parseRange(body.start, body.end);
     const act = ensureActivity({ activityId: body.activityId, title: body.title, category: body.category });
     if (!body.parallel) displace(a, b);
-    db.segs.push({ id: id('s'), start: a, end: b, title: act.name, activityId: act.id, category: body.category ?? act.category, status: 'confirmed', source: 'user', parallel: !!body.parallel, confirmedUntil: b });
+    db.segs.push({ id: id('s'), start: a, end: b, title: act.name, activityId: act.id, category: body.category ?? categoryFor(act, a), status: 'confirmed', source: 'user', parallel: !!body.parallel, confirmedUntil: b });
     touch(act, b);
   }
 
@@ -361,7 +366,7 @@ export function createDemoApi(opts = {}) {
 
   // ---------- seed ----------
   function seed() {
-    for (const [name, category, typicalMin] of SEED_ACTIVITIES) db.acts.push({ id: id('a'), name, category, typicalMin, lastUsedUtc: null });
+    for (const [name, category, typicalMin] of SEED_ACTIVITIES) db.acts.push({ id: id('a'), name, category, typicalMin, lastUsedUtc: null, rules: [] });
     const nowMs = now();
     const today = T.todayIn(tz, nowMs);
     const seg = (startMs, endMs, name, extra = {}) => {
@@ -588,7 +593,10 @@ export function createDemoApi(opts = {}) {
       for (const x of gone) x.archived = true;
       const keys = new Set(gone.map((x) => x.key));
       // Stored entries keep the category; activities and template blocks lose it.
-      for (const a of db.acts) if (keys.has(a.category)) a.category = null;
+      for (const a of db.acts) {
+        if (keys.has(a.category)) a.category = null;
+        a.rules = (a.rules ?? []).filter((r) => !keys.has(r.category));
+      }
       db.me.blocks = db.me.blocks.map((b) => (keys.has(b.category) ? { ...b, category: null } : b));
       return meOut();
     }),
@@ -645,7 +653,7 @@ export function createDemoApi(opts = {}) {
       }
       if (patch.title && patch.title.trim() !== s.title) {
         const act = ensureActivity({ title: patch.title, category: patch.category });
-        s.title = act.name; s.activityId = act.id; s.category = patch.category ?? act.category;
+        s.title = act.name; s.activityId = act.id; s.category = patch.category ?? categoryFor(act, s.start) ?? s.category;
       } else if ('category' in patch) s.category = patch.category;
       if (s.end != null) { s.status = 'confirmed'; s.source = 'user'; }
       if (!s.parallel) displace(s.start, s.end ?? now(), s.id);
@@ -688,6 +696,22 @@ export function createDemoApi(opts = {}) {
         if (patch.typicalMin != null && !(Number.isInteger(patch.typicalMin) && patch.typicalMin >= 1 && patch.typicalMin <= 1440)) throw err(422, 'validation', 'От 1 до 1440 минут.', 'typicalMin');
         a.typicalMin = patch.typicalMin;
       }
+      return a;
+    }),
+    setActivityRule: (aid, part, category) => call(() => {
+      const a = db.acts.find((x) => x.id === aid);
+      if (!a) throw err(404, 'not_found', 'Такого занятия нет.');
+      if (!T.PARTS_OF_DAY.some((x) => x.part === part)) throw err(422, 'validation', 'Часть суток — morning, afternoon, evening или night.', 'part');
+      if (!db.me.categories.some((c) => c.key === category && !c.archived)) throw err(422, 'validation', 'Нет такой категории.', 'category');
+      a.rules = [...(a.rules ?? []).filter((r) => r.part !== part), { part, category }]
+        .sort((x, y) => partIndex(x.part) - partIndex(y.part));
+      return a;
+    }),
+    deleteActivityRule: (aid, part) => call(() => {
+      const a = db.acts.find((x) => x.id === aid);
+      if (!a) throw err(404, 'not_found', 'Такого занятия нет.');
+      if (!T.PARTS_OF_DAY.some((x) => x.part === part)) throw err(422, 'validation', 'Часть суток — morning, afternoon, evening или night.', 'part');
+      a.rules = (a.rules ?? []).filter((r) => r.part !== part);
       return a;
     }),
 

@@ -1,5 +1,5 @@
 // Pure timeline model: layout of a day, display model of a piece, categories, summaries, local day patches.
-import { fmtRange, fmtDuration, fmtClock, localToMin, minToLocal, MINUTES_PER_DAY } from './time.js';
+import { fmtRange, fmtDuration, fmtClock, localToMin, minToLocal, partOfDay, MINUTES_PER_DAY } from './time.js';
 
 export const GROUPS = [
   { key: 'useful', name: 'Полезное' },
@@ -49,6 +49,15 @@ export function categoriesByGroup(me) {
 }
 
 /** Kind of a piece for styling: confirmed | assumed | questionable | future. */
+/**
+ * The category a new entry of this activity gets when none is named: the activity's rule for the part of the day
+ * the entry starts in (`startMin` — minute of the local day), otherwise the activity's own category.
+ */
+export function activityCategory(activity, startMin) {
+  const part = Number.isFinite(startMin) ? partOfDay(startMin) : null;
+  return (activity?.rules ?? []).find((r) => r.part === part)?.category ?? activity?.category ?? null;
+}
+
 export const pieceKind = (p) => (p.future ? 'future' : p.status);
 
 /** Stable key for keyed rendering and animations. */
