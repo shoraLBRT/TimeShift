@@ -1,12 +1,16 @@
 using TimeShift.Application.Abstractions;
 using TimeShift.Domain.Activities;
 using TimeShift.Domain.Categories;
+using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Users;
 
 namespace TimeShift.Application.Clients;
 
-/// <summary>Занятия пользователя для клиента: список (недавние первыми) и правка названия, категории и типичной длительности.</summary>
-public sealed class ActivityService(IActivityRepository activities, IUnitOfWork unitOfWork)
+/// <summary>
+/// Занятия пользователя для клиента: список (недавние первыми), правка названия, категории и типичной длительности,
+/// правила классификации по времени суток (spec §4.2).
+/// </summary>
+public sealed class ActivityService(IActivityRepository activities, IFactRepository facts, IUnitOfWork unitOfWork)
 {
     public const int MaxListed = 200;
 
@@ -14,14 +18,47 @@ public sealed class ActivityService(IActivityRepository activities, IUnitOfWork 
     {
         var all = await activities.ListAsync(user.Id, cancellationToken);
         var lastUsed = await activities.LastUsedAsync(user.Id, cancellationToken);
+        var rules = await facts.RulesAsync(user.Id, cancellationToken);
         return all
             .Select(a => (Activity: a, Last: lastUsed.TryGetValue(a.Id, out var at) ? at : (DateTime?)null))
             .OrderByDescending(x => x.Last.HasValue)
             .ThenByDescending(x => x.Last)
             .ThenBy(x => x.Activity.Name, StringComparer.CurrentCultureIgnoreCase)
             .Take(MaxListed)
-            .Select(x => ToModel(x.Activity, x.Last))
+            .Select(x => ToModel(x.Activity, x.Last, rules))
             .ToList();
+    }
+
+    /// <summary>
+    /// Правило «в эту часть суток — эта категория»: заводит или заменяет. Действует на новые записи занятия,
+    /// начавшиеся в эту часть суток; записанное раньше не меняется.
+    /// </summary>
+    public async Task<ActivityModel> SetRuleAsync(User user, Guid activityId, string part, string? category, CancellationToken cancellationToken)
+    {
+        var activity = await activities.GetAsync(user.Id, activityId, cancellationToken)
+            ?? throw ClientException.NotFound("Такого занятия нет.");
+        var when = ValidPart(part);
+        if (category is null || user.Categories.FindActive(category) is null)
+        {
+            throw ClientException.Invalid("category", "Нет такой категории.");
+        }
+
+        await facts.SetRuleAsync(user.Id, new CategoryRule(activity.Id, when, category), cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await ModelAsync(user, activity, cancellationToken);
+    }
+
+    /// <summary>Убирает правило; если его не было — ничего не меняется.</summary>
+    public async Task<ActivityModel> RemoveRuleAsync(User user, Guid activityId, string part, CancellationToken cancellationToken)
+    {
+        var activity = await activities.GetAsync(user.Id, activityId, cancellationToken)
+            ?? throw ClientException.NotFound("Такого занятия нет.");
+        if (await facts.RemoveRuleAsync(user.Id, activity.Id, ValidPart(part), cancellationToken))
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return await ModelAsync(user, activity, cancellationToken);
     }
 
     public async Task<ActivityModel> UpdateAsync(User user, Guid activityId, ActivityPatch patch, CancellationToken cancellationToken)
@@ -71,14 +108,24 @@ public sealed class ActivityService(IActivityRepository activities, IUnitOfWork 
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        var lastUsed = await activities.LastUsedAsync(user.Id, cancellationToken);
-        return ToModel(activity, lastUsed.TryGetValue(activity.Id, out var at) ? at : null);
+        return await ModelAsync(user, activity, cancellationToken);
     }
 
-    private static ActivityModel ToModel(Activity activity, DateTime? lastUsed) => new(
+    private static PartOfDay ValidPart(string part) =>
+        PartsOfDay.Parse(part) ?? throw ClientException.Invalid("part", "Часть суток — morning, afternoon, evening или night.");
+
+    private async Task<ActivityModel> ModelAsync(User user, Activity activity, CancellationToken cancellationToken)
+    {
+        var lastUsed = await activities.LastUsedAsync(user.Id, cancellationToken);
+        var rules = await facts.RulesAsync(user.Id, cancellationToken);
+        return ToModel(activity, lastUsed.TryGetValue(activity.Id, out var at) ? at : null, rules);
+    }
+
+    private static ActivityModel ToModel(Activity activity, DateTime? lastUsed, CategoryRules rules) => new(
         activity.Id,
         activity.Name,
         activity.CategoryKey,
         activity.TypicalDuration is { } typical ? (int)Math.Round(typical.TotalMinutes) : null,
-        lastUsed);
+        lastUsed,
+        rules.Of(activity.Id).Select(r => new ActivityRuleModel(PartsOfDay.Code(r.Part), r.CategoryKey)).ToList());
 }
