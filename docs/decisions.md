@@ -492,7 +492,8 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   are known; the proposal the user confirms already shows the result.
 - **Existing entries are never re-classified** — not when a rule is added, changed or removed, and not when an
   entry's bounds are edited across a boundary. Changing the title of an entry to another activity takes that
-  activity's category by the same order (it is a new statement about what it was).
+  activity's category by the same order (it is a new statement about what it was). The one exception came later
+  (#62, the section below): the running entry that has no category gets one when the bot's question is answered.
 - **Stored in `user_facts`, with one schema change.** The table held `key → minutes`; a rule needs a category
   key as its value, and encoding it into the key or into the integer would have been a trick. So `user_facts`
   got a nullable text column `value` and `minutes` became nullable: a fact is either a duration (`route:…`,
@@ -520,3 +521,39 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
 - **Not done on purpose:** rules by substring or for a whole category («любые игры ночью»), day-of-week
   conditions (the maintainer's decision above), and a rule when the entry itself is corrected («этот ютуб был
   учёбой» changes that entry only, as spec §4.2 says).
+
+## The category answer reaches the running entry (#62)
+
+- **An answer to the category question is also written to the running entry, as a timeline edit with its own
+  `/undo` step — not resolved at read time.** Before this the answer went to the activity (or the rule) and to
+  later entries only, so the entry the question was about — typically the very first entry of a new activity —
+  stayed in «Без категории». This is the maintainer's decision (2026-11-18), chosen over "fall back to the
+  activity's category when totals are read"; everything below is how it was carried out.
+- **What is written is what the resolution of the section above gives that entry now** — one code path,
+  `TrackingService.CategorizeCurrentAsync` over `CategoryAsync`. After a plain answer that is the chosen category.
+  After a rule answer («Только вечером», or «ютуб по вечерам — отдых») it is the rule's category only when the
+  entry started in that part of the day; otherwise the entry stays without one and the bot asks again, as before.
+- **Only the running entry of that activity, and only when its category is empty.** An entry that already has a
+  category — named for it, or taken from a rule or default at its start — is left alone; a stored category does
+  not say where it came from, so "explicit" means "not empty". Closed entries are not touched: an earlier entry of
+  the activity, or the confirmed part that «Всё ещё занят» cut off before the answer, keep no category (they can
+  be corrected by an edit). A question answered while another activity is running changes no entry.
+- **One answer is at most one `/undo` step, and it reverts the entry only.** The step is an ordinary edit
+  (`Timeline.Edit`: the entry is replaced by a copy with the category, same start, same elapsed time), so the
+  journal needed nothing new. `/undo` takes the category off the entry; the answer itself — the activity's
+  default or the rule — is a fact, not a timeline change, and stays (it is changed in `/facts` or by a new
+  phrase). «Только вечером» pressed after a plain answer adds no second step: the entry already has the category
+  and it started in that part of the day. If the category was undone in between, the rule puts it back.
+- **The reply says so**: «Запомнил: «Гитара» — Учёба. Текущая запись теперь — Учёба (отменить — /undo).» — an
+  edit of the timeline that `/undo` and the «↩️ Отменить» buttons will now hit first should not happen silently.
+  Without a changed entry the reply is as before.
+- **The same through the LLM, when the phrase is the whole message.** «Дота — залипание» said about the running
+  activity is the same answer in other words (it is also how a free-form reply to the question arrives), so
+  `classify` — with or without `when` — writes to the running entry too. It does so only when it is the single
+  intent of the message: after another intent of the same message the timeline may already have changed inside
+  the unit of work, and the stored open entry is read before that change is saved. In a message with several
+  intents `classify` only records the fact, as before.
+- **Not done on purpose:** the activity page of the PWA (`PATCH /api/activities/{id}`, the rule pickers) does not
+  touch the running entry — that is editing a setting, not answering about what is happening now, and the entry
+  form is where the PWA sets a category of an entry; past entries of the activity are not re-classified by an
+  answer.

@@ -79,6 +79,15 @@ Two tracks, order in `docs/ROADMAP.md`:
   `when`); listed and removed in `/facts`; in the PWA — on the activity page (Настройки → Занятия, all three
   designs), REST `PUT / DELETE /api/activities/{id}/rules/{part}`. Deleting an own category drops the rules that
   led to it. Decisions: `docs/decisions.md`, «Classification rules by time of day».
+- **The category answer reaches the running entry (#62):** when the bot's category question is answered — a
+  button or a name, «Только вечером», or a single `classify` phrase through the LLM — the running entry of that
+  activity gets the category too, if it has none, so the first entry of a new activity is counted in `/day`,
+  `/week` and the PWA summary under the answer and not in «Без категории». What is written is what
+  `TrackingService.CategoryAsync` gives that entry (a rule only when the entry started in its part of the day).
+  It is a timeline edit and its own `/undo` step: `/undo` takes the category off the entry, the answer (the
+  activity's default or the rule) stays. An entry that already has a category, closed entries and other
+  activities are not touched; the reply says when the entry was changed. Decisions: `docs/decisions.md`, «The
+  category answer reaches the running entry».
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -129,20 +138,32 @@ watching that it does not fight scrolling.
   colour of its own (it takes its parent's or its group's) — both left out on purpose (`docs/decisions.md`), say
   if they are wanted. The settings page was checked in Chromium at phone size in the three designs (demo and a
   local server), not on a phone; `/categories` was run through the dialog engine, not in the Telegram app.
-- Classification rules (#52): the entry that is running when a category question is answered keeps no category
-  — the answer (plain or «Только вечером») goes to the activity or the rule and to later entries only. This was
-  so before the rules; it is most visible on the very first entry of a new activity. Fixing it means rewriting
-  the running entry on an answer, which becomes a step of `/undo` — needs a decision. The phrase «ютуб по
-  вечерам — отдых» was run with a scripted model only (no LLM key yet, #2): the contract, two eval cases and the
-  prompt example are in place, a real model has not been asked. The rule pickers were checked in Chromium at phone
-  size on demo data in the three designs, not on a phone; `/facts` — through the dialog engine, not in Telegram.
+- Classification rules (#52): the phrase «ютуб по вечерам — отдых» was run with a scripted model only (no LLM
+  key yet, #2): the contract, two eval cases and the prompt example are in place, a real model has not been
+  asked. The rule pickers were checked in Chromium at phone size on demo data in the three designs, not on a
+  phone; `/facts` — through the dialog engine, not in Telegram.
+- Found while fixing #62, not fixed (no issue yet): with the real database, timeline reads inside one message do
+  not see what the same message has just recorded — `ITimelineRepository.FindOpenAsync` / `LoadAsync` query the
+  database, and the save comes once, at the end of the message. Probed on SQLite: after an unsaved start
+  `CurrentAsync` returns the previous activity. What follows from it is read from the code, not watched in a
+  running bot: right after «Гитара» starts a new activity, `QuestionService.NextAsync` sees the previous running
+  activity (or none), so the category / duration question for the new one would come only after the next
+  message; and an LLM message with several timeline intents would work on the timeline as it was before the
+  first of them. The dialog tests do not show it: their in-memory store applies a change at once. The
+  repository could answer from the change tracker, as `FactRepository` already does — needs an
+  issue and a decision on where to fix it. Related: several timeline changes recorded by one message share the
+  journal time (`AtUtc`), so the order in which `/undo` takes them is not defined on a database.
+- #62: the category answer changes the running entry only. The part of the same activity that «Всё ещё занят»
+  confirmed before the answer, and an entry that ended before the answer came, stay without a category (an edit
+  fixes them) — say if the answer should reach those too. The new reply line and `/undo` after an answer were run
+  through the dialog engine and on the database in tests, not in the Telegram app.
 
 ## Verify
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 389 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 389, 0 skipped (README)
+dotnet test           # all green: 396 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 396, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone
