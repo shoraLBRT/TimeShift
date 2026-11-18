@@ -1,6 +1,6 @@
 # Project state
 
-_Updated 2026-11-18._
+_Updated 2026-11-19._
 
 ## Stage
 
@@ -15,7 +15,7 @@ Two tracks, order in `docs/ROADMAP.md`:
   period resolution (§3.5), breaks inside an activity and parallel activities (§3.6), `Timeline.Apply/Stop/
   Continue/Undo`, ping rule `PingSchedule`.
 - **Application:** client-neutral dialog `ConversationService` (onboarding, `/blocks`, `/settings`, `/now`,
-  `/day [вчера|сб|13.11]` as text with ◀ ▶ and the parallel track, `/week` (◀ ▶ by week), `/add` (past entries without LLM), `/quiet`, `/undo`, short free text = new activity), `TrackingService`, `PingService`.
+  `/day [вчера|сб|13.11]` as text with ◀ ▶ and the parallel track, `/week` (◀ ▶ by week), `/add` (past entries without LLM), `/quiet`, `/undo`, `/facts`, `/categories`, short free text = new activity), `TrackingService`, `PingService`.
 - **Infrastructure:** EF Core with SQLite (dev) and Postgres (prod), two migration sets; segments, activities,
   undo journal, schedule blocks.
 - **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy and allow-list.
@@ -26,12 +26,12 @@ Two tracks, order in `docs/ROADMAP.md`:
 - **LLM building blocks:** `ILlmProvider` + OpenAI-compatible adapter (`Llm:*`),
   intent contract (`Intents`, `IntentParser`), prompt with context (`IntentPrompt`), `IntentExtractor` with one
   retry, day/time resolution `PastTime`.
-- **LLM eval (`tools/TimeShift.LlmEval`):** 40 phrases with expected intents, `IntentMatcher`, live run with
+- **LLM eval (`tools/TimeShift.LlmEval`):** 44 phrases with expected intents, `IntentMatcher`, live run with
   accuracy/latency/cost and `--record`; offline checks in `dotnet test`. No live run yet (no key, #2).
 - **Daily review (`DailyReview`):** evening — by the ping loop at «sleep − offset» (up to 30 min after sleep starts) or when sleep is started: the day, remaining 🟡 one by one, «⚪ Остальное верно» materializes ⚪ as ✅; morning — first message after the template sleep: «Спал как обычно?» (yes → ✅ sleep, no → «во сколько лёг и встал»). Once a day each; nothing before registration.
 - **Yellow review (`YellowReview`):** after a text/voice message or an answer button, the first unreviewed 🟡 span (≥ 15 min, last 12 h, after onboarding) is asked «Пока тебя не было…» — recent activity / wasted / describe (`/add`) / skip; each span once (`users.yellow_reviewed_until`).
 - **Classification (`Domain.Categories.Classifier`):** spec §4.2 defaults by name; YouTube, games and unknown activities get a one-time category question (buttons or a category name).
-- **Questions (`QuestionService`, `pending_questions`):** category, then unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, routes.
+- **Questions (`QuestionService`, `pending_questions`):** category, then unknown typical duration of the current activity is asked once, right after a reply, one at a time; answers by button or a bare duration; `/facts` lists durations, categories, classification rules and routes.
 - **Rendering (`TimeShift.Rendering`, SkiaSharp):** `/day` is a PNG (vertical day bar, colour = category, ✅ solid / ⚪ pale / 🟡 hatched, «now» line, parallel column) with the text and «Итого» per category as caption; `/week` is a PNG (a strip per day, a bar per category with hours and the difference with the previous week, one bar for the ✅/⚪/🟡 shares, parallel total) with the same numbers as caption; Docker image installs DejaVu for Cyrillic.
 - **Week numbers (`WeekStats`):** calendar week Mon–Sun, the current one up to «now»; built from the same day windows as `/day`, so the week equals the sum of its days; days before registration are not counted; comparison with the same part of the previous week when that week is wholly after registration (`docs/decisions.md`).
 - **Speech (`TimeShift.Speech`):** voice → OGG/Opus (Telegram, decoded in C# with Concentus) or WAV (the PWA; PCM 16 / float 32, any rate and channel count, recognised by signature) → PCM 16 kHz → local whisper.cpp (Whisper.net); `Speech:ModelPath`, `Speech:AutoDownload`; off without a model.
@@ -60,7 +60,7 @@ Two tracks, order in `docs/ROADMAP.md`:
   rounding setting, with the time above the finger, and saves it on release (`PATCH /api/entries/{id}` — the
   server displaces the neighbours, the toast's «Отменить» returns the previous bounds). Long press unrecorded
   time and drag → the entry sheet opens for that interval. Works in all three designs; no API change.
-- **Own categories (#52, first part):** the standard set stays in code, the user's own categories live in the
+- **Own categories (#52, closed):** the standard set stays in code, the user's own categories live in the
   table `categories` and are part of the `User` aggregate (`User.AddCategory / UpdateCategory / RemoveCategory`,
   `CategorySet` = standard + own). An own category has a name, a group and optionally a parent (two levels), and
   a generated key `u.…` that never changes. It is offered wherever a category is chosen (the bot's category
@@ -107,6 +107,8 @@ Two tracks, order in `docs/ROADMAP.md`:
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
 - **Repo:** habze standard (PR-title check, release-please, Renovate) — PR #1; CI build + tests on PRs.
+  Version 0.1.0 is released; release-please keeps a Release PR for the next version open (the maintainer merges
+  it).
 - **Tests on both databases (#17):** every test that needs a database gets it from `tests/Shared/TestDatabase.cs`
   — a temporary SQLite file, or its own Postgres database when `TIMESHIFT_TEST_POSTGRES` is set. CI runs the
   suite twice, on SQLite and on a `postgres:17` service container (Postgres migrations applied from scratch for
@@ -115,14 +117,25 @@ Two tracks, order in `docs/ROADMAP.md`:
 
 ## Next
 
-[#19](https://github.com/shoraLBRT/TimeShift/issues/19) — logs, DB backups, monitoring.
-[#18](https://github.com/shoraLBRT/TimeShift/issues/18) (deploy to a VPS) comes first in the roadmap but waits for
-the maintainer to choose and pay for the VPS. (#2 waits for the LLM key; voice needs a whisper model on the server).
+Everything in the roadmap's numbered order now waits for the maintainer:
 
-PWA: check on a real phone over HTTPS (#45) — that now includes the one open item of #50: say a 10–30 s phrase
-on an iPhone and on Android against a server with a whisper model (`Speech:ModelPath` or `Speech:AutoDownload`;
-the microphone needs HTTPS) and of #51: long press and drag on the timeline with a finger, in each design,
-watching that it does not fight scrolling.
+- [#18](https://github.com/shoraLBRT/TimeShift/issues/18) (deploy to a VPS) — the maintainer chooses and pays for
+  the VPS. [#19](https://github.com/shoraLBRT/TimeShift/issues/19) (logs, DB backups, monitoring) depends on #18.
+- [#2](https://github.com/shoraLBRT/TimeShift/issues/2) — the LLM aggregator key.
+- #47 and #48 — a decision (see the open questions).
+- Open only for a check on real devices: #16 — the `/week` picture in Telegram on an iPhone (any running bot will
+  do); #50 — say a 10–30 s phrase on an iPhone and on Android against a server with a whisper model
+  (`Speech:ModelPath` or `Speech:AutoDownload`; the microphone needs HTTPS, so the deployed server); #51 — long
+  press and drag on the timeline with a finger, in each design, watching that it does not fight scrolling.
+
+What a coding session can take without waiting (outside the numbered order, `docs/ROADMAP.md` «Also»):
+
+- [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — the Telegram bot is open to everyone by default; the
+  issue says what to do (closed by default, `Telegram:AllowAnyone` for the open mode). After it a server without
+  `Telegram:AllowedChatIds` stops answering until the owner adds their chat id — say so in the PR and in
+  `docs/deploy.md`.
+- [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
+  note while the PWA is the main client.
 
 ## Open questions
 
@@ -148,7 +161,6 @@ watching that it does not fight scrolling.
   (AAC, older Web Audio API forms) is written but untested. To watch on the phone: whether the first word is lost
   while the microphone starts (it is opened per phrase, `docs/decisions.md`), and how long whisper `base` takes
   for 30 s on the VPS (the client waits up to 180 s).
-
 - Own categories (#52): standard categories cannot be renamed, hidden or deleted, and an own category has no
   colour of its own (it takes its parent's or its group's) — both left out on purpose (`docs/decisions.md`), say
   if they are wanted. The settings page was checked in Chromium at phone size in the three designs (demo and a
