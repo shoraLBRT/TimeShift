@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TimeShift.Application.Questions;
@@ -8,34 +9,38 @@ namespace TimeShift.Infrastructure.Persistence;
 internal sealed class QuestionRepository(TimeShiftDbContext db) : IQuestionRepository
 {
     public async Task<PendingQuestion?> FindAsync(Guid userId, QuestionKind kind, Guid subjectId, CancellationToken cancellationToken) =>
-        Local(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId)
-        ?? Alive(await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId, cancellationToken));
+        (await WhereAsync(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId, cancellationToken)).FirstOrDefault();
 
     public async Task<PendingQuestion?> GetAsync(Guid userId, Guid questionId, CancellationToken cancellationToken) =>
-        Alive(await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Id == questionId, cancellationToken));
+        (await WhereAsync(q => q.UserId == userId && q.Id == questionId, cancellationToken)).FirstOrDefault();
 
     public async Task<PendingQuestion?> OpenAsync(Guid userId, CancellationToken cancellationToken) =>
-        Local(q => q.UserId == userId && q.AskedAtUtc != null && q.ResolvedAtUtc == null)
-        ?? await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.AskedAtUtc != null && q.ResolvedAtUtc == null, cancellationToken);
+        (await WhereAsync(q => q.UserId == userId && q.AskedAtUtc != null && q.ResolvedAtUtc == null, cancellationToken)).FirstOrDefault();
 
     public async Task<PendingQuestion?> NextAsync(Guid userId, CancellationToken cancellationToken) =>
-        Local(q => q.UserId == userId && q.AskedAtUtc == null && q.ResolvedAtUtc == null)
-        ?? await db.Questions
-            .Where(q => q.UserId == userId && q.AskedAtUtc == null && q.ResolvedAtUtc == null)
-            .OrderBy(q => q.CreatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
+        (await WhereAsync(q => q.UserId == userId && q.AskedAtUtc == null && q.ResolvedAtUtc == null, cancellationToken))
+        .OrderBy(q => q.CreatedAtUtc)
+        .FirstOrDefault();
 
     public void Add(PendingQuestion question) => db.Questions.Add(question);
 
     public void Remove(PendingQuestion question) => db.Questions.Remove(question);
 
-    /// <summary>Запрос возвращает и забытое в этой единице работы (оно ещё в базе) — такого вопроса уже нет.</summary>
-    private PendingQuestion? Alive(PendingQuestion? question) =>
-        question is not null && db.Entry(question).State == EntityState.Deleted ? null : question;
-
-    /// <summary>Добавленные в этой единице работы ещё не в базе — ищем и среди них.</summary>
-    private PendingQuestion? Local(Func<PendingQuestion, bool> predicate) =>
-        db.Questions.Local.Where(q => db.Entry(q).State == EntityState.Added).FirstOrDefault(predicate);
+    /// <summary>
+    /// Вопросы под условие — как их вернула бы база после сохранения (#65). Запрос отвечает по сохранённому: вопрос,
+    /// заданный или закрытый в этой единице работы, для него всё ещё «не задан» или «открыт», добавленного в ней нет,
+    /// забытый — есть. Поэтому запрос только подтягивает строки в контекст, а ответ собирается из контекста тем же
+    /// условием: всё, что отличается от базы, в нём уже лежит.
+    /// </summary>
+    private async Task<List<PendingQuestion>> WhereAsync(Expression<Func<PendingQuestion, bool>> filter, CancellationToken cancellationToken)
+    {
+        await db.Questions.Where(filter).LoadAsync(cancellationToken);
+        var matches = filter.Compile();
+        return db.ChangeTracker.Entries<PendingQuestion>()
+            .Where(e => e.State is not (EntityState.Deleted or EntityState.Detached) && matches(e.Entity))
+            .Select(e => e.Entity)
+            .ToList();
+    }
 }
 
 internal sealed class PendingQuestionConfiguration : IEntityTypeConfiguration<PendingQuestion>

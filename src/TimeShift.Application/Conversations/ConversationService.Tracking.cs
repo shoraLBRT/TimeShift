@@ -385,7 +385,7 @@ public sealed partial class ConversationService
     private async Task<BotReply> UndoAsync(User user, CancellationToken ct) =>
         await tracking.UndoAsync(user, ct) switch
         {
-            UndoResult.Undone => BotReply.Plain("↩️ Отменил последнюю запись. /day — посмотреть ленту."),
+            UndoResult.Undone => BotReply.Plain("↩️ Отменил последнее изменение ленты. /day — посмотреть ленту."),
             UndoResult.Stale => BotReply.Plain("Лента с тех пор поменялась — эту запись уже не отменить целиком."),
             _ => BotReply.Plain("Отменять нечего."),
         };

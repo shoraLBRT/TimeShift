@@ -90,7 +90,6 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
     /// его начала, иначе категория занятия. Отрезок с категорией и уже закрытые записи не трогаются. Это правка
     /// ленты — отдельный шаг <c>/undo</c>: он снимает категорию с записи, а сам ответ (категория занятия или
     /// правило) остаётся. Возвращает исправленный отрезок или <c>null</c>, если менять нечего.
-    /// Вызывать, пока в этой единице работы лента не менялась: открытый отрезок читается из хранилища.
     /// </summary>
     public async Task<Segment?> CategorizeCurrentAsync(User user, Activity activity, DateTime nowUtc, CancellationToken cancellationToken)
     {

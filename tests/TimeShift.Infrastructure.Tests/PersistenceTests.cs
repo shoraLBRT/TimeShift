@@ -164,6 +164,10 @@ public sealed class PersistenceTests : IAsyncLifetime
             var repo = sp.GetRequiredService<Application.Questions.IQuestionRepository>();
             var next = await repo.NextAsync(userId, Ct);
             next!.MarkAsked(Utc(10));
+
+            // Заданный в этой единице работы уже не «следующий», а «открытый» — хотя в базе он ещё не задан (#65).
+            Assert.Null(await repo.NextAsync(userId, Ct));
+            Assert.Same(next, await repo.OpenAsync(userId, Ct));
         });
 
         await InScopeAsync(async sp =>
@@ -173,6 +177,14 @@ public sealed class PersistenceTests : IAsyncLifetime
             var open = await repo.OpenAsync(userId, Ct);
             Assert.Equal(Utc(10), open!.AskedAtUtc);
             open.Resolve(Utc(11));
+
+            // Закрытый в этой единице работы больше не «открытый» — следующий вопрос можно задать этим же ответом.
+            Assert.Null(await repo.OpenAsync(userId, Ct));
+            var later = new Application.Questions.PendingQuestion(userId, Application.Questions.QuestionKind.ActivityCategory, subject, Utc(11));
+            repo.Add(later);
+            Assert.Same(later, await repo.NextAsync(userId, Ct));
+            repo.Remove(later);
+            Assert.Null(await repo.NextAsync(userId, Ct));
         });
 
         var found = await InScopeAsync(sp => sp.GetRequiredService<Application.Questions.IQuestionRepository>()
@@ -293,6 +305,139 @@ public sealed class PersistenceTests : IAsyncLifetime
         var kept = await InScopeAsync(sp => sp.GetRequiredService<IActivityRepository>().GetAsync(userId, guitar.Id, Ct));
         Assert.Equal(DefaultCategories.Study, kept!.CategoryKey);
     }
+
+    [Fact]
+    public async Task Reads_see_what_the_same_unit_of_work_has_just_recorded()
+    {
+        var userId = await CreateUserAsync();
+        var work = await CreateActivityAsync(userId, "Работа", "work");
+        await StartAsync(userId, work, Utc(9));
+
+        // Одно сообщение — одна единица работы: сохранение в самом конце (#65), а читают ленту и до него.
+        await InScopeAsync(async sp =>
+        {
+            var repo = sp.GetRequiredService<ITimelineRepository>();
+            var tracking = Tracking(sp);
+            var user = (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+            var before = (await repo.FindOpenAsync(userId, Ct))!;
+
+            // Новое занятие (карточки ещё нет в базе) начато, но не сохранено.
+            var guitar = await tracking.ResolveActivityAsync(user, "Гитара", Ct);
+            var started = await tracking.StartAsync(user, guitar, Utc(10), Ct);
+
+            var open = await repo.FindOpenAsync(userId, Ct);
+            Assert.Equal(started.Id, open!.Id);
+            var timeline = await repo.LoadAsync(userId, Utc(0), Ct);
+            Assert.Equal(["09:00-10:00 Работа", "10:00-… Гитара"], timeline.Segments.Select(Describe));
+            Assert.Null(await repo.FindSegmentAsync(userId, before.Id, Ct));
+            Assert.Equal(started.Id, (await repo.FindSegmentAsync(userId, started.Id, Ct))!.Id);
+
+            var current = await tracking.CurrentAsync(user, Ct);
+            Assert.Equal("Гитара", current!.Segment.Title);
+            Assert.Same(guitar, current.Activity);
+            Assert.Contains(guitar, await sp.GetRequiredService<IActivityRepository>().ListAsync(userId, Ct));
+
+            // Вторая запись того же сообщения строится на первой, а не на состоянии из базы.
+            var lunch = await tracking.ResolveActivityAsync(user, "Обед", Ct);
+            await tracking.StartAsync(user, lunch, Utc(11), Ct);
+            timeline = await repo.LoadAsync(userId, Utc(0), Ct);
+            Assert.Equal(["09:00-10:00 Работа", "10:00-11:00 Гитара", "11:00-… Обед"], timeline.Segments.Select(Describe));
+
+            // Откат несохранённого изменения — тоже виден сразу, и откатывается именно последнее.
+            Assert.Equal(UndoResult.Undone, await tracking.UndoAsync(user, Ct));
+            timeline = await repo.LoadAsync(userId, Utc(0), Ct);
+            Assert.Equal(["09:00-10:00 Работа", "10:00-… Гитара"], timeline.Segments.Select(Describe));
+
+            // И ещё одно: возвращается отрезок, который уже лежит в базе и в этой единице работы был убран.
+            Assert.Equal(UndoResult.Undone, await tracking.UndoAsync(user, Ct));
+            Assert.Equal(before.Id, (await repo.FindOpenAsync(userId, Ct))!.Id);
+
+            await tracking.StartAsync(user, guitar, Utc(10), Ct);
+        });
+
+        // После сохранения в базе то же, что видели чтения до него.
+        var loaded = await LoadAsync(userId);
+        Assert.Equal(["09:00-10:00 Работа", "10:00-… Гитара"], loaded.Segments.Select(Describe));
+    }
+
+    [Fact]
+    public async Task Changes_of_one_unit_of_work_are_undone_in_reverse_order()
+    {
+        var userId = await CreateUserAsync();
+        string[] names = ["Работа", "Обед", "Гитара", "Прогулка", "Чтение", "Ужин"];
+        var activities = new List<Activity>();
+        foreach (var name in names)
+        {
+            activities.Add(await CreateActivityAsync(userId, name));
+        }
+
+        // Шесть изменений ленты одним сохранением и с одним временем журнала — как намерения одного сообщения (#65).
+        // Каждое записано поверх ленты, собранной в памяти: порядок отката не должен зависеть от чтений до сохранения.
+        var at = Utc(15);
+        await InScopeAsync(sp =>
+        {
+            var repo = sp.GetRequiredService<ITimelineRepository>();
+            var timeline = new Timeline([]);
+            for (var i = 0; i < activities.Count; i++)
+            {
+                var start = Utc(9 + i);
+                var change = timeline.Apply(
+                    [new Segment(start, null, activities[i].Name, SegmentStatus.Confirmed, SegmentSource.User, activities[i].Id)], start);
+                repo.Record(userId, change, at);
+            }
+
+            return Task.CompletedTask;
+        });
+        Assert.Equal("Ужин", (await LoadAsync(userId)).OpenSegment!.Title);
+
+        // /undo — каждое в своём сообщении: открытым становится предыдущее занятие, и так до пустой ленты.
+        for (var i = names.Length - 2; i >= 0; i--)
+        {
+            Assert.Equal(UndoResult.Undone, await UndoAsync(userId));
+            var loaded = await LoadAsync(userId);
+            Assert.Equal(names[i], loaded.OpenSegment!.Title);
+            Assert.Equal(i + 1, loaded.Segments.Count);
+        }
+
+        Assert.Equal(UndoResult.Undone, await UndoAsync(userId));
+        Assert.Empty((await LoadAsync(userId)).Segments);
+        Assert.Equal(UndoResult.NothingToUndo, await UndoAsync(userId));
+    }
+
+    [Fact]
+    public async Task Changes_recorded_at_the_same_instant_by_different_units_of_work_are_undone_in_reverse_order()
+    {
+        var userId = await CreateUserAsync();
+        string[] names = ["Работа", "Обед", "Гитара", "Прогулка", "Чтение", "Ужин"];
+        var at = Utc(15);
+        for (var i = 0; i < names.Length; i++)
+        {
+            // Часы между сообщениями могут и не сдвинуться (тесты с остановленными часами, два сообщения подряд).
+            var activity = await CreateActivityAsync(userId, names[i]);
+            await InScopeAsync(async sp =>
+            {
+                var repo = sp.GetRequiredService<ITimelineRepository>();
+                var timeline = await repo.LoadAsync(userId, Utc(0), Ct);
+                var start = Utc(9 + i);
+                repo.Record(
+                    userId,
+                    timeline.Apply([new Segment(start, null, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id)], start),
+                    at);
+            });
+        }
+
+        for (var i = names.Length - 2; i >= 0; i--)
+        {
+            Assert.Equal(UndoResult.Undone, await UndoAsync(userId));
+            Assert.Equal(names[i], (await LoadAsync(userId)).OpenSegment!.Title);
+        }
+    }
+
+    private Task<UndoResult> UndoAsync(Guid userId) => InScopeAsync(async sp =>
+    {
+        var user = (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+        return await Tracking(sp).UndoAsync(user, Ct);
+    });
 
     private static TrackingService Tracking(IServiceProvider sp) => new(
         sp.GetRequiredService<ITimelineRepository>(), sp.GetRequiredService<IActivityRepository>(), sp.GetRequiredService<IFactRepository>());
