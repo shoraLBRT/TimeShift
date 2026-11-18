@@ -114,7 +114,7 @@ public class CategoryDialogTests
         var question = Assert.Single(await Text("Гитара"), r => r.Text.StartsWith("❓", StringComparison.Ordinal));
         var button = Assert.Single(question.Buttons.SelectMany(row => row), b => b.Label == "Музыка");
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(button.Data) <= 64, "данные кнопки Telegram — не больше 64 байт");
-        Assert.Contains(await Press(button.Data), r => r.Text == "Запомнил: «Гитара» — Музыка.");
+        Assert.Contains(await Press(button.Data), r => r.Text == "Запомнил: «Гитара» — Музыка. Текущая запись теперь — Музыка (отменить — /undo).");
         Assert.Equal(music.Key, _store.Activities.Single(a => a.Name == "Гитара").CategoryKey);
 
         await Text("/add 9-11 Гитара");

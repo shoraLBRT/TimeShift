@@ -87,6 +87,10 @@ public static class TrackingReplies
         return builder.ToString();
     }
 
+    /// <summary>Приписка к ответу о категории занятия, когда категорию получила и идущая запись (#62).</summary>
+    public static string CurrentEntryCategorized(Segment entry, Domain.Categories.CategorySet categories) =>
+        $"Текущая запись теперь — {categories.Name(entry.CategoryKey!)} (отменить — /undo).";
+
     /// <summary>Итоги по категориям (spec §5.7): основная дорожка — сумма = длина окна; параллельные — отдельно.</summary>
     public static string Totals(
         IReadOnlyList<TimelinePiece> pieces, IReadOnlyList<TimelinePiece> parallel, Domain.Categories.CategorySet? categories = null)

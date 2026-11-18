@@ -160,7 +160,7 @@ public sealed partial class QuestionService(
         var found = await questions.GetAsync(user.Id, questionId, ct);
         if (value.StartsWith(OnlyWhen, StringComparison.Ordinal) && PartsOfDay.Parse(value[OnlyWhen.Length..]) is { } part)
         {
-            return (await NarrowAsync(user, found, part, ct)) with { ReplacesSource = true };
+            return (await NarrowAsync(user, found, part, now, ct)) with { ReplacesSource = true };
         }
 
         if (found is not { ResolvedAtUtc: null } question)
@@ -316,8 +316,11 @@ public sealed partial class QuestionService(
         // Ответ можно сузить до части суток, на которую пришлось занятие (по началу отрезка, как и у правил).
         var current = await tracking.CurrentAsync(user, ct);
         var part = PartsOfDay.Of(current?.Segment is { } open && open.ActivityId == activity.Id ? open.StartUtc : now, user.TimeZoneInfo);
+
+        // Ответ доходит и до идущей записи этого занятия, если у неё категории ещё нет (#62) — отдельным шагом /undo.
+        var entry = await tracking.CategorizeCurrentAsync(user, activity, now, ct);
         return new BotReply(
-            $"Запомнил: «{activity.Name}» — {user.Categories.Name(key)}.",
+            $"Запомнил: «{activity.Name}» — {user.Categories.Name(key)}.{EntryNote(user, entry)}",
             [[new ReplyButton($"Только {PartsOfDay.Label(part)}", $"q:{question.Id}:{OnlyWhen}{PartsOfDay.Code(part)}")]]);
     }
 
@@ -325,7 +328,7 @@ public sealed partial class QuestionService(
     /// «Только вечером»: только что данный ответ о категории становится правилом на часть суток (spec §4.2), а у самого
     /// занятия категории снова нет — в другое время суток бот спросит ещё раз (поэтому вопрос забывается).
     /// </summary>
-    private async Task<BotReply> NarrowAsync(User user, PendingQuestion? question, PartOfDay part, CancellationToken ct)
+    private async Task<BotReply> NarrowAsync(User user, PendingQuestion? question, PartOfDay part, DateTime now, CancellationToken ct)
     {
         if (question is not { Kind: QuestionKind.ActivityCategory }
             || await tracking.GetActivityAsync(user, question.SubjectId, ct) is not { CategoryKey: { } key } activity
@@ -337,10 +340,17 @@ public sealed partial class QuestionService(
         await tracking.SetRuleAsync(user, activity, part, key, ct);
         activity.CategoryKey = null;
         questions.Remove(question);
+
+        // Обычно идущая запись уже получила категорию от самого ответа; если её с тех пор сняли (/undo), правило
+        // ставит её снова — но только когда запись началась в эту часть суток.
+        var entry = await tracking.CategorizeCurrentAsync(user, activity, now, ct);
         return BotReply.Plain(
-            $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(key)}. " +
+            $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(key)}.{EntryNote(user, entry)} " +
             "В другое время суток спрошу отдельно. Убрать правило — в /facts.");
     }
+
+    private static string EntryNote(User user, Domain.Timelines.Segment? entry) =>
+        entry is null ? string.Empty : " " + TrackingReplies.CurrentEntryCategorized(entry, user.Categories);
 
     /// <summary>Ответ текстом на вопрос о категории: «учёба», «отдых», «залипание».</summary>
     private static string? CategoryByName(CategorySet categories, string text)
