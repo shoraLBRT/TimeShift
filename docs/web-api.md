@@ -172,7 +172,9 @@ Own categories:
 - `segment` — the stored segment behind the piece (`null` for computed pieces: template blocks and background).
   `startLocal` / `endLocal` are its full bounds (it may start on another day); `endLocal` is `null` while it runs.
   One piece maps to exactly one stored segment: neighbours from different segments are not merged.
-- `current` — the running activity, whatever day is shown; `null` when nothing runs.
+- `current` — the running activity, whatever day is shown; `null` when nothing runs. Its `category` is the
+  category of the running entry itself, the same value as in its piece and in `totals` (`null` when the entry has
+  none) — not the activity's default category, which is in `GET /api/activities`.
 - `totals`, `status`, `parallelMin` count the past part of the main track only (up to "now"); `totals` is ordered
   by minutes, descending. `category` may be `null` (not classified yet).
 - A day in the future is allowed (all pieces `future`); it shows the week template.

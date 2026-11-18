@@ -193,7 +193,8 @@ public sealed class DayService(TrackingService tracking, IClock clock)
         current.Segment.Id,
         current.Segment.ActivityId,
         current.Segment.Title,
-        current.Segment.CategoryKey ?? current.Activity?.CategoryKey,
+        // Категория самой записи, как в pieces и totals: категория занятия — это настройка для будущих записей.
+        current.Segment.CategoryKey,
         current.Segment.StartUtc,
         LocalTime.ToLocal(current.Segment.StartUtc, tz),
         Math.Max(0, Minutes(current.Elapsed(TrackingService.Minute(now)))),
