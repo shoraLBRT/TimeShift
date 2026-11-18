@@ -48,5 +48,30 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasMany(u => u.Blocks).WithOne().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(u => u.Blocks).UsePropertyAccessMode(PropertyAccessMode.Field).AutoInclude();
+
+        // Свои категории — часть агрегата: набор нужен везде, где есть пользователь (имена, итоги, выбор).
+        builder.Ignore(u => u.Categories);
+        builder.HasMany(u => u.OwnCategories).WithOne().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(u => u.OwnCategories).HasField("_categories").UsePropertyAccessMode(PropertyAccessMode.Field).AutoInclude();
+    }
+}
+
+/// <summary>Свои категории пользователя (spec §7: categories). Системные заданы в коде и в таблицу не попадают.</summary>
+internal sealed class UserCategoryConfiguration : IEntityTypeConfiguration<TimeShift.Domain.Categories.UserCategory>
+{
+    public void Configure(EntityTypeBuilder<TimeShift.Domain.Categories.UserCategory> builder)
+    {
+        builder.ToTable("categories");
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.Property<Guid>("UserId").HasColumnName("user_id");
+        builder.Property(c => c.Key).HasColumnName("key").HasMaxLength(64).IsRequired();
+        builder.HasIndex("UserId", nameof(TimeShift.Domain.Categories.UserCategory.Key)).IsUnique();
+        builder.Property(c => c.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        builder.Property(c => c.Group).HasColumnName("group").HasConversion<string>().HasMaxLength(16);
+        builder.Property(c => c.ParentKey).HasColumnName("parent_key").HasMaxLength(64);
+        builder.Property(c => c.CreatedAtUtc).HasColumnName("created_at");
+        builder.Property(c => c.ArchivedAtUtc).HasColumnName("archived_at");
+        builder.Ignore(c => c.IsArchived);
     }
 }

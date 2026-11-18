@@ -77,8 +77,8 @@ public sealed partial class ConversationService
             return new BotReply(monday == thisMonday ? "Неделя только началась." : $"{title}: записей нет.", navigation);
         }
 
-        var stats = WeekStats.Of(days.SelectMany(d => d.Pieces), parallel, previous);
-        var image = renderer.RenderWeek(new WeekImage(title, tz, days, stats));
+        var stats = WeekStats.Of(days.SelectMany(d => d.Pieces), parallel, previous, user.Categories);
+        var image = renderer.RenderWeek(new WeekImage(title, tz, days, stats, user.Categories));
         return new BotReply(TrackingReplies.Week(title, stats), navigation) { Image = image };
     }
 

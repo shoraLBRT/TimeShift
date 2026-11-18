@@ -42,6 +42,7 @@ public sealed partial class ConversationService
                 "/quiet" => [Quiet(user, argument, now)],
                 "/undo" => [await UndoAsync(user, ct)],
                 "/facts" => [await questions.FactsAsync(user, ct)],
+                "/categories" => [CategoriesMenu(user)],
                 _ => null,
             };
             // Команда сбрасывает ожидание ответа — кроме «/add» без текста: он как раз начинает ждать.
@@ -73,6 +74,16 @@ public sealed partial class ConversationService
             return await AddPastAsync(user, text, defaultDay, now, ct);
         }
 
+        if (state is { Step: Step.CategoryName })
+        {
+            return AddCategoryByText(user, text, StateArgument(user.DialogState), now);
+        }
+
+        if (state is { Step: Step.CategoryRename })
+        {
+            return RenameCategoryByText(user, text, StateArgument(user.DialogState));
+        }
+
         if (state is { Step: Step.ActivityName })
         {
             user.DialogState = null;
@@ -97,6 +108,11 @@ public sealed partial class ConversationService
 
     private async Task<IReadOnlyList<BotReply>?> OnTrackingButtonAsync(User user, string data, DateTime now, CancellationToken ct)
     {
+        if (data.StartsWith(CategoryButton, StringComparison.Ordinal))
+        {
+            return await OnCategoryButtonAsync(user, data, now, ct);
+        }
+
         if (await intents.OnButtonAsync(user, data, now, ct) is { } proposal)
         {
             return proposal;
@@ -294,9 +310,9 @@ public sealed partial class ConversationService
             Policy = user.Settings.Extension,
         });
         var parallel = TimelineBuilder.BuildParallel(new TimeRange(dayStart, end), timeline.ParallelSegments, nowMinute);
-        var text = TrackingReplies.Day(pieces, parallel, tz, day, today) + "\n\n" + TrackingReplies.Totals(pieces, parallel);
+        var text = TrackingReplies.Day(pieces, parallel, tz, day, today) + "\n\n" + TrackingReplies.Totals(pieces, parallel, user.Categories);
         var title = text.Split('\n')[0].Trim().TrimEnd(':');
-        var image = renderer.RenderDay(new Abstractions.DayImage(title, dayStart, dayEnd, nowMinute, tz, pieces, parallel));
+        var image = renderer.RenderDay(new Abstractions.DayImage(title, dayStart, dayEnd, nowMinute, tz, pieces, parallel, user.Categories));
         return new BotReply(text, navigation) { Image = image };
     }
 

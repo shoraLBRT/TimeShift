@@ -91,4 +91,29 @@ public class RenderingTests
         Assert.Equal(SkiaDayRenderer.ColorOf(DefaultCategories.Work), bitmap.GetPixel(SkiaDayRenderer.WeekRight - 10, categoriesTop + 41));
         Assert.NotEqual(SkiaDayRenderer.ColorOf(DefaultCategories.Sleep), bitmap.GetPixel(SkiaDayRenderer.WeekRight - 10, categoriesTop + SkiaDayRenderer.CategoryRow + 41));
     }
+
+    [Fact]
+    public void Own_categories_are_drawn_in_the_colour_of_their_parent_or_group()
+    {
+        var user = new Domain.Users.User(1, "Тест", Domain.Users.User.DefaultTimeZone, Day);
+        var music = user.AddCategory("Музыка", CategoryGroup.Rest, null, Day);
+        var guitar = user.AddCategory("Гитара", CategoryGroup.Rest, music.Key, Day);
+        var calls = user.AddCategory("Созвоны", CategoryGroup.Useful, DefaultCategories.Work, Day);
+        user.RemoveCategory(music.Key, Day);
+        var set = user.Categories;
+        var grey = SkiaDayRenderer.ColorOf("nope");
+
+        // Подвид системной категории — её цвет; своя категория и её подвид — цвет группы; удалённые — как были.
+        Assert.Equal(SkiaDayRenderer.ColorOf(DefaultCategories.Work), SkiaDayRenderer.ColorOf(calls.Key, set));
+        Assert.NotEqual(grey, SkiaDayRenderer.ColorOf(music.Key, set));
+        Assert.Equal(SkiaDayRenderer.ColorOf(music.Key, set), SkiaDayRenderer.ColorOf(guitar.Key, set));
+        Assert.Equal(grey, SkiaDayRenderer.ColorOf(music.Key));
+
+        // И на картинке дня: кусок своей категории закрашен её цветом, а не серым «без категории».
+        var png = new SkiaDayRenderer().RenderDay(new DayImage(
+            "Сегодня", Day, Day.AddDays(1), Day.AddHours(20), Utc, [Piece(0, 20, "Гитара", guitar.Key, SegmentStatus.Confirmed)], [], set));
+        using var bitmap = SKBitmap.Decode(png);
+        var (x, y) = At(15); // между линиями сетки
+        Assert.Equal(SkiaDayRenderer.ColorOf(guitar.Key, set), bitmap.GetPixel(x + 200, y));
+    }
 }

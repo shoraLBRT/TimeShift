@@ -60,7 +60,7 @@ export function createFlows(app, opts = {}) {
     openGap(piece) { return open('gap', (o) => gapPanel(app, { ...o, piece })); },
     openAssistant(text) { return open('assistant', (o) => assistantPanel(app, { ...o, text })); },
     openSummary() { return open('summary', (o) => summaryPanel(app, o)); },
-    /** page: open a section directly — 'schedule' | 'reminders' | 'tracking' | 'activities' | 'other'. */
+    /** page: open a section directly — 'schedule' | 'reminders' | 'tracking' | 'activities' | 'categories' | 'other'. */
     openSettings(page) { return open('settings', (o) => settingsPanel(app, { ...o, page })); },
     closeAll() { for (const s of [...current.values()]) s.close('program'); },
     get top() { return topSheet(); },

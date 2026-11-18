@@ -62,7 +62,10 @@ public sealed class ScheduleBlock
 
     public string Title { get; }
 
-    public string? CategoryKey { get; }
+    public string? CategoryKey { get; private set; }
+
+    /// <summary>Категория блока удалена — блок остаётся без категории.</summary>
+    internal void ClearCategory() => CategoryKey = null;
 
     public Guid? ActivityId { get; }
 

@@ -1,6 +1,6 @@
 # Project state
 
-_Updated 2026-11-17._
+_Updated 2026-11-18._
 
 ## Stage
 
@@ -58,6 +58,15 @@ Two tracks, order in `docs/ROADMAP.md`:
   rounding setting, with the time above the finger, and saves it on release (`PATCH /api/entries/{id}` — the
   server displaces the neighbours, the toast's «Отменить» returns the previous bounds). Long press unrecorded
   time and drag → the entry sheet opens for that interval. Works in all three designs; no API change.
+- **Own categories (#52, first part):** the standard set stays in code, the user's own categories live in the
+  table `categories` and are part of the `User` aggregate (`User.AddCategory / UpdateCategory / RemoveCategory`,
+  `CategorySet` = standard + own). An own category has a name, a group and optionally a parent (two levels), and
+  a generated key `u.…` that never changes. It is offered wherever a category is chosen (the bot's category
+  question, the LLM contract, the PWA pickers), validated in the REST API and counted in `/day` «Итого», `/week`,
+  the pictures and `GET /api/summary`. Deleting archives it: old segments keep their name, parent and totals, the
+  category leaves every choice, activities and template blocks that had it lose it; adding the same name again
+  brings it back. Edited in the PWA (Настройки → Категории, all three designs) and in Telegram (`/categories`);
+  REST: `POST / PATCH / DELETE /api/categories` (`docs/web-api.md`). Decisions: `docs/decisions.md`.
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -77,7 +86,12 @@ the maintainer to choose and pay for the VPS. (#2 waits for the LLM key; voice n
 PWA: check on a real phone over HTTPS (#45) — that now includes the one open item of #50: say a 10–30 s phrase
 on an iPhone and on Android against a server with a whisper model (`Speech:ModelPath` or `Speech:AutoDownload`;
 the microphone needs HTTPS) and of #51: long press and drag on the timeline with a finger, in each design,
-watching that it does not fight scrolling. Then #52 (user-defined categories).
+watching that it does not fight scrolling.
+
+[#52](https://github.com/shoraLBRT/TimeShift/issues/52) stays open for its third item — classification rules as
+user facts (spec §4.2: «YouTube по вечерам — отдых»). Today a category answer is remembered on the activity; a
+rule with a condition has no model yet (what a condition is, where it is stored, how the LLM states it, how
+`/facts` shows and removes it) — the options are in the issue.
 
 ## Open questions
 
@@ -104,12 +118,17 @@ watching that it does not fight scrolling. Then #52 (user-defined categories).
   while the microphone starts (it is opened per phrase, `docs/decisions.md`), and how long whisper `base` takes
   for 30 s on the VPS (the client waits up to 180 s).
 
+- Own categories (#52): standard categories cannot be renamed, hidden or deleted, and an own category has no
+  colour of its own (it takes its parent's or its group's) — both left out on purpose (`docs/decisions.md`), say
+  if they are wanted. The settings page was checked in Chromium at phone size in the three designs (demo and a
+  local server), not on a phone; `/categories` was run through the dialog engine, not in the Telegram app.
+
 ## Verify
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 338 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 338, 0 skipped (README)
+dotnet test           # all green: 366 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 366, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone

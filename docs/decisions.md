@@ -418,3 +418,52 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   The future is not reachable: the server rejects it, so the drag stops at "now".
 - **Left out:** parallel entries, the end of the running entry (that is «Закончил»), edges lying on another day,
   a keyboard path — all of these stay in the entry sheet.
+
+## Own categories (#52)
+
+- **The table `categories` holds only what the user added.** The standard set stays in code (`DefaultCategories`)
+  and is the same for everyone; spec §7 draws one table with `user_id = null` for system rows, but that would mean
+  seeding rows that never differ from the code and a second source of truth for them. `CategorySet` (Domain) is the
+  user's whole set — standard plus own — and is what names, validates and folds categories everywhere.
+- **Still referenced by string key, not by id.** Segments, activities and blocks already store keys, so nothing
+  stored had to be rewritten. An own category gets a generated key `u.<10 hex>` once and keeps it through renames
+  and moves. It is short on purpose: Telegram button data is 64 bytes and a category question puts the key next to
+  a question id (`q:<guid>:<key>`).
+- **Own categories are part of the `User` aggregate** (loaded with the user, like the week-template blocks). The
+  set is needed wherever a user is — totals, pictures, prompts, validation — and it is small (at most 50), so this
+  is cheaper than a repository threaded through every service. The rules live in `User.AddCategory /
+  UpdateCategory / RemoveCategory`; the Web adapter and the Telegram dialog only translate.
+- **Delete is an archive.** The row stays with `archived_at`; the category leaves every choice (pickers, the
+  category question, the LLM contract, validation of `category` in requests) but still resolves by key, so old
+  segments keep their name, parent and colour and their time stays in the totals under the same name. Nothing in
+  the timeline is rewritten. Its own subcategories are archived with it.
+- **What pointed at a deleted category and is not history is cleared**: activities lose it as their default
+  category (the bot asks about them again), week-template blocks stay without a category. The assumed (⚪) time
+  of such a block on past days therefore loses the category too — it was never stored, it is recomputed from the
+  template, exactly as when the block itself is edited.
+- **Adding a category with the name of a deleted one brings the old one back** with the same key, so the past and
+  the future are counted together again; this is also the "undo" of a delete. Deleted subcategories stay deleted.
+  One exception: a deleted category that had subcategories is not revived *as a subcategory* (that would make
+  three levels) — a new one is created.
+- **Two levels, like the standard set.** A parent is a top-level category, standard or own; a subcategory always
+  has its parent's group; a category with subcategories cannot become one. Totals fold subcategories into the
+  parent in the bot (`/day` «Итого», `/week`, pictures) — `CategorySet.TotalsKey`; the REST API keeps giving
+  totals per key and the PWA groups them itself, as before.
+- **Names are unique among the categories that are not deleted**, standard ones included, case and «ё» ignored:
+  a name is how a category is picked in text («Работа: Созвоны», an answer to the category question).
+- **Standard categories cannot be renamed, hidden or deleted** in this step. `sleep` and `wasted` are used by the
+  engine (sleep blocks, the background), and hiding the rest is a separate, smaller wish than adding one's own.
+- **No colour column.** Spec §7 lists `color`; nothing lets the user choose one yet. An own category is drawn in
+  the colour of its standard parent, otherwise in the colour of its group (the bot's pictures); the PWA colours
+  everything by group already.
+- **The LLM sees the user's set.** The prompt lists the categories that are not deleted with their keys, and the
+  parser accepts only those keys (`IntentContext.Categories`); an unknown key on an activity is still dropped,
+  on `classify` it is still an error.
+- **`/categories` in Telegram**: the set by group, own ones marked 🔹 and listed as buttons (rename / delete);
+  «➕» asks for the group, then the name; «Работа: Созвоны» makes a subcategory. Moving a category to another
+  group or parent is in the PWA only — in the chat it is delete and add again.
+- **Not in this step: classification rules as user facts** (spec §4.2 — «YouTube по вечерам — отдых»). Today the
+  answer to a category question is stored on the activity (`activities.category_key`), which covers "this
+  activity is always X". A rule with a condition needs its own shape (what the condition is, where it is stored —
+  `user_facts` holds only minutes, how the LLM states it, how `/facts` shows and removes it) and is left for the
+  next pull request of #52.

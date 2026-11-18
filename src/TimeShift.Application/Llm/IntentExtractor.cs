@@ -64,7 +64,7 @@ public sealed class IntentExtractor(ILlmProvider llm)
             prompt += response.PromptTokens ?? 0;
             completion += response.CompletionTokens ?? 0;
 
-            var parsed = IntentParser.Parse(response.Content);
+            var parsed = IntentParser.Parse(response.Content, context.Categories);
             if (parsed.IsValid)
             {
                 return new IntentExtraction(ExtractionStatus.Ok, parsed.Intents, [], prompt, completion, raw);

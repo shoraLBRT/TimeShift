@@ -29,7 +29,21 @@ public sealed record SleepModel(TimeOnly Start, TimeOnly End, SleepRange? Weeken
 /// <summary>Блок шаблона (кроме сна). <c>Days</c> — дни ISO (1 = понедельник … 7 = воскресенье), в которые блок начинается.</summary>
 public sealed record BlockModel(Guid Id, ScheduleBlockKind Kind, string Title, string? Category, IReadOnlyList<int> Days, TimeOnly Start, TimeOnly End);
 
-public sealed record CategoryModel(string Key, string Name, CategoryGroup Group, string? Parent);
+/// <summary>Категория для клиента. <c>System</c> — из стартового набора (не правится); <c>Archived</c> — удалена: нужна только чтобы назвать старые записи.</summary>
+public sealed record CategoryModel(string Key, string Name, CategoryGroup Group, string? Parent, bool System, bool Archived);
+
+/// <summary>Новая своя категория: <c>Parent</c> — ключ категории верхнего уровня (тогда группа берётся у неё), иначе нужна <c>Group</c>.</summary>
+public sealed record CategoryRequest(string? Name, CategoryGroup? Group, string? Parent);
+
+/// <summary>Правка своей категории: что не задано — не меняется; <c>Parent</c> = <c>null</c> делает подвид отдельной категорией.</summary>
+public sealed record CategoryPatch
+{
+    public string? Name { get; init; }
+
+    public CategoryGroup? Group { get; init; }
+
+    public Optional<string?> Parent { get; init; }
+}
 
 public sealed record MeModel(
     Guid Id,

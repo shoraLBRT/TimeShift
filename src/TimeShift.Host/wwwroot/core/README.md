@@ -151,6 +151,7 @@ All return promises. Timeline mutations resolve to `{ ok, result?, error? }`, ne
 | `sendVoice(wav, seconds)` | a recording from `core/voice.js` (WAV 16 kHz mono) → the same thread: the user's message is «🎙 Голосовое · 0:12» (`voice: true`), the first reply is what the server heard |
 | `saveSettings(patch)`, `setSleep(sleep)`, `addBlock(b)`, `updateBlock(id, b)`, `deleteBlock(id)` | optimistic, rolled back on error, run one after another |
 | `updateActivity(id, { name?, category?, typicalMin? })` | optimistic |
+| `addCategory({ name, group } \| { name, parent }, { inlineErrors? })`, `updateCategory(key, { name?, group?, parent? }, { inlineErrors? })`, `deleteCategory(key)` | own categories (`docs/web-api.md`); not optimistic — `state.me` is replaced by the server's answer; `deleteCategory` also re-reads the day and the activities |
 | `loadSummary({ from?, to? })` | resolves to the raw `/api/summary` data (default: 7 days ending with `viewDate`) |
 | `enablePush()` | **call directly from a tap handler** (the permission prompt needs the gesture) |
 | `disablePush()`, `testPush()`, `promptInstall()` | |
@@ -188,7 +189,7 @@ scroller.scrollTop = initialScrollTop(L, scroller.clientHeight, { day: state.day
 { title,           // background + questionable → «Не записано» (never «Залипание»); future background → «Свободно»
   unknown,         // true for background (unknown time)
   kind, status, source, future, open, parallel,
-  category: { key, name, group, parent, parentName }, group,  // group 'none' when unclassified
+  category: { key, name, group, parent, parentName, system, archived }, group,  // group 'none' when unclassified
   startMin, endMin, durationMin, rangeText: '09:00–10:30', durationText: '1 ч 30 мин', startText, endText ('сейчас' when open),
   statusLabel: 'Подтверждено' | 'Предположено' | 'Под вопросом' | 'План', sourceLabel,
   actions: { confirm, continue, fill, edit, delete }, segmentId, activityId }
@@ -200,6 +201,11 @@ Other helpers: `GROUPS`, `groupName(key)`, `categoryInfo(key, me)`, `categoriesB
 
 Category groups: `useful` Полезное, `necessary` Необходимое, `people` Люди, `rest` Отдых, `lost` Потерянное,
 `none` Без категории. Colour pieces by `category.group` (and optionally by `category.key`).
+
+`me.categories` holds the standard categories, the user's own (`system: false`) and the own ones that were deleted
+(`archived: true`). `categoryInfo` resolves all of them, so an old entry keeps its name and colour after its
+category is deleted; `categoriesByGroup` — and with it every picker — offers only the ones that are not deleted.
+Colour an own category by its group: its key is generated (`u.…`), there is nothing to hang a colour on.
 
 ## 4. Time — `core/time.js`
 
@@ -227,7 +233,7 @@ Category groups: `useful` Полезное, `necessary` Необходимое, 
 | `flows.openEntry(piece)`, `flows.openGap(piece)` | direct |
 | `flows.openAssistant(text?)` | text is sent right away |
 | `flows.openSummary()` | |
-| `flows.openSettings(page?)` | `'schedule' \| 'reminders' \| 'tracking' \| 'activities' \| 'other'` |
+| `flows.openSettings(page?)` | `'schedule' \| 'reminders' \| 'tracking' \| 'activities' \| 'categories' \| 'other'` |
 | `flows.closeAll()` | |
 | `flows.renderGate(container)` | loading / login / onboarding into `container`; sets `data-phase`, hides it when ready |
 
@@ -469,6 +475,12 @@ Panels:
   (`.ts-options` with `data-value=typical|default|infinite|custom`, `.ts-extension-custom`), `activities`
   (`ul.ts-activity-list > li.ts-activity-item[data-activity-id][data-group] > button.ts-activity-open`
   (`.ts-activity-name`, `.ts-activity-meta`)), `activity` (`.ts-activity-form`, `[data-action=clear-typical]`),
+  `categories` (`.ts-categories` > `.ts-section`s: an intro `p.ts-hint`, one per group — `p.ts-hint` with the
+  standard names, then the own ones as `ul.ts-activity-list > li.ts-activity-item[data-category][data-group] >
+  button.ts-activity-open` — and `[data-action=add-category]`), `category` (`form.ts-block-form.ts-category-form[data-mode=new|edit]`: the name
+  field, a `.ts-section` with the group `.ts-options[data-value=useful|…|lost]`, a `.ts-category-picker` for the
+  parent — absent when the category has subcategories, `[data-action=add]`, `[data-action=delete]`; it is built
+  from the classes of the block and activity pages on purpose, so a design styles it without new rules),
   `other` (Тема and Вид: two `.ts-options` radio groups, Вид has the extra class `.ts-designs` and options
   `[data-value=a|b|c]`; Вид is hidden when embedded; `.ts-install[data-kind]`, `[data-action=install]`, `.ts-version`,
   `[data-action=logout]`), `tz` (`.ts-tz-picker > .ts-search + ul.ts-tz-list > li.ts-tz-item[aria-selected] >

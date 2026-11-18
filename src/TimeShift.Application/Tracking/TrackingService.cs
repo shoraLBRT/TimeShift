@@ -45,6 +45,25 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
     public Task<Activity?> GetActivityAsync(User user, Guid activityId, CancellationToken cancellationToken) =>
         activities.GetAsync(user.Id, activityId, cancellationToken);
 
+    /// <summary>
+    /// Удаляет свою категорию пользователя (и её подвиды) и снимает их с занятий — о категории такого занятия бот
+    /// спросит заново. Отрезки ленты не меняются. Возвращает, сколько занятий осталось без категории.
+    /// </summary>
+    /// <exception cref="Domain.Categories.CategoryException">Категория системная или её нет.</exception>
+    public async Task<int> RemoveCategoryAsync(User user, string key, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var removed = user.RemoveCategory(key, nowUtc);
+        var affected = (await activities.ListAsync(user.Id, cancellationToken))
+            .Where(a => a.CategoryKey is { } k && removed.Contains(k))
+            .ToList();
+        foreach (var activity in affected)
+        {
+            activity.CategoryKey = null;
+        }
+
+        return affected.Count;
+    }
+
     /// <summary>Находит занятие по названию или заводит новое (категория и длительность пока неизвестны).</summary>
     public async Task<Activity> ResolveActivityAsync(User user, string name, CancellationToken cancellationToken)
     {

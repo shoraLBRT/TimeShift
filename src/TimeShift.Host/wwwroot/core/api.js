@@ -88,6 +88,10 @@ export function createApi(opts = {}) {
     updateBlock: (id, block) => request('PUT', `/api/schedule/blocks/${encodeURIComponent(id)}`, block),
     deleteBlock: (id) => request('DELETE', `/api/schedule/blocks/${encodeURIComponent(id)}`),
     completeOnboarding: () => post('/api/onboarding/complete'),
+    // own categories → Me
+    addCategory: (category) => post('/api/categories', category),
+    updateCategory: (key, patch) => request('PATCH', `/api/categories/${encodeURIComponent(key)}`, patch),
+    deleteCategory: (key) => request('DELETE', `/api/categories/${encodeURIComponent(key)}`),
     // reading the timeline
     day: (date) => get(`/api/day/${encodeURIComponent(date)}`),
     summary: (from, to) => get(`/api/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),

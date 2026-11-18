@@ -1,8 +1,8 @@
 // Settings: nested pages inside one sheet (push / pop). Every change saves at once, with rollback on error.
 import { h, setText, prefersReducedMotion } from '../dom.js';
 import * as T from '../time.js';
-import { categoryInfo } from '../timeline.js';
-import { button, field, radioGroup, switchInput, timeInput, categoryPicker, note } from './common.js';
+import { categoryInfo, categoriesByGroup, GROUPS } from '../timeline.js';
+import { button, field, radioGroup, switchInput, timeInput, textInput, categoryPicker, note } from './common.js';
 import { blockList, blockForm, fmtDays, fmtBlockTime } from './blocks.js';
 import { remindersContent } from './reminders.js';
 import { tzPicker } from './tz.js';
@@ -86,12 +86,13 @@ export function settingsPanel(app, opts = {}) {
     if (e.key === 'Escape' && stack.length > 1) { e.preventDefault(); pop(); }
   });
 
+  const ownCount = (me) => (me.categories ?? []).filter((c) => c.system === false && !c.archived).length;
   const section = (title, ...children) => h('section', { class: 'ts-section' }, title ? h('h4', { class: 'ts-section-title' }, title) : null, ...children);
 
   const PAGES = {
     root() {
       const items = [
-        ['schedule', 'Расписание'], ['reminders', 'Напоминания'], ['tracking', 'Учёт'], ['activities', 'Занятия'], ['other', 'Прочее'],
+        ['schedule', 'Расписание'], ['reminders', 'Напоминания'], ['tracking', 'Учёт'], ['activities', 'Занятия'], ['categories', 'Категории'], ['other', 'Прочее'],
       ].map(([key, label]) => {
         const value = h('span', { class: 'ts-menu-value' });
         const b = h('button', { type: 'button', class: 'ts-menu-item', dataset: { page: key }, onClick: () => push(key) }, h('span', { class: 'ts-menu-label' }, label), value);
@@ -105,6 +106,7 @@ export function settingsPanel(app, opts = {}) {
           reminders: me.quietUntilUtc && Date.parse(me.quietUntilUtc) > app.nowMs() ? `Тишина до ${T.fmtClock(T.nowMinIn(me.timeZone, Date.parse(me.quietUntilUtc)))}` : `Каждые ${T.fmtDuration(me.settings.pingIntervalMin)}`,
           tracking: extensionPreset(me.settings).label,
           activities: `${s.activities.length}`,
+          categories: ownCount(me) ? `${ownCount(me)} ${T.plural(ownCount(me), 'своя', 'свои', 'своих')}` : 'Стандартные',
           other: T.fmtTimeZone(me.timeZone),
         };
         for (const it of items) setText(it.value, v[it.key]);
@@ -233,6 +235,110 @@ export function settingsPanel(app, opts = {}) {
       });
       const clear = button('Не знаю', { action: 'clear-typical', onClick: () => { typ.value = ''; typ.dispatchEvent(new Event('change')); } });
       return { title: a.name, el: h('div', { class: 'ts-activity-form' }, nameF.el, cat.el, typF.el, clear) };
+    },
+
+    // Own categories (spec §4.1): the standard set is fixed, own ones are added, renamed, moved and deleted here.
+    // The markup is the list and the form the other pages use, so a design needs no extra styles for it.
+    categories() {
+      const body = h('div', { class: 'ts-categories' });
+      // One flat run of sections (intro, a section per group, the button), so a design's own gap between sections applies.
+      const intro = section(null, h('p', { class: 'ts-hint' }, 'Своя категория появляется в выборе при записи и считается в итогах дня и недели. Стандартные изменить нельзя.'));
+      const add = section(null, button('Добавить категорию', { action: 'add-category', onClick: () => push('category', null) }));
+      let last = null;
+      const unsub = app.subscribe((s) => {
+        if (!s.me || s.me.categories === last) return;
+        last = s.me.categories;
+        body.replaceChildren(intro, ...categoriesByGroup(s.me).map((g) => {
+          const names = (list) => list.map((c) => c.name).join(', ');
+          const standard = g.categories.filter((c) => c.system && c.depth === 0)
+            .map((c) => {
+              const sub = g.categories.filter((x) => x.system && x.parent === c.key);
+              return sub.length ? `${c.name} (${names(sub)})` : c.name;
+            }).join(' · ');
+          const own = g.categories.filter((c) => !c.system);
+          return section(g.name,
+            standard ? h('p', { class: 'ts-hint' }, standard) : null,
+            own.length ? h('ul', { class: 'ts-activity-list' }, own.map((c) =>
+              h('li', { class: 'ts-activity-item', dataset: { category: c.key, group: g.group } },
+                h('button', { type: 'button', class: 'ts-activity-open', onClick: () => push('category', c.key) },
+                  h('span', { class: 'ts-activity-name' }, c.name),
+                  h('span', { class: 'ts-activity-meta' }, c.parent ? `Подвид: ${categoryInfo(c.parent, s.me).name}` : 'Своя'))))) : null);
+        }), add);
+      });
+      return { title: 'Категории', el: body, destroy: unsub };
+    },
+
+    category(key) {
+      const me = app.state.me;
+      const cur = key ? me.categories.find((c) => c.key === key && c.system === false && !c.archived) : null;
+      if (key && !cur) return { title: 'Категория', el: note('Категория не найдена.') };
+      const draft = { name: cur?.name ?? '', group: cur?.group ?? 'useful', parent: cur?.parent ?? null };
+      const stored = () => app.state.me.categories.find((c) => c.key === key) ?? draft;
+      const name = textInput({ value: draft.name, placeholder: 'Например, «Музыка»', maxLength: 40, enterkeyhint: 'done' });
+      const nameF = field('Название', name);
+      const error = h('p', { class: 'ts-field-error', role: 'alert', hidden: true });
+      const fail = (r) => {
+        const e = r.error;
+        if (e?.status === 422 && e.field === 'name') nameF.setError(e.message);
+        else if (e?.status === 422) { error.hidden = false; setText(error, e.message); }
+      };
+      const clear = () => { nameF.setError(null); error.hidden = true; };
+      // An existing category saves every change at once; a new one is sent by the button.
+      const save = async (patch) => {
+        if (!cur) return;
+        clear();
+        const r = await app.actions.updateCategory(key, patch, { inlineErrors: true });
+        if (r.ok) return;
+        fail(r);
+        // Not saved: the form goes back to what the server has; the message says why.
+        const c = stored();
+        Object.assign(draft, { name: c.name, group: c.group, parent: c.parent ?? null });
+        name.value = c.name;
+        groups.set(c.group);
+        parent?.set(c.parent ?? null);
+      };
+      const groups = radioGroup('Группа', GROUPS.filter((g) => g.key !== 'none').map((g) => ({ value: g.key, label: g.name })), draft.group, (g) => {
+        draft.group = g;
+        draft.parent = null;
+        parent?.set(null);
+        save({ group: g, parent: null });
+      });
+      // Two levels only: a category that has subcategories cannot become one itself.
+      const hasChildren = !!cur && me.categories.some((c) => c.parent === key && !c.archived);
+      const parent = hasChildren ? null : categoryPicker(me, draft.parent, (k) => {
+        draft.parent = k;
+        if (k) { draft.group = categoryInfo(k, me).group; groups.set(draft.group); }
+        save(k ? { parent: k } : { parent: null, group: draft.group });
+      }, { caption: 'Подвид категории', noneLabel: 'Нет, отдельная', filter: (c) => c.depth === 0 && c.key !== key });
+      name.addEventListener('change', () => {
+        const v = name.value.trim();
+        if (!cur) return;
+        if (!v) { nameF.setError('Название не может быть пустым.'); name.value = stored().name; return; }
+        if (v !== stored().name) save({ name: v });
+      });
+      const submit = cur ? null : button('Добавить', { variant: 'primary', type: 'submit', action: 'add' });
+      const del = cur ? button('Удалить категорию', { variant: 'danger', action: 'delete', onClick: async () => { const r = await app.actions.deleteCategory(key); if (r.ok) pop(); } }) : null;
+      const form = h('form', { class: 'ts-block-form ts-category-form', dataset: { mode: cur ? 'edit' : 'new' }, novalidate: true },
+        nameF.el,
+        section('Группа', groups.el),
+        parent?.el,
+        h('p', { class: 'ts-hint' }, parent
+          ? 'Подвид считается в итогах вместе со своей категорией и берёт её группу.'
+          : 'У этой категории есть подвиды, поэтому сама она подвидом быть не может.'),
+        error, submit, del,
+        cur ? h('p', { class: 'ts-hint' }, 'После удаления прошлые записи останутся как были, а в выборе категории больше не будет. Вернуть её можно, добавив снова с тем же названием.') : null);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (cur) { name.blur(); return; }
+        clear();
+        const v = name.value.trim();
+        if (!v) { nameF.setError('Назови категорию.'); return; }
+        submit.disabled = true;
+        const r = await app.actions.addCategory(draft.parent ? { name: v, parent: draft.parent } : { name: v, group: draft.group }, { inlineErrors: true });
+        submit.disabled = false;
+        if (r.ok) pop(); else fail(r);
+      });
+      return { title: cur ? cur.name : 'Новая категория', el: form };
     },
 
     other() {

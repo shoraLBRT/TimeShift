@@ -94,7 +94,7 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
             throw ClientException.Invalid("end", FutureText);
         }
 
-        var category = ValidCategory(request.Category);
+        var category = ValidCategory(user, request.Category);
         var activity = await ActivityForAsync(user, request.ActivityId, request.Title, cancellationToken);
         if (category is not null)
         {
@@ -148,7 +148,7 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
             }
         }
 
-        category = ValidCategory(patch.Category) ?? category;
+        category = ValidCategory(user, patch.Category) ?? category;
         var replacement = new Segment(
             start, end, title, SegmentStatus.Confirmed, SegmentSource.User, activityId, category,
             existing.IsOpen && end is null ? existing.ElapsedBefore : default, existing.IsParallel);
@@ -274,14 +274,14 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
         return name;
     }
 
-    private static string? ValidCategory(string? key)
+    private static string? ValidCategory(User user, string? key)
     {
         if (key is null)
         {
             return null;
         }
 
-        return DefaultCategories.Find(key) is not null ? key : throw ClientException.Invalid("category", "Нет такой категории.");
+        return user.Categories.FindActive(key) is not null ? key : throw ClientException.Invalid("category", "Нет такой категории.");
     }
 
     /// <summary>Занятие по Id или по названию (нового заводит); ровно одно из двух.</summary>

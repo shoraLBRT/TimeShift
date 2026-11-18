@@ -85,8 +85,9 @@ only then. `speechMaxSec` — the longest recording it takes (`Speech:MaxSeconds
       "days": [1, 2, 3, 4, 5], "start": "09:00", "end": "18:00" }
   ],
   "categories": [
-    { "key": "work", "name": "Работа", "group": "useful", "parent": null },
-    { "key": "wasted.youtube", "name": "YouTube", "group": "lost", "parent": "wasted" }
+    { "key": "work", "name": "Работа", "group": "useful", "parent": null, "system": true, "archived": false },
+    { "key": "wasted.youtube", "name": "YouTube", "group": "lost", "parent": "wasted", "system": true, "archived": false },
+    { "key": "u.3fa9c1d2e0", "name": "Музыка", "group": "rest", "parent": null, "system": false, "archived": false }
   ]
 }
 ```
@@ -96,6 +97,10 @@ only then. `speechMaxSec` — the longest recording it takes (`Speech:MaxSeconds
 - `days`: ISO weekdays, 1 = Monday … 7 = Sunday — the days the block **starts** on. `end < start` crosses midnight.
 - `kind`: `fixed` (work, study) or `custom`. Sleep is not in `blocks`.
 - `group`: `useful | necessary | people | rest | lost`.
+- `categories` is the whole set of this user: the standard ones (`system: true`, fixed) and the user's own
+  (`system: false`, keys start with `u.` and never change). `archived: true` marks an own category that was
+  deleted: it is not offered for new entries and is rejected as a `category` value, but stays in the list so that
+  old entries, which keep its key, still have a name, a group and a parent. `parent` is one level deep.
 
 All of the following return the updated **Me**:
 
@@ -106,10 +111,28 @@ All of the following return the updated **Me**:
 | `POST /api/schedule/blocks` | `{ "kind", "title", "category"?, "days", "start", "end" }` |
 | `PUT /api/schedule/blocks/{id}` | the same |
 | `DELETE /api/schedule/blocks/{id}` | — |
+| `POST /api/categories` | `{ "name", "group" }` — an own category, or `{ "name", "parent" }` — a subcategory |
+| `PATCH /api/categories/{key}` | any of `name`, `group`, `parent` (`null` makes a subcategory a category of its own) |
+| `DELETE /api/categories/{key}` | — |
 | `POST /api/onboarding/complete` | — (`409` when sleep is not set) |
 
 A block that overlaps another block or sleep → `409 conflict` with the name of the other block in `message`.
 An update keeps the block's `id`; a failed update leaves the block as it was.
+
+Own categories:
+
+- `name` is 1–40 characters and unique among the categories that are not deleted (case and «ё» ignored) — `422`
+  with `field: "name"`. At most 50 own categories.
+- `parent` is the key of a top-level category, standard or own; the subcategory takes the parent's `group`
+  (a `group` sent along is ignored) and is counted with the parent wherever totals are folded. A category that has
+  subcategories cannot become one — `422` with `field: "parent"`. Without `parent`, `group` is required.
+- Changing the `group` of a category moves its subcategories with it. The `key` stays the same through every edit.
+- Standard categories cannot be changed or deleted — `409`; an unknown or already deleted key — `404`.
+- `DELETE` archives the category and its own subcategories (see `archived` above). Stored entries are not
+  touched; activities that had it as their default category lose it (the next `GET /api/activities` shows
+  `category: null`), week-template blocks with it stay without a category.
+- `POST` with the name of a deleted category brings that category back with its old key, so old and new entries
+  are counted together again (its deleted subcategories stay deleted).
 
 ## Day
 
@@ -186,7 +209,8 @@ Every request below returns `{ "day": Day }` — the refreshed day. Which day: q
 | `POST /api/quiet` | `{ "minutes": 120 }` (`0` — off; 5…1440) | Manual quiet hours. |
 
 - `start` / `end` are local times; `end > start`; the future is rejected with `422` ("Будущее не записывается").
-- `category` is a category key; omitted for a known activity — its default category.
+- `category` is the key of a category that is not deleted (standard or own), otherwise `422` with
+  `field: "category"`; omitted for a known activity — its default category.
 - `title` is 1–60 characters.
 
 ## Activities
