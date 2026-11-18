@@ -6,8 +6,12 @@ namespace TimeShift.Infrastructure.Persistence;
 
 internal sealed class ActivityRepository(TimeShiftDbContext db) : IActivityRepository
 {
-    public Task<Activity?> GetAsync(Guid userId, Guid activityId, CancellationToken cancellationToken) =>
-        db.Activities.FirstOrDefaultAsync(a => a.UserId == userId && a.Id == activityId, cancellationToken);
+    public async Task<Activity?> GetAsync(Guid userId, Guid activityId, CancellationToken cancellationToken)
+    {
+        // FindAsync сначала смотрит в контекст — карточка, заведённая в этой же единице работы, ещё не в базе (#65).
+        var activity = await db.Activities.FindAsync([activityId], cancellationToken);
+        return activity?.UserId == userId ? activity : null;
+    }
 
     public async Task<Activity?> FindByNameAsync(Guid userId, string name, CancellationToken cancellationToken)
     {
@@ -36,7 +40,10 @@ internal sealed class ActivityRepository(TimeShiftDbContext db) : IActivityRepos
     }
 
     public async Task<IReadOnlyList<Activity>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
-        await db.Activities.Where(a => a.UserId == userId).ToListAsync(cancellationToken);
+    [
+        .. await db.Activities.Where(a => a.UserId == userId).ToListAsync(cancellationToken),
+        .. db.Activities.Local.Where(a => a.UserId == userId && db.Entry(a).State == EntityState.Added),
+    ];
 
     public async Task<IReadOnlyDictionary<Guid, DateTime>> LastUsedAsync(Guid userId, CancellationToken cancellationToken)
     {

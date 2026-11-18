@@ -83,7 +83,8 @@ public class DialogTests
               {"type":"start_activity","activity":"Обед","at":"11:00","category":"household"},
               {"type":"start_activity","activity":"Гитара","category":"study"}]}
             """);
-        Assert.Equal(["600-660 Работа", "660-690 Обед", "690-690 Гитара"], Recorded(said));
+        // Гитара началась только что — куска ленты у неё ещё нет, она «текущее».
+        Assert.Equal(["600-660 Работа", "660-690 Обед"], Recorded(said));
         Assert.Equal("Гитара", Current(said));
 
         // /undo снимает их в обратном порядке, по одной за раз.

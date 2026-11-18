@@ -7,6 +7,10 @@ public sealed class TimelineChangeRecord
 
     public Guid UserId { get; set; }
 
+    /// <summary>
+    /// Когда записано — и порядок <c>/undo</c>: у одного пользователя строго растёт (изменения одного сообщения
+    /// идут через микросекунду друг за другом, см. <c>TimelineRepository.NextJournalTime</c>).
+    /// </summary>
     public DateTime AtUtc { get; set; }
 
     public string BeforeJson { get; set; } = "[]";

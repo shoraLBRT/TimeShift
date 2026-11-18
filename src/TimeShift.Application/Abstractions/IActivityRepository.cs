@@ -2,6 +2,11 @@ using TimeShift.Domain.Activities;
 
 namespace TimeShift.Application.Abstractions;
 
+/// <summary>
+/// Карточки занятий. Как и лента (<see cref="ITimelineRepository"/>), карточка, заведённая в этой единице работы,
+/// видна до сохранения — по Id, по названию и в списке. Исключение — <see cref="RecentAsync"/> и
+/// <see cref="LastUsedAsync"/>: они считаются по сохранённым отрезкам (это порядок подсказок, а не состояние ленты).
+/// </summary>
 public interface IActivityRepository
 {
     Task<Activity?> GetAsync(Guid userId, Guid activityId, CancellationToken cancellationToken);

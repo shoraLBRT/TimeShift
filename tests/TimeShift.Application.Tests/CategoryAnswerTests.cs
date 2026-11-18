@@ -16,7 +16,7 @@ public class CategoryAnswerTests
 {
     private const long ChatId = 9;
 
-    private const string Undone = "↩️ Отменил последнюю запись";
+    private const string Undone = "↩️ Отменил последнее изменение ленты";
 
     private readonly InMemoryStore _store = new();
 

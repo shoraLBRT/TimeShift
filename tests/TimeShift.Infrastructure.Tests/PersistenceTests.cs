@@ -164,6 +164,10 @@ public sealed class PersistenceTests : IAsyncLifetime
             var repo = sp.GetRequiredService<Application.Questions.IQuestionRepository>();
             var next = await repo.NextAsync(userId, Ct);
             next!.MarkAsked(Utc(10));
+
+            // Заданный в этой единице работы уже не «следующий», а «открытый» — хотя в базе он ещё не задан (#65).
+            Assert.Null(await repo.NextAsync(userId, Ct));
+            Assert.Same(next, await repo.OpenAsync(userId, Ct));
         });
 
         await InScopeAsync(async sp =>
@@ -173,6 +177,14 @@ public sealed class PersistenceTests : IAsyncLifetime
             var open = await repo.OpenAsync(userId, Ct);
             Assert.Equal(Utc(10), open!.AskedAtUtc);
             open.Resolve(Utc(11));
+
+            // Закрытый в этой единице работы больше не «открытый» — следующий вопрос можно задать этим же ответом.
+            Assert.Null(await repo.OpenAsync(userId, Ct));
+            var later = new Application.Questions.PendingQuestion(userId, Application.Questions.QuestionKind.ActivityCategory, subject, Utc(11));
+            repo.Add(later);
+            Assert.Same(later, await repo.NextAsync(userId, Ct));
+            repo.Remove(later);
+            Assert.Null(await repo.NextAsync(userId, Ct));
         });
 
         var found = await InScopeAsync(sp => sp.GetRequiredService<Application.Questions.IQuestionRepository>()
