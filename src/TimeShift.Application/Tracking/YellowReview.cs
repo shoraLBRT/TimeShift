@@ -95,7 +95,8 @@ public sealed class YellowReview(TrackingService tracking)
             return ([new BotReply("Не нашёл это занятие.", [], ReplacesSource: true)], null);
         }
 
-        var segment = new Segment(range.StartUtc, range.EndUtc, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, activity.CategoryKey);
+        var category = await tracking.CategoryAsync(user, activity, range.StartUtc, ct);
+        var segment = new Segment(range.StartUtc, range.EndUtc, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, category);
         await tracking.ApplyAsync(user, [segment], now, ct);
         var replies = new List<BotReply>
         {

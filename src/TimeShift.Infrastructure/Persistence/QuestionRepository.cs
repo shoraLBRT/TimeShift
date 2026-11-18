@@ -9,10 +9,10 @@ internal sealed class QuestionRepository(TimeShiftDbContext db) : IQuestionRepos
 {
     public async Task<PendingQuestion?> FindAsync(Guid userId, QuestionKind kind, Guid subjectId, CancellationToken cancellationToken) =>
         Local(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId)
-        ?? await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId, cancellationToken);
+        ?? Alive(await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Kind == kind && q.SubjectId == subjectId, cancellationToken));
 
     public async Task<PendingQuestion?> GetAsync(Guid userId, Guid questionId, CancellationToken cancellationToken) =>
-        await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Id == questionId, cancellationToken);
+        Alive(await db.Questions.FirstOrDefaultAsync(q => q.UserId == userId && q.Id == questionId, cancellationToken));
 
     public async Task<PendingQuestion?> OpenAsync(Guid userId, CancellationToken cancellationToken) =>
         Local(q => q.UserId == userId && q.AskedAtUtc != null && q.ResolvedAtUtc == null)
@@ -26,6 +26,12 @@ internal sealed class QuestionRepository(TimeShiftDbContext db) : IQuestionRepos
             .FirstOrDefaultAsync(cancellationToken);
 
     public void Add(PendingQuestion question) => db.Questions.Add(question);
+
+    public void Remove(PendingQuestion question) => db.Questions.Remove(question);
+
+    /// <summary>Запрос возвращает и забытое в этой единице работы (оно ещё в базе) — такого вопроса уже нет.</summary>
+    private PendingQuestion? Alive(PendingQuestion? question) =>
+        question is not null && db.Entry(question).State == EntityState.Deleted ? null : question;
 
     /// <summary>Добавленные в этой единице работы ещё не в базе — ищем и среди них.</summary>
     private PendingQuestion? Local(Func<PendingQuestion, bool> predicate) =>

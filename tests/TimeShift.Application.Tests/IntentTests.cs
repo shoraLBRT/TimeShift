@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Llm;
+using TimeShift.Domain.Schedule;
 
 namespace TimeShift.Application.Tests;
 

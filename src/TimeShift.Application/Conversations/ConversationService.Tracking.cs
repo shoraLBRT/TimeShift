@@ -143,6 +143,12 @@ public sealed partial class ConversationService
             return review.Replies;
         }
 
+        if (data.StartsWith(Questions.QuestionService.RuleButton, StringComparison.Ordinal)
+            && await questions.RemoveRuleAsync(user, data, ct) is { } withoutRule)
+        {
+            return [withoutRule];
+        }
+
         if (data.StartsWith("fdur:", StringComparison.Ordinal) && Guid.TryParse(data["fdur:".Length..], out var activityId)
             && await questions.AskDurationAgainAsync(user, activityId, now, ct) is { } ask)
         {

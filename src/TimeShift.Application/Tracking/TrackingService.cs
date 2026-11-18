@@ -1,5 +1,7 @@
 using TimeShift.Application.Abstractions;
 using TimeShift.Domain.Activities;
+using TimeShift.Domain.Categories;
+using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
 
@@ -18,7 +20,7 @@ public sealed record CurrentActivity(Segment Segment, Activity? Activity)
 /// Запись занятий в ленту: начать, продолжить, закончить, откатить (spec §5.3: ответ кнопкой — без LLM).
 /// Изменения ленты пишутся в журнал для <c>/undo</c>. Сохранение — через <see cref="IUnitOfWork"/> вызывающего.
 /// </summary>
-public sealed class TrackingService(ITimelineRepository timelines, IActivityRepository activities)
+public sealed class TrackingService(ITimelineRepository timelines, IActivityRepository activities, IFactRepository facts)
 {
     /// <summary>Насколько назад загружать ленту для операций «сейчас».</summary>
     private static readonly TimeSpan RecentWindow = TimeSpan.FromDays(2);
@@ -47,7 +49,8 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
 
     /// <summary>
     /// Удаляет свою категорию пользователя (и её подвиды) и снимает их с занятий — о категории такого занятия бот
-    /// спросит заново. Отрезки ленты не меняются. Возвращает, сколько занятий осталось без категории.
+    /// спросит заново; правила классификации, которые вели в неё, тоже пропадают. Отрезки ленты не меняются.
+    /// Возвращает, сколько занятий осталось без категории.
     /// </summary>
     /// <exception cref="Domain.Categories.CategoryException">Категория системная или её нет.</exception>
     public async Task<int> RemoveCategoryAsync(User user, string key, DateTime nowUtc, CancellationToken cancellationToken)
@@ -61,8 +64,33 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
             activity.CategoryKey = null;
         }
 
+        foreach (var rule in (await facts.RulesAsync(user.Id, cancellationToken)).All.Where(r => removed.Contains(r.CategoryKey)).ToList())
+        {
+            await facts.RemoveRuleAsync(user.Id, rule.ActivityId, rule.Part, cancellationToken);
+        }
+
         return affected.Count;
     }
+
+    /// <summary>Правила классификации пользователя (spec §4.2) — факты «занятие в такую-то часть суток → категория».</summary>
+    public Task<CategoryRules> RulesAsync(User user, CancellationToken cancellationToken) =>
+        facts.RulesAsync(user.Id, cancellationToken);
+
+    /// <summary>
+    /// Категория нового отрезка занятия, начинающегося в <paramref name="startUtc"/>, когда она не названа явно:
+    /// правило на эту часть суток, иначе категория занятия. Через это проходит каждая запись — диалог, намерения
+    /// LLM, <c>/add</c>, клиенты; уже записанные отрезки правила не меняют.
+    /// </summary>
+    public async Task<string?> CategoryAsync(User user, Activity activity, DateTime startUtc, CancellationToken cancellationToken) =>
+        (await facts.RulesAsync(user.Id, cancellationToken)).Resolve(activity, startUtc, user.TimeZoneInfo, user.Categories);
+
+    /// <summary>Заводит правило или заменяет правило того же занятия на ту же часть суток.</summary>
+    public Task SetRuleAsync(User user, Activity activity, PartOfDay part, string categoryKey, CancellationToken cancellationToken) =>
+        facts.SetRuleAsync(user.Id, new CategoryRule(activity.Id, part, categoryKey), cancellationToken);
+
+    /// <summary>Убирает правило. <c>false</c> — такого не было.</summary>
+    public Task<bool> RemoveRuleAsync(User user, Guid activityId, PartOfDay part, CancellationToken cancellationToken) =>
+        facts.RemoveRuleAsync(user.Id, activityId, part, cancellationToken);
 
     /// <summary>Находит занятие по названию или заводит новое (категория и длительность пока неизвестны).</summary>
     public async Task<Activity> ResolveActivityAsync(User user, string name, CancellationToken cancellationToken)
@@ -86,7 +114,8 @@ public sealed class TrackingService(ITimelineRepository timelines, IActivityRepo
     {
         var now = Minute(startUtc is { } s && s < nowUtc ? s : nowUtc);
         var timeline = await timelines.LoadAsync(user.Id, now - RecentWindow, cancellationToken);
-        var segment = new Segment(now, null, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, activity.CategoryKey);
+        var category = await CategoryAsync(user, activity, now, cancellationToken);
+        var segment = new Segment(now, null, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, category);
         var change = timeline.Apply([segment], now);
         timelines.Record(user.Id, change, nowUtc);
         return segment;

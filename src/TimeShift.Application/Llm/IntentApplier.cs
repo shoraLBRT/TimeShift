@@ -178,6 +178,15 @@ public sealed partial class IntentApplier(
             case ClassifyIntent classify:
             {
                 var activity = await tracking.ResolveActivityAsync(user, classify.Activity, ct);
+                if (classify.When is { } part)
+                {
+                    // «Ютуб по вечерам — отдых»: правило на часть суток, категория самого занятия остаётся как была.
+                    await tracking.SetRuleAsync(user, activity, part, classify.Category, ct);
+                    return [BotReply.Plain(
+                        $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(classify.Category)}. " +
+                        "Действует на новые записи; убрать правило — в /facts.")];
+                }
+
                 activity.CategoryKey = classify.Category;
                 return [BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(classify.Category)}.")];
             }
@@ -239,7 +248,8 @@ public sealed partial class IntentApplier(
             var from = TrackingService.Minute(at ?? now);
             var length = activity.TypicalDuration ?? DefaultParallelDuration;
             var segment = new Segment(
-                from, from + length, activity.Name, SegmentStatus.Assumed, SegmentSource.User, activity.Id, activity.CategoryKey, isParallel: true);
+                from, from + length, activity.Name, SegmentStatus.Assumed, SegmentSource.User, activity.Id,
+                await tracking.CategoryAsync(user, activity, from, ct), isParallel: true);
             await tracking.ApplyAsync(user, [segment], now, ct);
             return new BotReply(
                 $"➕ Параллельно: «{activity.Name}» {TrackingReplies.Clock(segment.StartUtc, tz)}–{TrackingReplies.Clock(segment.EndUtc!.Value, tz)} ⚪, " +
@@ -299,7 +309,7 @@ public sealed partial class IntentApplier(
         if (edit.NewActivity is { } rename)
         {
             var activity = await tracking.ResolveActivityAsync(user, rename, ct);
-            (title, activityId, category) = (activity.Name, activity.Id, activity.CategoryKey ?? category);
+            (title, activityId, category) = (activity.Name, activity.Id, await tracking.CategoryAsync(user, activity, start, ct) ?? category);
         }
 
         if (edit.NewCategory is { } newCategory)
@@ -468,7 +478,14 @@ public sealed partial class IntentApplier(
             {
                 var segments = proposal.Segments.ToList();
                 segments.AddRange(Parallel(main, parallel, proposal.Segments, resolved, range, tz));
-                return new Plan.Ready(segments, proposal.UnaccountedTails);
+
+                // Время пунктов известно только теперь — правила на часть суток (spec §4.2) применяются по началу отрезка.
+                var rules = await tracking.RulesAsync(user, ct);
+                return new Plan.Ready(
+                    segments.Select(s => s.ActivityId is { } id && rules.Match(id, s.StartUtc, tz, user.Categories) is { } byRule && byRule != s.CategoryKey
+                        ? new Segment(s.StartUtc, s.EndUtc, s.Title, s.Status, s.Source, s.ActivityId, byRule, isParallel: s.IsParallel)
+                        : s).ToList(),
+                    proposal.UnaccountedTails);
             }
 
             default:

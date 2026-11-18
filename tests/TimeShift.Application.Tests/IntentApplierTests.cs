@@ -18,7 +18,7 @@ public class IntentApplierTests
 
     private readonly ScriptedLlm _llm = new(enabled: true);
 
-    private TrackingService Tracking => new(_store, _store);
+    private TrackingService Tracking => new(_store, _store, _store);
 
     private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, _llm), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _store.Renderer, _clock);
 

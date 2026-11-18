@@ -239,13 +239,18 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("key");
 
-                    b.Property<int>("Minutes")
+                    b.Property<int?>("Minutes")
                         .HasColumnType("INTEGER")
                         .HasColumnName("minutes");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT")
                         .HasColumnName("user_id");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 

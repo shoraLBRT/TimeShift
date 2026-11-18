@@ -1,6 +1,7 @@
 using TimeShift.Application.Conversations;
 using TimeShift.Domain.Categories;
 using TimeShift.Application.Tracking;
+using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Users;
 
 namespace TimeShift.Application.Questions;
@@ -65,6 +66,9 @@ public interface IQuestionRepository
     Task<PendingQuestion?> NextAsync(Guid userId, CancellationToken cancellationToken);
 
     void Add(PendingQuestion question);
+
+    /// <summary>Забыть вопрос — о том же можно будет спросить ещё раз.</summary>
+    void Remove(PendingQuestion question);
 }
 
 /// <summary>
@@ -79,6 +83,12 @@ public sealed partial class QuestionService(
 {
     private static readonly int[] QuickMinutes = [30, 60, 90, 120];
 
+    /// <summary>Значение кнопки «только в эту часть суток» под ответом о категории: <c>q:&lt;id&gt;:when.evening</c>.</summary>
+    private const string OnlyWhen = "when.";
+
+    /// <summary>Кнопка «убрать правило» в /facts: <c>frule:&lt;id занятия&gt;:evening</c>.</summary>
+    public const string RuleButton = "frule:";
+
     /// <summary>
     /// После ответа бота: завести вопросы о том, чего не знаем про текущее занятие, и задать следующий, если сейчас
     /// ни один не задан. Возвращает вопрос (добавить в конец ответа) или <c>null</c>.
@@ -86,8 +96,10 @@ public sealed partial class QuestionService(
     public async Task<BotReply?> NextAsync(User user, DateTime now, CancellationToken ct)
     {
         // Сначала категория (от неё статистика), потом длительность (от неё пинги и продление).
+        // Категорию не спрашиваем, если на это время суток у занятия есть правило (spec §4.2).
         var current = await tracking.CurrentAsync(user, ct);
         if (current?.Activity is { CategoryKey: null } uncategorized
+            && (await tracking.RulesAsync(user, ct)).Match(uncategorized.Id, current.Segment.StartUtc, user.TimeZoneInfo, user.Categories) is null
             && await questions.FindAsync(user.Id, QuestionKind.ActivityCategory, uncategorized.Id, ct) is null)
         {
             questions.Add(new PendingQuestion(user.Id, QuestionKind.ActivityCategory, uncategorized.Id, now));
@@ -133,7 +145,10 @@ public sealed partial class QuestionService(
             : null;
     }
 
-    /// <summary>Кнопки вопроса: <c>q:&lt;id&gt;:&lt;минуты&gt;</c>, <c>q:&lt;id&gt;:skip</c>.</summary>
+    /// <summary>
+    /// Кнопки вопроса: <c>q:&lt;id&gt;:&lt;минуты или ключ категории&gt;</c>, <c>q:&lt;id&gt;:skip</c>; под ответом о категории —
+    /// <c>q:&lt;id&gt;:when.&lt;часть суток&gt;</c>: ответ верен только для этой части суток.
+    /// </summary>
     public async Task<BotReply?> OnButtonAsync(User user, string data, DateTime now, CancellationToken ct)
     {
         var parts = data.Split(':');
@@ -142,7 +157,13 @@ public sealed partial class QuestionService(
             return null;
         }
 
-        if (await questions.GetAsync(user.Id, questionId, ct) is not { ResolvedAtUtc: null } question)
+        var found = await questions.GetAsync(user.Id, questionId, ct);
+        if (value.StartsWith(OnlyWhen, StringComparison.Ordinal) && PartsOfDay.Parse(value[OnlyWhen.Length..]) is { } part)
+        {
+            return (await NarrowAsync(user, found, part, ct)) with { ReplacesSource = true };
+        }
+
+        if (found is not { ResolvedAtUtc: null } question)
         {
             return new BotReply("Этот вопрос уже закрыт.", [], ReplacesSource: true);
         }
@@ -180,17 +201,41 @@ public sealed partial class QuestionService(
         return reply;
     }
 
-    /// <summary>/facts (spec §5.7): что бот знает — длительности и категории занятий, маршруты.</summary>
-    public async Task<BotReply> FactsAsync(User user, CancellationToken ct)
+    /// <summary>Кнопка «убрать правило» в /facts. <c>null</c> — кнопка не эта.</summary>
+    public async Task<BotReply?> RemoveRuleAsync(User user, string data, CancellationToken ct)
+    {
+        var parts = data.Split(':');
+        if (parts is not ["frule", var id, var code] || !Guid.TryParseExact(id, "N", out var activityId) || PartsOfDay.Parse(code) is not { } part)
+        {
+            return null;
+        }
+
+        var removed = await tracking.RemoveRuleAsync(user, activityId, part, ct);
+        var note = removed
+            ? "Правило убрал — новые записи пойдут по категории занятия. Уже записанное не трогаю."
+            : "Этого правила уже нет.";
+        return (await FactsAsync(user, ct, note)) with { ReplacesSource = true };
+    }
+
+    /// <summary>/facts (spec §5.7): что бот знает — длительности и категории занятий, правила классификации, маршруты.</summary>
+    public async Task<BotReply> FactsAsync(User user, CancellationToken ct, string? note = null)
     {
         var known = await activities.ListAsync(user.Id, ct);
+        var rules = await tracking.RulesAsync(user, ct);
         var routes = (await facts.GetAsync(user.Id, ct))
             .Select(f => (Route: Domain.Facts.UserFact.ParseRouteKey(f.Key), f.Value))
             .Where(f => f.Route is not null)
             .ToList();
 
         var categories = user.Categories;
-        var lines = new List<string> { "Что я знаю:" };
+        var lines = new List<string>();
+        if (note is not null)
+        {
+            lines.Add(note);
+            lines.Add(string.Empty);
+        }
+
+        lines.Add("Что я знаю:");
         if (known.Count == 0 && routes.Count == 0)
         {
             lines.Add("пока ничего — запомню, когда расскажешь.");
@@ -201,6 +246,10 @@ public sealed partial class QuestionService(
             var duration = a.TypicalDuration is { } d ? TrackingReplies.Duration(d) : "длительность ?";
             var category = a.CategoryKey is { } k ? categories.Name(k) : "категория ?";
             lines.Add($"• {a.Name} — {duration}, {category}");
+            foreach (var rule in rules.Of(a.Id))
+            {
+                lines.Add($"   ↳ {PartsOfDay.Label(rule.Part)} — {categories.Name(rule.CategoryKey)}");
+            }
         }
 
         foreach (var (route, minutes) in routes)
@@ -215,8 +264,20 @@ public sealed partial class QuestionService(
             .Chunk(2)
             .Select(c => (IReadOnlyList<ReplyButton>)c)
             .ToList();
+
+        // Правила: по кнопке «убрать» на каждое, в том же порядке, что в списке.
+        var ruleButtons = known
+            .OrderBy(a => a.Name, StringComparer.CurrentCulture)
+            .SelectMany(a => rules.Of(a.Id).Select(r => new ReplyButton(
+                $"✖ {a.Name} · {PartsOfDay.When(r.Part)}", $"{RuleButton}{a.Id:N}:{PartsOfDay.Code(r.Part)}")))
+            .Take(10)
+            .ToList();
+        buttons.AddRange(ruleButtons.Select(b => (IReadOnlyList<ReplyButton>)[b]));
         lines.Add(string.Empty);
         lines.Add("Поменять длительность — кнопкой; маршрут или категорию — просто напиши («до работы минут 40», «дота — залипание»).");
+        lines.Add(ruleButtons.Count > 0
+            ? "Правило на время суток (↳) действует на новые записи; убрать — кнопкой ✖."
+            : "Категория может зависеть от времени суток: «ютуб по вечерам — отдых» или кнопка «Только …» под ответом на вопрос о категории.");
         return new BotReply(string.Join('\n', lines), buttons);
     }
 
@@ -249,7 +310,34 @@ public sealed partial class QuestionService(
         }
 
         activity.CategoryKey = key;
-        return BotReply.Plain($"Запомнил: «{activity.Name}» — {user.Categories.Name(key)}.");
+
+        // Ответ можно сузить до части суток, на которую пришлось занятие (по началу отрезка, как и у правил).
+        var current = await tracking.CurrentAsync(user, ct);
+        var part = PartsOfDay.Of(current?.Segment is { } open && open.ActivityId == activity.Id ? open.StartUtc : now, user.TimeZoneInfo);
+        return new BotReply(
+            $"Запомнил: «{activity.Name}» — {user.Categories.Name(key)}.",
+            [[new ReplyButton($"Только {PartsOfDay.Label(part)}", $"q:{question.Id}:{OnlyWhen}{PartsOfDay.Code(part)}")]]);
+    }
+
+    /// <summary>
+    /// «Только вечером»: только что данный ответ о категории становится правилом на часть суток (spec §4.2), а у самого
+    /// занятия категории снова нет — в другое время суток бот спросит ещё раз (поэтому вопрос забывается).
+    /// </summary>
+    private async Task<BotReply> NarrowAsync(User user, PendingQuestion? question, PartOfDay part, CancellationToken ct)
+    {
+        if (question is not { Kind: QuestionKind.ActivityCategory }
+            || await tracking.GetActivityAsync(user, question.SubjectId, ct) is not { CategoryKey: { } key } activity
+            || user.Categories.FindActive(key) is null)
+        {
+            return BotReply.Plain("Это уже учтено. Категории занятий и правила — в /facts.");
+        }
+
+        await tracking.SetRuleAsync(user, activity, part, key, ct);
+        activity.CategoryKey = null;
+        questions.Remove(question);
+        return BotReply.Plain(
+            $"Запомнил: «{activity.Name}» {PartsOfDay.Label(part)} — {user.Categories.Name(key)}. " +
+            "В другое время суток спрошу отдельно. Убрать правило — в /facts.");
     }
 
     /// <summary>Ответ текстом на вопрос о категории: «учёба», «отдых», «залипание».</summary>

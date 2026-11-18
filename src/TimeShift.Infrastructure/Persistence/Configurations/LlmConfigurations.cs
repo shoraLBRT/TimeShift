@@ -18,6 +18,7 @@ internal sealed class UserFactConfiguration : IEntityTypeConfiguration<UserFact>
         builder.Property(f => f.Key).HasColumnName("key").HasMaxLength(200).IsRequired();
         builder.HasIndex(f => new { f.UserId, f.Key }).IsUnique();
         builder.Property(f => f.Minutes).HasColumnName("minutes");
+        builder.Property(f => f.Value).HasColumnName("value").HasMaxLength(64);
     }
 }
 

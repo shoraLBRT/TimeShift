@@ -15,7 +15,7 @@ public class TrackingTests
 
     private readonly TestClock _clock = new(); // 09:00 UTC = 12:00 Москва
 
-    private TrackingService Tracking => new(_store, _store);
+    private TrackingService Tracking => new(_store, _store, _store);
 
     private ConversationService Conversation => new(_store, _store, Tracking, _store.Applier(Tracking, new ScriptedLlm()), _store.Speech, _store.Questions(Tracking), new YellowReview(Tracking), new DailyReview(Tracking, new YellowReview(Tracking)), _store.Renderer, _clock);
 
