@@ -557,3 +557,50 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   touch the running entry — that is editing a setting, not answering about what is happening now, and the entry
   form is where the PWA sets a category of an entry; past entries of the activity are not re-classified by an
   answer.
+
+## Reads inside one unit of work (#65)
+
+- **A message stays one save; the repositories answer reads as the database would after it.** The dialog saves
+  once, at the end of a message — that is what makes a message atomic, and it stays. The EF repositories used to
+  answer reads with a query alone, and a query knows nothing of the unit of work: a row added in it is missing,
+  a row removed in it is still returned, a row edited in it is matched by its old values. The fix is in
+  Infrastructure, not in Application: no intermediate `SaveChanges`, no change to the ports' signatures. A read
+  runs the query only to bring the matching rows into the context and then answers from the context with the
+  same condition (`TimelineRepository.SegmentsAsync`, `QuestionRepository.WhereAsync`) — everything that differs
+  from the database is tracked there, so stored and unsaved state cannot disagree. Lookups by id go through
+  `FindAsync`, which looks in the context first.
+- **What was confirmed on a real database before fixing** (tests written first and seen failing on SQLite):
+  after an unsaved start "current" was the previous activity; the question about a new activity did not come in
+  the reply to the message that started it; an LLM message with several timeline intents did worse than work on
+  a stale timeline — it *saved* overlapping entries (three open ones for three starts, two copies of the stopped
+  entry for «закончил … начал …»), after which the timeline could not be loaded at all; and six changes saved
+  together were not undone in reverse order (`/undo` answered «лента с тех пор поменялась»). One more of the same
+  kind showed up in the dialog test and was not in the issue: the question queue did not see a question asked or
+  closed in the same message, so the duration question did not follow the category answer in the same reply.
+  Not reproduced: changes recorded at the same instant by *different* saves were undone in the right order on
+  SQLite even before the fix (the query had no tie-break, so nothing promised it) — the test stays as a guard.
+- **Scope of "reads see unsaved changes":** the timeline (`LoadAsync`, `FindOpenAsync`, `FindSegmentAsync`), an
+  activity by id and the activity list, the question queue. Facts and the pending period already did. Left on
+  saved data on purpose: `RecentAsync` / `LastUsedAsync` — SQL aggregates over entries that only order the
+  suggestion buttons; making them exact means recomputing them in memory for every activity touched in the unit
+  of work, which the buttons do not need.
+- **The order of `/undo` is the order of `Record` calls, kept in the journal time — no new column.** All changes
+  of one message come with the same "now", so the journal time alone did not order them. `TimelineRepository`
+  now makes it grow strictly per user: a change that is not later than the user's latest one is stamped one
+  microsecond after it (a microsecond is what Postgres `timestamptz` keeps; the time is cut to it first, so both
+  providers store the same value). The time of a change can therefore be a few microseconds off the clock —
+  nothing reads it except the ordering. A sequence column would say the same thing with two migrations and a
+  backfill of existing rows; it becomes worth it only if a user's requests ever run concurrently (two requests
+  at the very same moment can still read the same latest time — nothing serialises them today).
+- **Undoing a change that is not saved yet works on the same rules:** an entry added in the unit of work is
+  simply dropped from it, and an entry the unit of work removed from the database is un-removed rather than
+  inserted again (entries are immutable, the row is the same).
+- **`classify` among several intents (#62) is unchanged.** Its reason there — "the stored open entry is read
+  before that change is saved" — no longer holds; it now stays only as behaviour (in a message with several
+  intents `classify` records the fact and leaves the running entry alone). Lifting it is a separate decision.
+- **The `/undo` reply is «Отменил последнее изменение ленты»** instead of «…последнюю запись»: the last step can
+  be a category put on an entry (#62) or a «закончил», not an entry.
+- **Tests:** the in-memory store of `TimeShift.Application.Tests` applies a change at once and cannot show this
+  class of error. Rather than rewrite those tests, the scenarios that depend on unsaved state run through the
+  whole host on a real database (`TimeShift.Web.Tests/DialogTests.cs`, `POST /api/messages`, with a scripted
+  LLM in `TestApp`) and at repository level in `PersistenceTests` — on SQLite and, in CI, on Postgres.

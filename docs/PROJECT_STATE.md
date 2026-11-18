@@ -88,6 +88,17 @@ Two tracks, order in `docs/ROADMAP.md`:
   activity's default or the rule) stays. An entry that already has a category, closed entries and other
   activities are not touched; the reply says when the entry was changed. Decisions: `docs/decisions.md`, «The
   category answer reaches the running entry».
+- **Reads inside one message see what the message has recorded (#65):** a message is saved once, at its end, and
+  the EF repositories used to answer reads from the database alone. Now timeline reads (`LoadAsync`,
+  `FindOpenAsync`, `FindSegmentAsync`), an activity by id / in the list, and the question queue answer as the
+  database would after the save — stored rows plus the unit of work's unsaved additions, removals and edits. So
+  the question about a new activity comes in the reply to the message that started it, the next question comes
+  with the answer to the previous one, and an LLM message with several timeline intents builds each on the one
+  before (before the fix such a message saved overlapping entries and the timeline could not be loaded again).
+  The journal time grows strictly per user, so `/undo` takes the changes of one message back one by one in
+  reverse order. No schema change. Covered on a real database at repository level (`PersistenceTests`) and at
+  dialog level (`tests/TimeShift.Web.Tests/DialogTests.cs`, the whole host with a scripted LLM). Decisions:
+  `docs/decisions.md`, «Reads inside one unit of work».
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -142,17 +153,15 @@ watching that it does not fight scrolling.
   key yet, #2): the contract, two eval cases and the prompt example are in place, a real model has not been
   asked. The rule pickers were checked in Chromium at phone size on demo data in the three designs, not on a
   phone; `/facts` — through the dialog engine, not in Telegram.
-- Found while fixing #62, not fixed (no issue yet): with the real database, timeline reads inside one message do
-  not see what the same message has just recorded — `ITimelineRepository.FindOpenAsync` / `LoadAsync` query the
-  database, and the save comes once, at the end of the message. Probed on SQLite: after an unsaved start
-  `CurrentAsync` returns the previous activity. What follows from it is read from the code, not watched in a
-  running bot: right after «Гитара» starts a new activity, `QuestionService.NextAsync` sees the previous running
-  activity (or none), so the category / duration question for the new one would come only after the next
-  message; and an LLM message with several timeline intents would work on the timeline as it was before the
-  first of them. The dialog tests do not show it: their in-memory store applies a change at once. The
-  repository could answer from the change tracker, as `FactRepository` already does — needs an
-  issue and a decision on where to fix it. Related: several timeline changes recorded by one message share the
-  journal time (`AtUtc`), so the order in which `/undo` takes them is not defined on a database.
+- #65, left as it was: `IActivityRepository.RecentAsync` / `LastUsedAsync` (the order of the suggestion buttons)
+  are still computed from saved entries, so inside the message that starts a brand-new activity the buttons do
+  not list it yet. `classify` among several intents of one message still only records the fact and does not
+  touch the running entry: the technical reason is gone with #65, lifting the restriction is a behaviour
+  decision — say if it is wanted. The dialog tests of `TimeShift.Application.Tests` still run on the in-memory
+  store, which cannot show this class of error; the scenarios that depend on it are in `DialogTests` on a real
+  database — moving more dialog tests there (or running them on both stores) is an option, not done. Two
+  requests of the same user handled at the very same moment can still get the same journal time (nothing
+  serialises a user's requests); not seen, the owner is one person.
 - #62: the category answer changes the running entry only. The part of the same activity that «Всё ещё занят»
   confirmed before the answer, and an entry that ended before the answer came, stay without a category (an edit
   fixes them) — say if the answer should reach those too. The new reply line and `/undo` after an answer were run
@@ -162,8 +171,8 @@ watching that it does not fight scrolling.
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 396 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 396, 0 skipped (README)
+dotnet test           # all green: 402 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 402, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone
