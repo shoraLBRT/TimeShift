@@ -29,9 +29,9 @@ public class DialogTests
             .Select(p => $"{p!["startMin"]!.GetValue<int>()}-{p["endMin"]!.GetValue<int>()} {p["title"]!.GetValue<string>()}")
             .ToList();
 
-    /// <summary>
-    /// Категория самой записи — по её куску ленты: у «текущего» в ответе она дополняется категорией занятия.
-    /// </summary>
+    private static string? CurrentCategory(ApiResponse response) => response.Json["day"]!["current"]?["category"]?.GetValue<string>();
+
+    /// <summary>Категория самой записи — по её куску ленты.</summary>
     private static string? EntryCategory(ApiResponse response, string title) =>
         Assert.Single(response.Json["day"]!["pieces"]!.AsArray(), p => p!["segment"] is not null && p["title"]!.GetValue<string>() == title)!["category"]
             ?.GetValue<string>();
@@ -161,13 +161,16 @@ public class DialogTests
         // Запись гитары — с категорией и считается под ней в итогах дня и сводки.
         Assert.Equal(["660-690 Гитара"], Recorded(said));
         Assert.Equal(("Гитара", "study"), (Current(said), EntryCategory(said, "Гитара")));
+        Assert.Equal("study", CurrentCategory(said));
         Assert.Equal(30, Totals(said.Json["day"]!["totals"]!)["study"]);
         Assert.Equal(30, Totals((await app.GetAsync("/api/summary")).Json["totals"]!)["study"]);
 
         // Первый /undo снимает категорию с записи: запись идёт дальше, ответ остался у занятия.
+        // «Текущее» показывает категорию самой записи, как лента и итоги, а не настройку занятия.
         var undone = await SayAsync(app, "/undo");
         Assert.Equal(["660-690 Гитара"], Recorded(undone));
         Assert.Equal(("Гитара", null), (Current(undone), EntryCategory(undone, "Гитара")));
+        Assert.Null(CurrentCategory(undone));
         Assert.DoesNotContain("study", Totals(undone.Json["day"]!["totals"]!).Keys);
         Assert.Equal("study", await ActivityCategoryAsync(app, "Гитара"));
 

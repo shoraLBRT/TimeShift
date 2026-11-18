@@ -39,7 +39,9 @@ Two tracks, order in `docs/ROADMAP.md`:
   session cookie; day (pieces mapped to stored segments), summary, start / stop / continue, entries, confirm,
   undo, quiet, activities, settings, week template, free text and voice (`POST /api/messages` with an
   `audio/wav` body, the reply starts with what was heard) through the same dialog engine. Use cases live in
-  `Application/Clients`. A user can exist without Telegram (`telegram_chat_id` is nullable).
+  `Application/Clients`. A user can exist without Telegram (`telegram_chat_id` is nullable). `day.current.category`
+  is the category of the running entry itself, as in its piece and the totals (it no longer falls back to the
+  activity's default).
 - **Notifications:** channels fan-out (`NotificationFanout`): Telegram and Web Push (VAPID keys from config or
   generated once and kept in the database, subscriptions in `push_subscriptions`).
 - **PWA (`src/TimeShift.Host/wwwroot`, no build step, no third-party requests):** shared core (`core/`: API
