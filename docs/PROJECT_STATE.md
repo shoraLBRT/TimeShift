@@ -122,7 +122,6 @@ Everything in the roadmap's numbered order now waits for the maintainer:
 - [#18](https://github.com/shoraLBRT/TimeShift/issues/18) (deploy to a VPS) — the maintainer chooses and pays for
   the VPS. [#19](https://github.com/shoraLBRT/TimeShift/issues/19) (logs, DB backups, monitoring) depends on #18.
 - [#2](https://github.com/shoraLBRT/TimeShift/issues/2) — the LLM aggregator key.
-- #47 and #48 — a decision (see the open questions).
 - Open only for a check on real devices: #16 — the `/week` picture in Telegram on an iPhone (any running bot will
   do); #50 — say a 10–30 s phrase on an iPhone and on Android against a server with a whisper model
   (`Speech:ModelPath` or `Speech:AutoDownload`; the microphone needs HTTPS, so the deployed server); #51 — long
@@ -136,6 +135,12 @@ What a coding session can take without waiting (outside the numbered order, `doc
   `docs/deploy.md`.
 - [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
   note while the PWA is the main client.
+- [#47](https://github.com/shoraLBRT/TimeShift/issues/47) and [#48](https://github.com/shoraLBRT/TimeShift/issues/48)
+  — decided by the maintainer on 2026-11-19, not built: unknown time is shown and counted as unknown, with
+  «Залипание» as the answer the bot offers first (#47); the ping behaviour after unanswered pings, pings on/off
+  and quiet hours become settings (#48). The maintainer's words and how they were read are in each issue and in
+  `docs/decisions.md` («Maintainer's decisions on #47 and #48»); both change the spec, which is edited in the PR
+  that builds them.
 
 ## Open questions
 
@@ -143,8 +148,11 @@ What a coding session can take without waiting (outside the numbered order, `doc
   recorded responses.
 - VPS choice for deploy (#18). With the PWA the server can be in Russia; check from the VPS that the push
   hosts and the LLM aggregator are reachable (`docs/deploy.md`).
-- Unknown time is counted as «Залипание» (#47); pings stop for good after two unanswered (#48) — both change
-  the spec and need a decision.
+- #47 and #48 are decided (see «Next»), but the decisions were short and were read by the session: for #47,
+  whether «базово предлагается "залипание"» means the first offered answer (as read) or a setting with that
+  default; for #48, the default values of the new settings (suggested: back-off, pings on, no quiet hours).
+  Until they are built, unknown time is still counted as «Залипание» and pings still stop for good after two
+  unanswered.
 - `/day` and `/week` pictures were checked as rendered PNGs at 720 px, not in Telegram on an iPhone (#16's
   «читается на iPhone» is still to be confirmed by the maintainer). The PWA has no week picture; it has
   `GET /api/summary`.

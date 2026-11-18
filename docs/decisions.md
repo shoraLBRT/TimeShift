@@ -618,3 +618,21 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   class of error. Rather than rewrite those tests, the scenarios that depend on unsaved state run through the
   whole host on a real database (`TimeShift.Web.Tests/DialogTests.cs`, `POST /api/messages`, with a scripted
   LLM in `TestApp`) and at repository level in `PersistenceTests` — on SQLite and, in CI, on Postgres.
+
+## Maintainer's decisions on #47 and #48 (2026-11-19)
+
+Both issues waited for a decision because they change the spec. The maintainer answered on 2026-11-19; nothing
+is built yet. The quotes are the maintainer's words, the readings under them are the session's and can be
+corrected in the issues before the work starts.
+
+- **#47, unknown time.** Decision: «неизвестное время описывается как неизвестное, но базово предлагается
+  "залипание"». Reading: the issue's option 1 — the background is «Не записано», has no category, is a separate
+  line in the totals and is not part of «Потерянное» — and «Залипание» stays the first thing the bot offers when
+  it asks about such a span («Пока тебя не было…», the evening review); until the user answers, the time is
+  unknown. Changes spec §3.2 and §5.1 item 3, to be edited in the PR that builds it.
+- **#48, pings after unanswered ones.** Decision: «сделать настраиваемо». Reading: the behaviour becomes
+  settings (Telegram `/settings` and the PWA settings) instead of one built-in choice — what happens after the
+  limit of unanswered pings (stop, as today, or back off: the issue's option 1), pings on/off and hours without
+  pings (option 3). The defaults were not named; the session's suggestion is back-off, pings on, no quiet hours.
+  Option 4 (one ping per typical duration during an activity) is not part of the decision. Changes spec §5.2,
+  to be edited in the PR that builds it.
