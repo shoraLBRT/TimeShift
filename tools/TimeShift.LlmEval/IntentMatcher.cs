@@ -128,6 +128,7 @@ public static class IntentMatcher
             case (ClassifyIntent e, ClassifyIntent a):
                 Name("activity", e.Activity, a.Activity);
                 Same("category", e.Category, a.Category);
+                Same("when", e.When, a.When);
                 break;
 
             case (SetFactIntent e, SetFactIntent a):

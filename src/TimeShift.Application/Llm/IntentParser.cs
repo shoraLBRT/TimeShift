@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using TimeShift.Domain.Categories;
+using TimeShift.Domain.Schedule;
 
 namespace TimeShift.Application.Llm;
 
@@ -91,7 +92,8 @@ public static class IntentParser
                     return null;
                 }
 
-                return classified is not null && category is not null ? new ClassifyIntent(classified, category) : null;
+                var when = r.PartOfDay("when");
+                return classified is not null && category is not null ? new ClassifyIntent(classified, category, when) : null;
             }
 
             case "set_fact":
@@ -348,10 +350,7 @@ public static class IntentParser
         public PartOfDay? PartOfDay(string name) => String(name)?.ToLowerInvariant() switch
         {
             null => null,
-            "morning" => Llm.PartOfDay.Morning,
-            "afternoon" => Llm.PartOfDay.Afternoon,
-            "evening" => Llm.PartOfDay.Evening,
-            "night" => Llm.PartOfDay.Night,
+            var code when PartsOfDay.Parse(code) is { } part => part,
             var other => Invalid<PartOfDay>(name, $"morning, afternoon, evening или night, а не «{other}»"),
         };
 

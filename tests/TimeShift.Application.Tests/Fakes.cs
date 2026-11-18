@@ -4,6 +4,8 @@ using TimeShift.Application.Llm;
 using TimeShift.Application.Questions;
 using TimeShift.Application.Tracking;
 using TimeShift.Domain.Activities;
+using TimeShift.Domain.Categories;
+using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
 
@@ -101,6 +103,8 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
 
     void IQuestionRepository.Add(PendingQuestion question) => QuestionList.Add(question);
 
+    void IQuestionRepository.Remove(PendingQuestion question) => QuestionList.Remove(question);
+
     Task<IReadOnlyList<Activity>> IActivityRepository.ListAsync(Guid userId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Activity>>(Activities.Where(a => a.UserId == userId).ToList());
 
@@ -128,6 +132,20 @@ internal sealed class InMemoryStore : IUserRepository, ITimelineRepository, IAct
         Facts[(userId, key)] = minutes;
         return Task.CompletedTask;
     }
+
+    public Dictionary<(Guid User, Guid Activity, PartOfDay Part), string> Rules { get; } = [];
+
+    Task<CategoryRules> IFactRepository.RulesAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(new CategoryRules(Rules.Where(r => r.Key.User == userId).Select(r => new CategoryRule(r.Key.Activity, r.Key.Part, r.Value))));
+
+    Task IFactRepository.SetRuleAsync(Guid userId, CategoryRule rule, CancellationToken cancellationToken)
+    {
+        Rules[(userId, rule.ActivityId, rule.Part)] = rule.CategoryKey;
+        return Task.CompletedTask;
+    }
+
+    Task<bool> IFactRepository.RemoveRuleAsync(Guid userId, Guid activityId, PartOfDay part, CancellationToken cancellationToken) =>
+        Task.FromResult(Rules.Remove((userId, activityId, part)));
 
     // IPendingPeriodRepository
     Task<PendingPeriod?> IPendingPeriodRepository.GetAsync(Guid userId, CancellationToken cancellationToken) =>

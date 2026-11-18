@@ -195,6 +195,13 @@ public static class ApiEndpoints
             var patch = new ActivityPatch { Name = f.Str("name"), Category = f.OptStr("category"), TypicalMin = f.Opt<int>("typicalMin") };
             return Json(await activities.UpdateAsync(Owner(http), id, patch, ct));
         });
+        api.MapPut("/activities/{id:guid}/rules/{part}", async (Guid id, string part, HttpContext http, ActivityService activities, CancellationToken ct) =>
+        {
+            var f = await Fields.ReadAsync(http.Request, ct);
+            return Json(await activities.SetRuleAsync(Owner(http), id, part, f.Str("category"), ct));
+        });
+        api.MapDelete("/activities/{id:guid}/rules/{part}", async (Guid id, string part, HttpContext http, ActivityService activities, CancellationToken ct) =>
+            Json(await activities.RemoveRuleAsync(Owner(http), id, part, ct)));
 
         api.MapPost("/messages", async (HttpContext http, MessageService messages, DayService days, CancellationToken ct) =>
         {

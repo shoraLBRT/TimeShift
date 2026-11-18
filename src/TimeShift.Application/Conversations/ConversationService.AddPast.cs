@@ -101,7 +101,8 @@ public sealed partial class ConversationService
 
             var activity = await tracking.ResolveActivityAsync(user, title, ct);
             activity.CategoryKey ??= ScheduleText.GuessCategory(activity.Name);
-            segments.Add(new Segment(start, end, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, activity.CategoryKey));
+            var category = await tracking.CategoryAsync(user, activity, start, ct);
+            segments.Add(new Segment(start, end, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id, category));
         }
 
         var replies = new List<BotReply>();

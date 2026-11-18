@@ -203,10 +203,11 @@ export function settingsPanel(app, opts = {}) {
         empty.hidden = s.activities.length > 0;
         list.replaceChildren(...s.activities.map((a) => {
           const c = categoryInfo(a.category, s.me);
+          const rules = a.rules?.length ? 'по времени суток' : null;
           return h('li', { class: 'ts-activity-item', dataset: { activityId: a.id, group: c.group } },
             h('button', { type: 'button', class: 'ts-activity-open', onClick: () => push('activity', a.id) },
               h('span', { class: 'ts-activity-name' }, a.name),
-              h('span', { class: 'ts-activity-meta' }, [c.name, a.typicalMin ? T.fmtDuration(a.typicalMin) : null].filter(Boolean).join(' · '))));
+              h('span', { class: 'ts-activity-meta' }, [c.name, rules, a.typicalMin ? T.fmtDuration(a.typicalMin) : null].filter(Boolean).join(' · '))));
         }));
       });
       return { title: 'Занятия', el: h('div', null, list, empty), destroy: unsub };
@@ -234,7 +235,23 @@ export function settingsPanel(app, opts = {}) {
         app.actions.updateActivity(id, { typicalMin: v });
       });
       const clear = button('Не знаю', { action: 'clear-typical', onClick: () => { typ.value = ''; typ.dispatchEvent(new Event('change')); } });
-      return { title: a.name, el: h('div', { class: 'ts-activity-form' }, nameF.el, cat.el, typF.el, clear) };
+      // Classification rules (spec §4.2): a category of its own for a part of the day; "Как обычно" removes the rule.
+      const ruleOf = (act, part) => act?.rules?.find((r) => r.part === part)?.category ?? null;
+      const rules = T.PARTS_OF_DAY.map((p) => {
+        const picker = categoryPicker(app.state.me, ruleOf(a, p.part), (k) => app.actions.setActivityRule(id, p.part, k),
+          { caption: `${p.label}, ${p.hours}`, noneLabel: 'Как обычно' });
+        picker.el.dataset.part = p.part;
+        return { part: p.part, picker };
+      });
+      const unsub = app.subscribe((s) => {
+        const cur = s.activities.find((x) => x.id === id);
+        for (const r of rules) if (r.picker.get() !== ruleOf(cur, r.part)) r.picker.set(ruleOf(cur, r.part));
+      });
+      const byTime = h('section', { class: 'ts-section ts-activity-rules' },
+        h('h4', { class: 'ts-section-title' }, 'По времени суток'),
+        h('p', { class: 'ts-hint' }, 'Если в какое-то время суток это занятие — другое: например, YouTube вечером — отдых. Считается по началу записи и действует на новые записи; записанное раньше не меняется.'),
+        rules.map((r) => r.picker.el));
+      return { title: a.name, el: h('div', { class: 'ts-activity-form' }, nameF.el, cat.el, typF.el, clear, byTime), destroy: unsub };
     },
 
     // Own categories (spec §4.1): the standard set is fixed, own ones are added, renamed, moved and deleted here.

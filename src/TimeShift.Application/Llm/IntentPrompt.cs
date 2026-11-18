@@ -113,6 +113,9 @@ public static class IntentPrompt
           part_of_day — morning, afternoon, evening, night, если сказано «утром», «днём», «вечером», «ночью» без часов.
         - answer — ответ на последний вопрос бота: {"type":"answer","value":"25"}
         - classify — к какой категории относится занятие: {"type":"classify","activity":"Dota 2","category":"wasted.multiplayer"}
+          when — morning, afternoon, evening или night, только если правило названо для части суток («по вечерам»,
+          «утром», «ночью»): {"type":"classify","activity":"YouTube","category":"rest","when":"evening"}.
+          Это правило на будущее, а не запись: «вечером смотрел ютуб» — describe_period, а не classify.
         - set_fact — сколько обычно длится: {"type":"set_fact","activity":"Тренировка","minutes":60}
           или маршрут: {"type":"set_fact","route":{"from":"зал","to":"дом"},"minutes":25}
         - quiet — не беспокоить: {"type":"quiet","minutes":120} или {"type":"quiet","until":"18:00"}
@@ -135,6 +138,7 @@ public static class IntentPrompt
         «обедаю за компом, работаю дальше» → {"intents":[{"type":"start_activity","activity":"Обед","category":"household","parallel":true}]}
         «закончил в 15:30» → {"intents":[{"type":"stop_activity","at":"15:30"}]}
         «не беспокой пару часов» → {"intents":[{"type":"quiet","minutes":120}]}
+        «ютуб по вечерам — это отдых» → {"intents":[{"type":"classify","activity":"YouTube","category":"rest","when":"evening"}]}
         «тренировка была до 15:30, а не до 15» →
         {"intents":[{"type":"edit_segment","target":{"activity":"Тренировка"},"changes":{"end":"15:30"}}]}
 

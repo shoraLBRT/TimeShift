@@ -34,14 +34,7 @@ public sealed record WindowResult(PeriodWindow? Window, WindowError? Error)
 public static class PastTime
 {
     /// <summary>Части суток в местном времени: утро 06–12, день 12–18, вечер 18–24, ночь 00–06.</summary>
-    public static (TimeOnly Start, TimeOnly End) Bounds(PartOfDay part) => part switch
-    {
-        PartOfDay.Morning => (new TimeOnly(6, 0), new TimeOnly(12, 0)),
-        PartOfDay.Afternoon => (new TimeOnly(12, 0), new TimeOnly(18, 0)),
-        PartOfDay.Evening => (new TimeOnly(18, 0), TimeOnly.MinValue),
-        PartOfDay.Night => (TimeOnly.MinValue, new TimeOnly(6, 0)),
-        _ => throw new ArgumentOutOfRangeException(nameof(part)),
-    };
+    public static (TimeOnly Start, TimeOnly End) Bounds(PartOfDay part) => PartsOfDay.Bounds(part);
 
     public static DateOnly ResolveDate(DayRef day, DateOnly today) => day switch
     {

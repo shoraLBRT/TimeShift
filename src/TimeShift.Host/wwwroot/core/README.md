@@ -110,7 +110,7 @@ not remembered and sheets do not touch history.
   dayLoading: boolean,               // no cached copy of viewDate yet
   dayError: ApiError | null,
   nowMin: number | null,             // minutes since the start of viewDate, or null when it is not today
-  activities: Activity[],            // most recently used first
+  activities: Activity[],            // most recently used first; each has rules: [{ part, category }] (category by part of the day)
   busy: null | 'start' | 'stop' | 'continue' | 'addEntry' | 'updateEntry' | 'deleteEntry' | 'confirm' | 'undo' | 'quiet' | 'login' | 'onboarding' | 'push',
   thread: [{ id, from: 'user' | 'bot', text, buttons?: [[{ label, data }]], pending?, error?, pressed?, hasImage?, voice? }],
   threadBusy: boolean,
@@ -151,6 +151,7 @@ All return promises. Timeline mutations resolve to `{ ok, result?, error? }`, ne
 | `sendVoice(wav, seconds)` | a recording from `core/voice.js` (WAV 16 kHz mono) → the same thread: the user's message is «🎙 Голосовое · 0:12» (`voice: true`), the first reply is what the server heard |
 | `saveSettings(patch)`, `setSleep(sleep)`, `addBlock(b)`, `updateBlock(id, b)`, `deleteBlock(id)` | optimistic, rolled back on error, run one after another |
 | `updateActivity(id, { name?, category?, typicalMin? })` | optimistic |
+| `setActivityRule(id, part, category \| null)` | a classification rule of the activity: in this part of the day (`'morning' \| 'afternoon' \| 'evening' \| 'night'`) it is this category; `null` removes it. Optimistic. Acts on new entries only |
 | `addCategory({ name, group } \| { name, parent }, { inlineErrors? })`, `updateCategory(key, { name?, group?, parent? }, { inlineErrors? })`, `deleteCategory(key)` | own categories (`docs/web-api.md`); not optimistic — `state.me` is replaced by the server's answer; `deleteCategory` also re-reads the day and the activities |
 | `loadSummary({ from?, to? })` | resolves to the raw `/api/summary` data (default: 7 days ending with `viewDate`) |
 | `enablePush()` | **call directly from a tap handler** (the permission prompt needs the gesture) |
@@ -195,7 +196,9 @@ scroller.scrollTop = initialScrollTop(L, scroller.clientHeight, { day: state.day
   actions: { confirm, continue, fill, edit, delete }, segmentId, activityId }
 ```
 
-Other helpers: `GROUPS`, `groupName(key)`, `categoryInfo(key, me)`, `categoriesByGroup(me)`, `pieceKind`, `pieceKey`,
+Other helpers: `GROUPS`, `groupName(key)`, `categoryInfo(key, me)`, `categoriesByGroup(me)`,
+`activityCategory(activity, startMin)` (the category a new entry of the activity gets when none is named: its rule
+for the part of the day `startMin` falls into, otherwise its own category), `pieceKind`, `pieceKey`,
 `questionablePieces(day)`, `assumedPieces(day)`, `pieceBounds(piece, day)`, `daySummary(day, me)`,
 `rangeSummary(summary, me)`, `summarizeTotals`, `summarizeStatus`, `advanceDay`, `patchDay`.
 
@@ -216,7 +219,8 @@ Colour an own category by its group: its key is generated (`u.…`), there is no
 `addDays`, `diffDays`, `weekday` (ISO 1…7), `weekStart`, `weekDates`, `lastDays`, `isWeekend`;
 `minToLocal(date, min)`, `localToMin(local, date)`, `parseLocal`, `parseClock`; zones: `todayIn(tz, ms)`,
 `nowMinIn(tz, ms)`, `utcToLocal(ms, tz)`, `localToUtc(local, tz)`, `tzOffsetMin`, `deviceTimeZone()`,
-`timeZones()`, `fmtTimeZone(tz)`; `roundTo`, `floorTo`.
+`timeZones()`, `fmtTimeZone(tz)`; `roundTo`, `floorTo`; `PARTS_OF_DAY` (`[{ part, startMin, endMin, label, hours }]` —
+the four fixed parts of the day classification rules are tied to, `docs/web-api.md`) and `partOfDay(min)`.
 
 ## 5. Flows — `core/flows.js`
 
@@ -474,7 +478,9 @@ Panels:
   `.ts-stepper-field > .ts-stepper` (`.ts-stepper-dec`, `output.ts-stepper-value`, `.ts-stepper-inc`)), `tracking`
   (`.ts-options` with `data-value=typical|default|infinite|custom`, `.ts-extension-custom`), `activities`
   (`ul.ts-activity-list > li.ts-activity-item[data-activity-id][data-group] > button.ts-activity-open`
-  (`.ts-activity-name`, `.ts-activity-meta`)), `activity` (`.ts-activity-form`, `[data-action=clear-typical]`),
+  (`.ts-activity-name`, `.ts-activity-meta`)), `activity` (`.ts-activity-form`, `[data-action=clear-typical]`,
+  then `section.ts-section.ts-activity-rules`: `h4.ts-section-title`, `p.ts-hint` and four
+  `.ts-category-picker[data-part=morning|afternoon|evening|night]` whose first chip «Как обычно» removes the rule),
   `categories` (`.ts-categories` > `.ts-section`s: an intro `p.ts-hint`, one per group — `p.ts-hint` with the
   standard names, then the own ones as `ul.ts-activity-list > li.ts-activity-item[data-category][data-group] >
   button.ts-activity-open` — and `[data-action=add-category]`), `category` (`form.ts-block-form.ts-category-form[data-mode=new|edit]`: the name

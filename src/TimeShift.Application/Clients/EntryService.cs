@@ -102,9 +102,10 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
         }
 
         user.RegisterActivity(now);
+        // Названная категория главнее правила на это время суток, правило — главнее категории занятия.
         var segment = new Segment(
             start, end, activity.Name, SegmentStatus.Confirmed, SegmentSource.User, activity.Id,
-            category ?? activity.CategoryKey, isParallel: request.Parallel);
+            category ?? await tracking.CategoryAsync(user, activity, start, cancellationToken), isParallel: request.Parallel);
         await tracking.ApplyAsync(user, [segment], now, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -144,7 +145,8 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
             if (Activity.Normalize(name) != Activity.Normalize(existing.Title))
             {
                 var activity = await tracking.ResolveActivityAsync(user, name, cancellationToken);
-                (title, activityId, category) = (activity.Name, activity.Id, activity.CategoryKey ?? category);
+                (title, activityId, category) =
+                    (activity.Name, activity.Id, await tracking.CategoryAsync(user, activity, start, cancellationToken) ?? category);
             }
         }
 

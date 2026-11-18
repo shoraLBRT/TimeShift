@@ -244,13 +244,18 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("character varying(200)")
                         .HasColumnName("key");
 
-                    b.Property<int>("Minutes")
+                    b.Property<int?>("Minutes")
                         .HasColumnType("integer")
                         .HasColumnName("minutes");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("value");
 
                     b.HasKey("Id");
 

@@ -109,6 +109,10 @@
       "expected": { "intents": [ { "type": "classify", "activity": "Dota 2|Дота", "category": "wasted.multiplayer" } ] } },
     { "id": "classify-02", "text": "ютуб про программирование считай учёбой", "now": "2026-11-14T12:00",
       "expected": { "intents": [ { "type": "classify", "activity": "YouTube", "category": "study" } ] } },
+    { "id": "classify-03", "text": "ютуб по вечерам — это отдых", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "classify", "activity": "YouTube", "category": "rest", "when": "evening" } ] } },
+    { "id": "classify-04", "text": "дота ночью — залипание, а не отдых", "now": "2026-11-14T12:00",
+      "expected": { "intents": [ { "type": "classify", "activity": "Dota 2|Дота", "category": "wasted.multiplayer", "when": "night" } ] } },
 
     // --- Тихие часы ---
     { "id": "quiet-01", "text": "не беспокой пару часов", "now": "2026-11-14T14:00",

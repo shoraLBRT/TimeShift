@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Llm;
+using TimeShift.Domain.Categories;
 using TimeShift.Domain.Facts;
+using TimeShift.Domain.Schedule;
 
 namespace TimeShift.Infrastructure.Persistence;
 
@@ -9,16 +11,52 @@ internal sealed class FactRepository(TimeShiftDbContext db) : IFactRepository
 {
     public async Task<IReadOnlyDictionary<string, int>> GetAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var stored = await db.Facts.Where(f => f.UserId == userId).ToListAsync(cancellationToken);
-        var result = stored.ToDictionary(f => f.Key, f => f.Minutes);
+        await db.Facts.Where(f => f.UserId == userId && f.Minutes != null).LoadAsync(cancellationToken);
 
-        // Добавленные в этой же единице работы — тоже факты.
-        foreach (var local in db.Facts.Local.Where(f => f.UserId == userId))
+        // Local — загруженные и добавленные в этой же единице работы, без удалённых в ней.
+        return db.Facts.Local
+            .Where(f => f.UserId == userId && f.Minutes is not null)
+            .ToDictionary(f => f.Key, f => f.Minutes!.Value);
+    }
+
+    public async Task<CategoryRules> RulesAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await db.Facts.Where(f => f.UserId == userId && f.Value != null).LoadAsync(cancellationToken);
+        return new CategoryRules(db.Facts.Local.Where(f => f.UserId == userId).Select(f => f.AsRule()).OfType<CategoryRule>());
+    }
+
+    public async Task SetRuleAsync(Guid userId, CategoryRule rule, CancellationToken cancellationToken)
+    {
+        var key = UserFact.RuleKey(rule.ActivityId, rule.Part);
+        await db.Facts.Where(f => f.UserId == userId && f.Key == key).LoadAsync(cancellationToken);
+
+        // Трекер знает и удалённое в этой единице работы: его возвращаем к жизни, а не добавляем второй раз.
+        var tracked = db.ChangeTracker.Entries<UserFact>().FirstOrDefault(e => e.Entity.UserId == userId && e.Entity.Key == key);
+        if (tracked is null)
         {
-            result[local.Key] = local.Minutes;
+            db.Facts.Add(new UserFact(userId, rule));
+            return;
         }
 
-        return result;
+        if (tracked.State == EntityState.Deleted)
+        {
+            tracked.State = EntityState.Modified;
+        }
+
+        tracked.Entity.Value = rule.CategoryKey;
+    }
+
+    public async Task<bool> RemoveRuleAsync(Guid userId, Guid activityId, PartOfDay part, CancellationToken cancellationToken)
+    {
+        var key = UserFact.RuleKey(activityId, part);
+        await db.Facts.Where(f => f.UserId == userId && f.Key == key).LoadAsync(cancellationToken);
+        if (db.Facts.Local.FirstOrDefault(f => f.UserId == userId && f.Key == key) is not { } fact)
+        {
+            return false;
+        }
+
+        db.Facts.Remove(fact);
+        return true;
     }
 
     public async Task SetAsync(Guid userId, string key, int minutes, CancellationToken cancellationToken)

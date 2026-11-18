@@ -83,7 +83,11 @@ public sealed record SettingsPatch
 /// <summary>Блок из запроса клиента. <paramref name="Kind"/>: <c>fixed</c> или <c>custom</c>; <paramref name="Days"/> — дни ISO.</summary>
 public sealed record BlockRequest(ScheduleBlockKind Kind, string? Title, string? Category, IReadOnlyList<int>? Days, TimeOnly Start, TimeOnly End);
 
-public sealed record ActivityModel(Guid Id, string Name, string? Category, int? TypicalMin, DateTime? LastUsedUtc);
+public sealed record ActivityModel(
+    Guid Id, string Name, string? Category, int? TypicalMin, DateTime? LastUsedUtc, IReadOnlyList<ActivityRuleModel> Rules);
+
+/// <summary>Правило классификации занятия (spec §4.2): в эту часть суток (<c>morning</c>…<c>night</c>) — эта категория.</summary>
+public sealed record ActivityRuleModel(string Part, string Category);
 
 /// <summary>Правка занятия: <c>Category</c> и <c>TypicalMin</c> = <c>null</c> очищают значение.</summary>
 public sealed record ActivityPatch

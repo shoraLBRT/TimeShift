@@ -615,6 +615,21 @@ export function createApp(opts = {}) {
         return { ok: false, error };
       }
     },
+    /** A rule "in this part of the day — this category" (`category: null` removes it). Applies to new entries only. */
+    async setActivityRule(id, part, category) {
+      const prev = state.activities;
+      const withRule = (a) => ({ ...a, rules: [...(a.rules ?? []).filter((r) => r.part !== part), ...(category ? [{ part, category }] : [])] });
+      set({ activities: prev.map((a) => (a.id === id ? withRule(a) : a)) });
+      try {
+        const a = category ? await api.setActivityRule(id, part, category) : await api.deleteActivityRule(id, part);
+        set({ activities: state.activities.map((x) => (x.id === id ? a : x)) });
+        return { ok: true, result: a };
+      } catch (error) {
+        set({ activities: prev });
+        toastError(error);
+        return { ok: false, error };
+      }
+    },
 
     // ----- summary -----
     async loadSummary({ from, to } = {}) {

@@ -108,6 +108,8 @@ export function createApi(opts = {}) {
     // activities
     activities: () => get('/api/activities'),
     updateActivity: (id, patch) => request('PATCH', `/api/activities/${encodeURIComponent(id)}`, patch),
+    setActivityRule: (id, part, category) => request('PUT', `/api/activities/${encodeURIComponent(id)}/rules/${encodeURIComponent(part)}`, { category }),
+    deleteActivityRule: (id, part) => request('DELETE', `/api/activities/${encodeURIComponent(id)}/rules/${encodeURIComponent(part)}`),
     // free text → { replies, day }
     message: (body, view) => post(`/api/messages${q(view)}`, body),
     // a recording (WAV 16 kHz mono, see voice.js) → the same { replies, day }; recognition is slow, so a long timeout

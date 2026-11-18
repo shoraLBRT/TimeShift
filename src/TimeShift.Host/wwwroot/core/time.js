@@ -274,5 +274,21 @@ const CITY_RU = {
 };
 
 /** Round minutes to a step (rounding setting). */
+/**
+ * Parts of the day, in the user's local time — the same fixed bounds the server uses for classification rules
+ * (docs/web-api.md, "Activities"): a rule applies to an entry that starts inside its part of the day.
+ */
+export const PARTS_OF_DAY = [
+  { part: 'morning', startMin: 360, endMin: 720, label: 'Утром', hours: '06–12' },
+  { part: 'afternoon', startMin: 720, endMin: 1080, label: 'Днём', hours: '12–18' },
+  { part: 'evening', startMin: 1080, endMin: 1440, label: 'Вечером', hours: '18–24' },
+  { part: 'night', startMin: 0, endMin: 360, label: 'Ночью', hours: '00–06' },
+];
+/** Part of the day a minute of a local day falls into (minutes outside 0…1439 wrap around). */
+export function partOfDay(min) {
+  const m = ((Math.floor(min) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  return PARTS_OF_DAY.find((x) => m >= x.startMin && m < x.endMin).part;
+}
+
 export const roundTo = (min, step = 5) => (step > 1 ? Math.round(min / step) * step : Math.round(min));
 export const floorTo = (min, step = 5) => (step > 1 ? Math.floor(min / step) * step : Math.floor(min));
