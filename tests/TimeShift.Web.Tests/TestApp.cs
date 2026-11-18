@@ -64,6 +64,26 @@ internal sealed class FakeSpeech : ISpeechToText
     }
 }
 
+/// <summary>Вместо LLM: выключен, пока тест не положил ответ; ответы отдаёт по очереди.</summary>
+internal sealed class FakeLlm : ILlmProvider
+{
+    private readonly Queue<string> _responses = new();
+
+    public bool IsEnabled { get; private set; }
+
+    /// <summary>Следующий ответ модели — JSON с намерениями; с первого же ответа «LLM включён».</summary>
+    public void Enqueue(string json)
+    {
+        IsEnabled = true;
+        _responses.Enqueue(json);
+    }
+
+    public Task<LlmResponse> CompleteJsonAsync(LlmRequest request, CancellationToken cancellationToken) =>
+        _responses.Count > 0
+            ? Task.FromResult(new LlmResponse(_responses.Dequeue()))
+            : throw new LlmException("нет ответа", false);
+}
+
 internal sealed record ApiResponse(HttpStatusCode Status, JsonNode? Body, HttpResponseMessage Raw)
 {
     public JsonNode Json => Body ?? throw new InvalidOperationException($"No JSON body ({(int)Status}).");
@@ -110,6 +130,8 @@ internal sealed class TestApp : IAsyncDisposable
                 services.AddSingleton<IWebPushSender>(Push);
                 services.RemoveAll<ISpeechToText>();
                 services.AddSingleton<ISpeechToText>(Speech);
+                services.RemoveAll<ILlmProvider>();
+                services.AddSingleton<ILlmProvider>(Llm);
             });
         });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
@@ -120,6 +142,8 @@ internal sealed class TestApp : IAsyncDisposable
     public FakeWebPushSender Push { get; } = new();
 
     public FakeSpeech Speech { get; } = new();
+
+    public FakeLlm Llm { get; } = new();
 
     public IServiceProvider Services => _factory.Services;
 
