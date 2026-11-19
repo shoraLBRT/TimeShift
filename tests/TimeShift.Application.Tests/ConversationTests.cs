@@ -226,8 +226,81 @@ public class ConversationTests
         var training = Me.Blocks.Single(b => b.Title == "Тренировка");
         var menu = await Press($"del:{training.Id}");
 
-        Assert.True(Assert.Single(menu).ReplacesSource);
+        var removed = Assert.Single(menu);
+        Assert.True(removed.ReplacesSource);
+        Assert.StartsWith("Убрал: Тренировка", removed.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(Me.Blocks, b => b.Title == "Тренировка");
+
+        // Промахнулся пальцем — «↩️ Вернуть» в том же сообщении.
+        Assert.Equal($"rb:{training.Id}", ButtonData(menu).First());
+        var back = Assert.Single(await Press($"rb:{training.Id}"));
+        Assert.True(back.ReplacesSource);
+        Assert.StartsWith("Вернул: Тренировка", back.Text, StringComparison.Ordinal);
+        Assert.Contains(Me.Blocks, b => b.Id == training.Id);
+        Assert.Contains("уже не вернуть", Assert.Single(await Press($"rb:{training.Id}")).Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Block_typed_again_with_the_same_title_replaces_the_old_one()
+    {
+        await OnboardAsync();
+        await Press("add:fixed");
+        await Text("Работа пн-пт 9-18");
+        var work = Me.Blocks.Single(b => b.Title == "Работа");
+
+        await Press("add:fixed");
+        var replaced = await Text("работа пн-пт 10-19");
+
+        Assert.Contains(replaced, r => r.Text.StartsWith("Заменил: Работа", StringComparison.Ordinal));
+        var now = Assert.Single(Me.Blocks, b => b.Title.Equals("работа", StringComparison.OrdinalIgnoreCase));
+        Assert.NotEqual(work.Id, now.Id);
+        Assert.Equal((new TimeOnly(10, 0), new TimeOnly(19, 0)), (now.Start, now.End));
+        Assert.Equal(work.CategoryKey, now.CategoryKey);
+
+        // Другое время без пересечения — второй блок с тем же названием.
+        await Press("add:fixed");
+        await Text("Работа сб 11-14");
+        Assert.Equal(2, Me.Blocks.Count(b => b.Title.Equals("работа", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task Settings_values_step_with_minus_and_plus_and_stop_at_the_ends()
+    {
+        await OnboardAsync();
+
+        var menu = await Text("/settings");
+        Assert.Contains("set:unanswered:+", ButtonData(menu));
+        Assert.Contains("set:unanswered:-", ButtonData(menu));
+
+        await Press("set:unanswered:-");
+        Assert.Equal(1, Me.Settings.MaxUnansweredPings);
+        var atMin = await Press("set:unanswered:-");
+        Assert.Equal(1, Me.Settings.MaxUnansweredPings);
+        Assert.DoesNotContain("set:unanswered:-", ButtonData(atMin));
+        await Press("set:unanswered:+");
+        Assert.Equal(2, Me.Settings.MaxUnansweredPings);
+
+        await Press("set:review:+");
+        Assert.Equal(45, Me.Settings.EveningReviewOffsetMin);
+        Me.Settings.EveningReviewOffsetMin = 37;
+        await Press("set:review:-");
+        Assert.Equal(30, Me.Settings.EveningReviewOffsetMin);
+        Me.Settings.EveningReviewOffsetMin = 175;
+        var atMax = await Press("set:review:+");
+        Assert.Equal(180, Me.Settings.EveningReviewOffsetMin);
+        Assert.DoesNotContain("set:review:+", ButtonData(atMax));
+
+        Assert.Contains("set:rounding:1", ButtonData(menu));
+        await Press("set:rounding:15");
+        Assert.Equal(15, Me.Settings.RoundingMin);
+        await Press("set:rounding:7");
+        Assert.Equal(15, Me.Settings.RoundingMin);
+
+        // Кнопка из старого меню (цикл) ничего не меняет — меню перерисовывается.
+        var stale = Assert.Single(await Press("set:unanswered"));
+        Assert.True(stale.ReplacesSource);
+        Assert.Equal(2, Me.Settings.MaxUnansweredPings);
+        Assert.All(ButtonData(menu), d => Assert.True(System.Text.Encoding.UTF8.GetByteCount(d) <= 64, d));
     }
 
     [Fact]
@@ -250,9 +323,9 @@ public class ConversationTests
         await OnboardAsync();
 
         var menu = await Text("/settings");
-        Assert.Contains("set:rounding", ButtonData(menu));
+        Assert.Contains("set:rounding:10", ButtonData(menu));
 
-        var rounding = await Press("set:rounding");
+        var rounding = await Press("set:rounding:10");
         Assert.True(Assert.Single(rounding).ReplacesSource);
         Assert.Equal(10, Me.Settings.RoundingMin);
 

@@ -334,6 +334,10 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                         .HasColumnType("time without time zone")
                         .HasColumnName("end_time");
 
+                    b.Property<bool>("IsTrashed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("trashed");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)

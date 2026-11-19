@@ -82,6 +82,70 @@ public class UserTests
     }
 
     [Fact]
+    public void Block_with_the_same_title_replaces_only_the_blocks_it_overlaps()
+    {
+        var user = NewUser();
+        user.TrySetSleep((T(1), T(9)));
+        var work = new ScheduleBlock(ScheduleBlockKind.Fixed, "Работа", "work", DaysOfWeek.Weekdays, T(9), T(18));
+        var study = new ScheduleBlock(ScheduleBlockKind.Fixed, "Учёба", "study", [DayOfWeek.Monday], T(19), T(21));
+        user.TryAddBlock(work);
+        user.TryAddBlock(study);
+
+        var later = new ScheduleBlock(ScheduleBlockKind.Fixed, "работа", "work", DaysOfWeek.Weekdays, T(10), T(19));
+        var conflict = user.TryAddOrReplaceBlock(later, out var replaced);
+        Assert.Null(conflict);
+        Assert.Same(work, Assert.Single(replaced));
+        Assert.DoesNotContain(user.Blocks, b => b.Id == work.Id);
+
+        // Тот же заголовок, но в другие часы — второй блок, а не замена.
+        var saturday = new ScheduleBlock(ScheduleBlockKind.Fixed, "Учёба", "study", [DayOfWeek.Saturday], T(10), T(13));
+        Assert.Null(user.TryAddOrReplaceBlock(saturday, out replaced));
+        Assert.Empty(replaced);
+        Assert.Equal(2, user.Blocks.Count(b => b.Title == "Учёба"));
+
+        // Заходит на чужой блок — ничего не меняется.
+        var wide = new ScheduleBlock(ScheduleBlockKind.Fixed, "Учёба", "study", [DayOfWeek.Monday], T(18), T(21));
+        Assert.Same(later, user.TryAddOrReplaceBlock(wide, out replaced));
+        Assert.Empty(replaced);
+        Assert.Contains(user.Blocks, b => b.Id == study.Id);
+    }
+
+    [Fact]
+    public void Trashed_block_leaves_the_template_and_comes_back_unless_something_took_its_place()
+    {
+        var user = NewUser();
+        user.TrySetSleep((T(1), T(9)));
+        var gym = new ScheduleBlock(ScheduleBlockKind.Custom, "Зал", "sport", [DayOfWeek.Tuesday], T(19), T(21));
+        var yoga = new ScheduleBlock(ScheduleBlockKind.Custom, "Йога", "sport", [DayOfWeek.Friday], T(10), T(11));
+        user.TryAddBlock(gym);
+        user.TryAddBlock(yoga);
+
+        Assert.True(user.TrashBlock(gym.Id));
+        Assert.DoesNotContain(user.Blocks, b => b.Id == gym.Id);
+        Assert.DoesNotContain(user.Template().Blocks, b => b.Id == gym.Id);
+        Assert.False(user.TrashBlock(gym.Id));
+        Assert.False(user.TrashBlock(user.Blocks.Single(b => b.Kind == ScheduleBlockKind.Sleep).Id));
+
+        // Время освободилось: новый блок туда встаёт, и вернуть старый уже нельзя.
+        var music = new ScheduleBlock(ScheduleBlockKind.Custom, "Музыка", null, [DayOfWeek.Tuesday], T(20), T(22));
+        Assert.Null(user.TryAddBlock(music));
+        Assert.False(user.TryRestoreBlock(gym.Id, out var conflict));
+        Assert.Same(music, conflict);
+
+        user.RemoveBlock(music.Id);
+        Assert.True(user.TryRestoreBlock(gym.Id, out conflict));
+        Assert.Null(conflict);
+        Assert.Contains(user.Blocks, b => b.Id == gym.Id);
+
+        // В корзине только последний убранный блок.
+        user.TrashBlock(gym.Id);
+        user.TrashBlock(yoga.Id);
+        Assert.False(user.TryRestoreBlock(gym.Id, out conflict));
+        Assert.Null(conflict);
+        Assert.True(user.TryRestoreBlock(yoga.Id, out _));
+    }
+
+    [Fact]
     public void Extension_policy_round_trips_through_settings_with_infinity_as_null()
     {
         var settings = NewUser().Settings;

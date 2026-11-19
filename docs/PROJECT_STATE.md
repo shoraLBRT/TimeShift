@@ -122,6 +122,12 @@ Two tracks, order in `docs/ROADMAP.md`:
   back-off and pings on), REST `pingsEnabled` / `afterUnansweredPings` / `quietHours`, Telegram `/settings`
   (two toggles and «🤫 Тихие часы»), PWA «Напоминания». Spec §5.2, §6, §7 and the `/settings` line of the commands table edited; decisions in
   `docs/decisions.md`, «Ping settings as built».
+- **Telegram /settings and /blocks (#53):** numbers change with «− value +» (unanswered pings, evening review),
+  rounding is a ✓ choice of 1 / 5 / 10 / 15 min, toggles stay toggles. 🗑 in `/blocks` moves the block to a
+  one-place trash (`schedule_blocks.trashed`, migration `TrashedBlocks` for both providers) and the redrawn menu
+  offers «↩️ Вернуть»; a block typed again with the same title replaces the same-titled blocks it overlaps.
+  Spec §7 and the `/blocks` line of the commands table edited; decisions in `docs/decisions.md`, «Telegram
+  /settings and /blocks as built».
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -150,12 +156,13 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 - [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — closing the bot by default: merged (PR #72).
   When #18 deploys, the owner's chat id goes into `TELEGRAM_ALLOWED_CHAT_ID`, or the bot answers nobody.
-- [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
-  note while the PWA is the main client.
+- [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings and blocks UX: built, PR open (not
+  merged); see «What exists». After it no open issue is left to a coding session: #2, #18 (then #19) and the
+  device checks #16 / #50 / #51 wait for the maintainer.
 - [#47](https://github.com/shoraLBRT/TimeShift/issues/47) — unknown time shown and counted as unknown: merged
   (PR #73); see «What exists».
 - [#48](https://github.com/shoraLBRT/TimeShift/issues/48) — ping settings (back-off or stop, on/off, daily quiet
-  hours): built, PR open (not merged); see «What exists».
+  hours): merged (PR #74); see «What exists».
 
 ## Open questions
 
@@ -220,8 +227,8 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 429 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 417, 0 skipped (README; CI runs it)
+dotnet test           # all green: 433 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 434, 0 skipped (README; CI runs it)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone

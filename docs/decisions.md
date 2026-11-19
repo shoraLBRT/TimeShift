@@ -690,3 +690,27 @@ Built on the reading above (the issue's option 1, «Залипание» offered
 - **Bot question.** «Пока тебя не было…» puts «Залипание» first (it was last, as «Залипание, так и было»; «так и
   было» no longer fits, since the bot did not say it was).
 - **Colour.** Unknown time is a neutral light grey in the `/day` and `/week` pictures, not the orange of «Потерянное».
+
+## Telegram /settings and /blocks as built (#53, 2026-11-19)
+
+- **Settings values.** A number is a row «− value +» (`set:<name>:-` / `set:<name>:+`; the middle button only
+  redraws the menu, «−» or «+» disappears at the end of the range): unanswered pings step by 1 within 1–10,
+  the evening review by 15 min within 0–180 (a value set elsewhere, say 37, goes to the next multiple: 45 / 30). A
+  short fixed list is a choice with ✓, like the ping interval: rounding 1 / 5 / 10 / 15 min (`set:rounding:<n>`;
+  the old cycle had no 1). Toggles stay toggles. Buttons of an old menu (`set:unanswered` without an argument)
+  change nothing and redraw the menu.
+- **Deleting a block** in `/blocks` puts it in a one-place trash: the menu is redrawn with «Убрал: …» and a first
+  button «↩️ Вернуть» (`rb:<id>`). The block keeps its row in `schedule_blocks` with `trashed = true` (migration
+  `TrashedBlocks` for both providers) and is out of `User.Blocks` and the template everywhere. Only the last
+  removed block is kept: removing another deletes the previous one for good, so «Вернуть» on an older message
+  answers «уже не вернуть». A block added into the freed time wins: «Вернуть» then says what it overlaps.
+  Why a column: callback data is 64 bytes and `dialog_state` 64 characters — neither holds a block with its title
+  and category. The REST `DELETE /schedule/blocks/{id}` still deletes for good (the PWA has its own confirmation).
+- **Editing a block by text.** A block typed again («Работа пн-пт 10-19» in «➕ Работа / учёба» or in onboarding)
+  replaces the blocks **with the same title (case-insensitive) that it overlaps**, keeping their category; the
+  answer says «Заменил: old → new». A same-titled block in other hours is added beside them, because onboarding
+  itself suggests two blocks of one name («Учёба пн, ср, пт 9:30-15», «Учёба по субботам 10-13»). Moving a block
+  to hours that do not overlap the old ones therefore adds a second one; the user removes the old one with 🗑. A
+  replacement has no «Вернуть» (onboarding's «↩️ Убрать» removes the new block only).
+- **Left out** (named in the issue, not in «Что сделать»): time zones beyond the eight buttons (any IANA name can
+  still be typed) and a finer sleep step (any time can be typed: «23:30-7:30»).

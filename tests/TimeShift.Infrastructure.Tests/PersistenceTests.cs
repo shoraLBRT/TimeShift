@@ -100,6 +100,33 @@ public sealed class PersistenceTests : IAsyncLifetime
         $"{s.StartUtc:HH:mm}-{(s.EndUtc is { } e ? e.ToString("HH:mm") : "…")} {s.Title}";
 
     [Fact]
+    public async Task Trashed_block_survives_a_reload_outside_the_template_and_can_be_restored()
+    {
+        var userId = await CreateUserAsync();
+        async Task<User> FindAsync(IServiceProvider sp) =>
+            (await sp.GetRequiredService<IUserRepository>().FindByIdAsync(userId, Ct))!;
+
+        await InScopeAsync(async sp =>
+        {
+            var user = await FindAsync(sp);
+            Assert.True(user.TrashBlock(user.Blocks.Single(b => b.Title == "Английский").Id));
+        });
+
+        var english = await InScopeAsync(async sp =>
+        {
+            var user = await FindAsync(sp);
+            Assert.DoesNotContain(user.Blocks, b => b.Title == "Английский");
+            Assert.DoesNotContain(user.Template().Blocks, b => b.Title == "Английский");
+            var trashed = await sp.GetRequiredService<TimeShiftDbContext>().Set<ScheduleBlock>().SingleAsync(b => b.IsTrashed, Ct);
+            Assert.True(user.TryRestoreBlock(trashed.Id, out _));
+            return trashed.Id;
+        });
+
+        var restored = await InScopeAsync(async sp => (await FindAsync(sp)).Blocks);
+        Assert.Contains(restored, b => b.Id == english);
+    }
+
+    [Fact]
     public async Task Facts_pending_periods_and_message_log_round_trip()
     {
         var userId = await CreateUserAsync();
