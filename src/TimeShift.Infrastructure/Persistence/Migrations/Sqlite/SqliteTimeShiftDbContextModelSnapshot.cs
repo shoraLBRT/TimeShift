@@ -329,6 +329,10 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                         .HasColumnType("TEXT")
                         .HasColumnName("end_time");
 
+                    b.Property<bool>("IsTrashed")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trashed");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)

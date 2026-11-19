@@ -236,7 +236,7 @@
 | `/now` | Что сейчас идёт; сменить или закончить занятие |
 | `/week` | Картинка недели по категориям + доли ✅/⚪/🟡 |
 | `/quiet 2ч` или «не беспокой 2 часа» | Ручные тихие часы |
-| `/blocks` | Посмотреть и изменить шаблон недели |
+| `/blocks` | Посмотреть и изменить шаблон недели: убрать блок (с «↩️ Вернуть»), добавить; блок с тем же названием, пересекающийся по времени, заменяет прежний |
 | `/settings` | Интервал пингов, пинги вкл/выкл, что после неотвеченных, часы тишины, режим продления, вечерний разбор, провайдер LLM |
 | `/facts` | Что бот знает: маршруты, длительности, правила классификации |
 | `/categories` | Набор категорий (4.1): добавить свою, переименовать, удалить |
@@ -280,7 +280,7 @@ places             id, user_id, name, aliases[]
 routes             id, user_id, from_place_id, to_place_id, typical_minutes
 schedule_blocks    id, user_id, kind (sleep | fixed | custom), title, category_id,
                    activity_id, days_of_week (маска), start_time, end_time,
-                   valid_from, valid_to
+                   valid_from, valid_to, trashed (убран кнопкой и ждёт «↩️ Вернуть»; в шаблон не входит)
 segments           id, user_id, start_utc, end_utc (null = открытое), activity_id,
                    category_id, title, status (confirmed | assumed | questionable),
                    source (user | extension | schedule | background | import),

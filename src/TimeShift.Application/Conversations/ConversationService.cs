@@ -449,8 +449,21 @@ public sealed partial class ConversationService(
                 return [SettingsMenu(user, replaces: true)];
 
             case "del" when Guid.TryParse(value, out var id):
-                user.RemoveBlock(id);
-                return [BlocksMenu(user, replaces: true)];
+                var trashed = user.Blocks.FirstOrDefault(b => b.Id == id);
+                return trashed is not null && user.TrashBlock(id)
+                    ? [BlocksMenu(user, replaces: true, removed: trashed)]
+                    : [BlocksMenu(user, replaces: true, note: "Этого блока уже нет.")];
+
+            case "rb" when Guid.TryParse(value, out var restoreId):
+                if (user.TryRestoreBlock(restoreId, out var restoreConflict))
+                {
+                    var back = user.Blocks.First(b => b.Id == restoreId);
+                    return [BlocksMenu(user, replaces: true, note: $"Вернул: {ScheduleText.Format(back)}")];
+                }
+
+                return [BlocksMenu(user, replaces: true, note: restoreConflict is null
+                    ? "Этот блок уже не вернуть."
+                    : $"Не вернуть: пересекается с «{ScheduleText.Format(restoreConflict)}».")];
 
             case "add":
                 var step = value == "custom" ? Step.CustomBlocks : Step.FixedBlocks;
@@ -578,13 +591,20 @@ public sealed partial class ConversationService(
         }
 
         var kind = step == Step.FixedBlocks ? ScheduleBlockKind.Fixed : ScheduleBlockKind.Custom;
-        var block = new ScheduleBlock(kind, parsed!.Title, ScheduleText.GuessCategory(parsed.Title), parsed.Days, parsed.Start, parsed.End);
-        if (user.TryAddBlock(block) is { } conflict)
+
+        // Блок с тем же названием — правка: категорию берём у него, а не угадываем заново.
+        var namesake = user.Blocks.FirstOrDefault(b => b.Kind != ScheduleBlockKind.Sleep
+            && string.Equals(b.Title.Trim(), parsed!.Title.Trim(), StringComparison.OrdinalIgnoreCase));
+        var category = namesake is not null ? namesake.CategoryKey : ScheduleText.GuessCategory(parsed!.Title);
+        var block = new ScheduleBlock(kind, parsed!.Title, category, parsed.Days, parsed.Start, parsed.End);
+        if (user.TryAddOrReplaceBlock(block, out var replaced) is { } conflict)
         {
             return [BotReply.Plain($"Пересекается с «{ScheduleText.Format(conflict)}». Поправь время или дни.")];
         }
 
-        var added = $"Добавил: {ScheduleText.Format(block)}";
+        var added = replaced.Count > 0
+            ? $"Заменил: {string.Join("; ", replaced.Select(ScheduleText.Format))} → {ScheduleText.Format(block)}"
+            : $"Добавил: {ScheduleText.Format(block)}";
         if (mode == Mode.Edit)
         {
             return Advance(user, mode, step, BotReply.Plain(added));
@@ -646,8 +666,18 @@ public sealed partial class ConversationService(
         _ => "реже (×2, до 4 ч)",
     };
 
-    private static void ChangeSetting(UserSettings settings, string name)
+    /// <summary>Шаг «−» / «+» вечернего разбора, минут.</summary>
+    private const int ReviewStepMin = 15;
+
+    /// <summary>
+    /// Кнопка настройки: <c>name</c> — переключатель, <c>name:+</c> / <c>name:-</c> — шаг, <c>name:N</c> — значение
+    /// из списка. Кнопки старого вида (цикл <c>set:unanswered</c> без аргумента) ничего не меняют — меню просто
+    /// перерисуется.
+    /// </summary>
+    private static void ChangeSetting(UserSettings settings, string value)
     {
+        var (name, arg) = value.IndexOf(':') is var i and >= 0 ? (value[..i], value[(i + 1)..]) : (value, string.Empty);
+        var delta = arg switch { "+" => 1, "-" => -1, _ => 0 };
         switch (name)
         {
             case "pings":
@@ -661,35 +691,56 @@ public sealed partial class ConversationService(
             case "blockping":
                 settings.PingDuringBlocks = !settings.PingDuringBlocks;
                 break;
-            case "unanswered":
-                settings.MaxUnansweredPings = settings.MaxUnansweredPings % 5 + 1;
+            case "unanswered" when delta != 0:
+                settings.MaxUnansweredPings = Math.Clamp(
+                    settings.MaxUnansweredPings + delta, UserSettings.MinUnansweredPingsLimit, UserSettings.MaxUnansweredPingsLimit);
                 break;
-            case "review":
-                settings.EveningReviewOffsetMin = Cycle([15, 30, 60], settings.EveningReviewOffsetMin);
+            case "review" when delta != 0:
+                settings.EveningReviewOffsetMin = StepTo(settings.EveningReviewOffsetMin, delta, ReviewStepMin,
+                    UserSettings.MinEveningReviewOffsetMin, UserSettings.MaxEveningReviewOffsetMin);
                 break;
-            case "rounding":
-                settings.RoundingMin = Cycle([5, 10, 15], settings.RoundingMin);
+            case "rounding" when int.TryParse(arg, out var rounding) && UserSettings.RoundingOptionsMin.Contains(rounding):
+                settings.RoundingMin = rounding;
                 break;
         }
     }
 
-    private static int Cycle(int[] values, int current) =>
-        values[(Array.IndexOf(values, current) + 1) % values.Length];
+    /// <summary>Следующее кратное <paramref name="step"/> вверх или вниз: 37 → 45 / 30, 30 → 45 / 15.</summary>
+    private static int StepTo(int current, int delta, int step, int min, int max)
+    {
+        var next = delta > 0
+            ? (current / step + 1) * step
+            : ((current + step - 1) / step - 1) * step;
+        return Math.Clamp(next, min, max);
+    }
 
     // ---- Меню -------------------------------------------------------------------------------------------------
 
-    private static BotReply BlocksMenu(User user, bool replaces = false)
+    /// <summary>
+    /// Меню шаблона. После удаления (<paramref name="removed"/>) — строка «Убрал: …» и первой кнопкой
+    /// «↩️ Вернуть»; <paramref name="note"/> — другая строка над шаблоном.
+    /// </summary>
+    private static BotReply BlocksMenu(User user, bool replaces = false, ScheduleBlock? removed = null, string? note = null)
     {
-        var rows = user.Blocks
+        var rows = new List<IReadOnlyList<ReplyButton>>();
+        if (removed is not null)
+        {
+            note = $"Убрал: {ScheduleText.Format(removed)}";
+            rows.Add([new ReplyButton("↩️ Вернуть", $"rb:{removed.Id}")]);
+        }
+
+        rows.AddRange(user.Blocks
             .Where(b => b.Kind != ScheduleBlockKind.Sleep)
             .OrderBy(b => b.Start)
-            .Select(b => (IReadOnlyList<ReplyButton>)[new ReplyButton($"🗑 {ScheduleText.Format(b)}", $"del:{b.Id}")])
-            .ToList();
+            .Select(b => (IReadOnlyList<ReplyButton>)[new ReplyButton($"🗑 {ScheduleText.Format(b)}", $"del:{b.Id}")]));
         rows.Add([new ReplyButton("➕ Работа / учёба", "add:fixed"), new ReplyButton("➕ Свой блок", "add:custom")]);
         rows.Add([new ReplyButton("😴 Изменить сон", "edit:sleep")]);
 
         return new BotReply(
-            "Шаблон недели:\n\n" + TemplateText(user) + "\n\nНажми на блок, чтобы удалить его.",
+            (note is null ? string.Empty : note + "\n\n") +
+            "Шаблон недели:\n\n" + TemplateText(user) + "\n\n" +
+            "Нажми на блок, чтобы убрать его (вернуть можно сразу). Чтобы изменить блок, добавь его заново с тем же " +
+            "названием: «Работа пн-пт 10-19» заменит прежнюю «Работу».",
             rows,
             replaces);
     }
@@ -732,21 +783,37 @@ public sealed partial class ConversationService(
             .. Rows(PingIntervals.Select(m => new ReplyButton(Mark(s.PingIntervalMin == m, $"{m} мин"), $"ping:{m}")), 3),
             .. ExtensionButtons(s.Extension, onboarding: false),
             [
-                new ReplyButton($"Пинг в блоках: {(s.PingDuringBlocks ? "да" : "нет")}", "set:blockping"),
-                new ReplyButton($"Без ответа: {s.MaxUnansweredPings}", "set:unanswered"),
-            ],
-            [
                 new ReplyButton(s.PingsEnabled ? "🔔 Пинги: вкл" : "🔕 Пинги: выкл", "set:pings"),
-                new ReplyButton(s.AfterUnansweredPings == UnansweredPingsPolicy.Stop ? "Дальше: пауза" : "Дальше: реже", "set:afterlimit"),
+                new ReplyButton($"Пинг в блоках: {(s.PingDuringBlocks ? "да" : "нет")}", "set:blockping"),
             ],
-            [
-                new ReplyButton($"Разбор: за {s.EveningReviewOffsetMin} мин", "set:review"),
-                new ReplyButton($"Округление: {s.RoundingMin} мин", "set:rounding"),
-            ],
+            Stepper($"Без ответа: {s.MaxUnansweredPings}", "unanswered",
+                s.MaxUnansweredPings > UserSettings.MinUnansweredPingsLimit, s.MaxUnansweredPings < UserSettings.MaxUnansweredPingsLimit),
+            [new ReplyButton(s.AfterUnansweredPings == UnansweredPingsPolicy.Stop ? "Дальше: пауза" : "Дальше: реже", "set:afterlimit")],
+            Stepper($"Разбор: за {s.EveningReviewOffsetMin} мин", "review",
+                s.EveningReviewOffsetMin > UserSettings.MinEveningReviewOffsetMin, s.EveningReviewOffsetMin < UserSettings.MaxEveningReviewOffsetMin),
+            [.. UserSettings.RoundingOptionsMin.Select(m => new ReplyButton(Mark(s.RoundingMin == m, $"±{m} мин"), $"set:rounding:{m}"))],
             [new ReplyButton("🤫 Тихие часы", "edit:quiet"), new ReplyButton("🌍 Часовой пояс", "edit:tz")],
         ];
 
         return new BotReply(text, rows, replaces);
+    }
+
+    /// <summary>Ряд «− значение +»: середина только перерисовывает меню, у края шкалы «−» или «+» пропадает.</summary>
+    private static List<ReplyButton> Stepper(string label, string name, bool canDecrease, bool canIncrease)
+    {
+        var row = new List<ReplyButton>();
+        if (canDecrease)
+        {
+            row.Add(new ReplyButton("−", $"set:{name}:-"));
+        }
+
+        row.Add(new ReplyButton(label, "menu:settings"));
+        if (canIncrease)
+        {
+            row.Add(new ReplyButton("+", $"set:{name}:+"));
+        }
+
+        return row;
     }
 
     private static IReadOnlyList<IReadOnlyList<ReplyButton>> ExtensionButtons(ExtensionPolicy? current, bool onboarding)

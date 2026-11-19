@@ -69,6 +69,9 @@ public sealed class ScheduleBlock
 
     public Guid? ActivityId { get; }
 
+    /// <summary>Блок убран кнопкой и ждёт «↩️ Вернуть» (см. <see cref="Users.User.TrashBlock"/>); в шаблоне его нет.</summary>
+    public bool IsTrashed { get; internal set; }
+
     /// <summary>Дни, в которые блок начинается.</summary>
     public IReadOnlySet<DayOfWeek> Days { get; }
 

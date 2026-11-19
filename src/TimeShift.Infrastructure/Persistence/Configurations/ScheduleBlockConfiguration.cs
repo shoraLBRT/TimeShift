@@ -21,6 +21,7 @@ internal sealed class ScheduleBlockConfiguration : IEntityTypeConfiguration<Sche
         builder.Property(b => b.ActivityId).HasColumnName("activity_id");
         builder.Property(b => b.Start).HasColumnName("start_time");
         builder.Property(b => b.End).HasColumnName("end_time");
+        builder.Property(b => b.IsTrashed).HasColumnName("trashed");
 
         // Дни недели — битовая маска (бит = (int)DayOfWeek), spec §7: days_of_week.
         builder.Property(b => b.Days)

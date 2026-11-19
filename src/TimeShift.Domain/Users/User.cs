@@ -133,11 +133,12 @@ public class User
     }
 
     /// <summary>Блоки шаблона недели.</summary>
-    public IReadOnlyList<ScheduleBlock> Blocks => _blocks;
+    /// <summary>Блоки шаблона без убранного в корзину (см. <see cref="TrashBlock"/>).</summary>
+    public IReadOnlyList<ScheduleBlock> Blocks => _blocks.Where(b => !b.IsTrashed).ToList();
 
     public TimeZoneInfo TimeZoneInfo => TimeZoneInfo.FindSystemTimeZoneById(TimeZone);
 
-    public WeekTemplate Template() => new(_blocks, TimeZoneInfo);
+    public WeekTemplate Template() => new(Blocks, TimeZoneInfo);
 
     public void CompleteOnboarding() => IsOnboarded = true;
 
@@ -145,7 +146,7 @@ public class User
     public ScheduleBlock? TryAddBlock(ScheduleBlock block)
     {
         ArgumentNullException.ThrowIfNull(block);
-        var conflict = Conflict([.. _blocks, block], block);
+        var conflict = Conflict([.. Blocks, block], block);
         if (conflict is null)
         {
             _blocks.Add(block);
@@ -154,7 +155,74 @@ public class User
         return conflict;
     }
 
+    /// <summary>
+    /// Добавляет блок, а блоки с тем же названием (без учёта регистра), с которыми он пересекается, заменяет им:
+    /// «Работа пн-пт 10-19» правит «Работа пн-пт 9-18», а «Учёба сб 10-13» встаёт рядом с «Учёба пн 9-15».
+    /// Если блок пересекается с блоком под другим названием — ничего не меняет и возвращает тот блок.
+    /// </summary>
+    public ScheduleBlock? TryAddOrReplaceBlock(ScheduleBlock block, out IReadOnlyList<ScheduleBlock> replaced)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        var active = Blocks;
+        replaced = active
+            .Where(b => b.Kind != ScheduleBlockKind.Sleep
+                && string.Equals(b.Title.Trim(), block.Title.Trim(), StringComparison.OrdinalIgnoreCase)
+                && WeekTemplate.FindOverlap([b, block]) is not null)
+            .ToList();
+        var replacedIds = replaced.Select(b => b.Id).ToHashSet();
+        var conflict = Conflict([.. active.Where(b => !replacedIds.Contains(b.Id)), block], block);
+        if (conflict is not null)
+        {
+            replaced = [];
+            return conflict;
+        }
+
+        _blocks.RemoveAll(b => replacedIds.Contains(b.Id));
+        _blocks.Add(block);
+        return null;
+    }
+
     public bool RemoveBlock(Guid blockId) => _blocks.RemoveAll(b => b.Id == blockId) > 0;
+
+    /// <summary>
+    /// Убирает блок так, чтобы его можно было вернуть (<see cref="TryRestoreBlock"/>). В корзине лежит только
+    /// последний убранный блок: прежний удаляется насовсем.
+    /// </summary>
+    public bool TrashBlock(Guid blockId)
+    {
+        var block = Blocks.FirstOrDefault(b => b.Id == blockId && b.Kind != ScheduleBlockKind.Sleep);
+        if (block is null)
+        {
+            return false;
+        }
+
+        _blocks.RemoveAll(b => b.IsTrashed);
+        block.IsTrashed = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Возвращает блок из корзины. Если его там уже нет — false и <paramref name="conflict"/> = null; если он
+    /// пересекается с блоком, добавленным после, — false и этот блок.
+    /// </summary>
+    public bool TryRestoreBlock(Guid blockId, out ScheduleBlock? conflict)
+    {
+        conflict = null;
+        var block = _blocks.FirstOrDefault(b => b.Id == blockId && b.IsTrashed);
+        if (block is null)
+        {
+            return false;
+        }
+
+        conflict = Conflict([.. Blocks, block], block);
+        if (conflict is not null)
+        {
+            return false;
+        }
+
+        block.IsTrashed = false;
+        return true;
+    }
 
     /// <summary>
     /// Заменяет блоки «Сон». Без <paramref name="weekend"/> — одинаковый сон каждую ночь; с ним — отдельно ночи
@@ -171,7 +239,7 @@ public class User
             ]
             : [ScheduleBlock.Sleep(DaysOfWeek.All, everyNight.Start, everyNight.End)];
 
-        var others = _blocks.Where(b => b.Kind != ScheduleBlockKind.Sleep).ToList();
+        var others = Blocks.Where(b => b.Kind != ScheduleBlockKind.Sleep).ToList();
         foreach (var block in sleep)
         {
             if (Conflict([.. others, .. sleep], block) is { } conflict)
