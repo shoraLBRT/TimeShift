@@ -21,6 +21,9 @@ internal sealed partial class TelegramPollingService(
     TelegramOptions options,
     ILogger<TelegramPollingService> logger) : BackgroundService
 {
+    /// <summary>Ответ чату, которому нельзя пользоваться ботом.</summary>
+    internal const string RejectedText = "Этот бот личный.";
+
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
 
     private static readonly BotCommand[] Commands =
@@ -46,6 +49,11 @@ internal sealed partial class TelegramPollingService(
             {
                 var me = await bot.GetMe(stoppingToken);
                 LogStarted(me.Username);
+                if (options.IsClosedToEveryone)
+                {
+                    LogClosedToEveryone();
+                }
+
                 await bot.SetMyCommands(Commands, cancellationToken: stoppingToken);
                 await bot.ReceiveAsync(
                     new DefaultUpdateHandler(HandleUpdateAsync, HandleErrorAsync),
@@ -71,7 +79,7 @@ internal sealed partial class TelegramPollingService(
         }
     }
 
-    private async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken cancellationToken)
+    internal async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken cancellationToken)
     {
         var (chat, from, incoming, callback) = Translate(update);
         if (chat is null || incoming is null || chat.Type != ChatType.Private)
@@ -86,10 +94,10 @@ internal sealed partial class TelegramPollingService(
                 await client.AnswerCallbackQuery(callback.Id, cancellationToken: cancellationToken);
             }
 
-            if (options.AllowedChatIds.Count > 0 && !options.AllowedChatIds.Contains(chat.Id))
+            if (!options.IsAllowed(chat.Id))
             {
                 LogRejected(chat.Id);
-                await client.SendMessage(chat.Id, "Это личный бот, доступ закрыт.", cancellationToken: cancellationToken);
+                await client.SendMessage(chat.Id, RejectedText, cancellationToken: cancellationToken);
                 return;
             }
 
@@ -217,6 +225,13 @@ internal sealed partial class TelegramPollingService(
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to handle update from chat {ChatId} (user {UserId})")]
     private partial void LogHandleFailed(Exception exception, long chatId, long? userId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Rejected chat {ChatId}: not in Telegram:AllowedChatIds")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Telegram:AllowedChatIds is empty and Telegram:AllowAnyone is not set: the bot refuses every chat. Write to the bot and add the chat id from the log to Telegram:AllowedChatIds")]
+    private partial void LogClosedToEveryone();
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Rejected chat {ChatId}: not in Telegram:AllowedChatIds (add it there, or set Telegram:AllowAnyone=true to open the bot)")]
     private partial void LogRejected(long chatId);
 }

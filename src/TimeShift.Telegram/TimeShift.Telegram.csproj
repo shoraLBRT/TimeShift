@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="TimeShift.Web.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\TimeShift.Application\TimeShift.Application.csproj" />
   </ItemGroup>
   <ItemGroup>

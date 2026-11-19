@@ -103,7 +103,10 @@ Short log of choices made where the spec (`docs/spec.md`) leaves room. One bulle
   `ExtensionPolicy`), because SQLite and Postgres disagree on storing infinity.
 - **Long polling, not a webhook:** works behind NAT and from a home PC; a webhook can come with the VPS deploy.
   `Telegram:Proxy` covers networks where api.telegram.org is reachable only through a local proxy.
-- **Only private chats are served**; `Telegram:AllowedChatIds` can close the bot to everyone else.
+- **Only private chats are served**, and the bot is **closed by default** (#49): with an empty
+  `Telegram:AllowedChatIds` every chat gets «Этот бот личный», no user is created, and the chat id is logged so the
+  owner can add themselves. `Telegram:AllowAnyone=true` is the explicit open mode. A personal server should not
+  hand out accounts and LLM budget to whoever finds the bot.
 
 ## Step 4 — pings and recording activities
 

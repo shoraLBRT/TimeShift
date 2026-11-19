@@ -19,8 +19,10 @@ public static class DependencyInjection
             BotToken = section[nameof(TelegramOptions.BotToken)],
             Proxy = section[nameof(TelegramOptions.Proxy)],
             AllowedChatIds = section.GetSection(nameof(TelegramOptions.AllowedChatIds)).GetChildren()
+                .Where(c => !string.IsNullOrWhiteSpace(c.Value)) // compose передаёт незаданную переменную пустой строкой
                 .Select(c => long.Parse(c.Value!, System.Globalization.CultureInfo.InvariantCulture))
                 .ToList(),
+            AllowAnyone = bool.TryParse(section[nameof(TelegramOptions.AllowAnyone)], out var allowAnyone) && allowAnyone,
         };
         services.AddSingleton(options);
 
