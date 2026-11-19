@@ -53,7 +53,7 @@ built yet:
 the bot offers first),
 [#48](https://github.com/shoraLBRT/TimeShift/issues/48) (what pings do after unanswered ones, on/off and quiet
 hours become settings).
-Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default) and
+Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default; PR open) and
 [#53](https://github.com/shoraLBRT/TimeShift/issues/53) (Telegram settings UX).
 
 After the MVP: iteration 2 (iPhone Shortcuts for app usage, Telegram Mini App, per-user LLM provider) and

@@ -13,6 +13,8 @@ services:
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timeshift};Username=${POSTGRES_USER:-timeshift};Password=${POSTGRES_PASSWORD:-timeshift}"
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
       Telegram__Proxy: ${TELEGRAM_PROXY:-}
+      Telegram__AllowedChatIds__0: ${TELEGRAM_ALLOWED_CHAT_ID:-}
+      Telegram__AllowAnyone: ${TELEGRAM_ALLOW_ANYONE:-false}
       Web__AccessKey: ${WEB_ACCESS_KEY:-}
       Web__TelegramChatId: ${WEB_TELEGRAM_CHAT_ID:-}
       Push__Subject: ${PUSH_SUBJECT:-}

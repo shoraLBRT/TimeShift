@@ -65,6 +65,11 @@ curl http://localhost:5138/health   # {"status":"ok"}
 `Telegram:BotToken`: локально — user-secrets (`dotnet user-secrets set "Telegram:BotToken" "<token>" --project src/TimeShift.Host`),
 на сервере — переменной окружения `Telegram__BotToken`.
 
+Бот по умолчанию закрыт: пока `Telegram:AllowedChatIds` пуст, он всем отвечает «Этот бот личный» и пишет в лог
+`Rejected chat <id>`. Напишите боту, возьмите свой chat id из лога и добавьте его
+(`dotnet user-secrets set "Telegram:AllowedChatIds:0" "<id>" --project src/TimeShift.Host`). Открыть бота всем —
+`Telegram:AllowAnyone=true`.
+
 ## Web-клиент
 
 Web-клиент (PWA) отдаётся из `src/TimeShift.Host/wwwroot`, REST-контракт — [docs/web-api.md](docs/web-api.md).
@@ -99,7 +104,8 @@ dotnet run --project src/TimeShift.Host
 | `Push:PublicKey`, `Push:PrivateKey` | ключи VAPID (base64url); не заданы — сервер создаёт пару один раз и хранит в базе, настраивать ничего не нужно |
 | `Web:TelegramChatId` | чей аккаунт открывает web-клиент; пусто — единственный пользователь или пользователь без Telegram |
 | `Telegram:Proxy` | прокси до api.telegram.org (`socks5://127.0.0.1:1080`, `http://…`); пусто — напрямую |
-| `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом; пусто — всем |
+| `Telegram:AllowedChatIds` | список chat id, которым можно пользоваться ботом (`Telegram__AllowedChatIds__0`, `__1`, …); пусто — **никому**: бот личный, посторонний чат получает «Этот бот личный», его chat id пишется в лог |
+| `Telegram:AllowAnyone` | `true` — бот открыт любому личному чату, список не проверяется; по умолчанию `false` |
 | `Llm:BaseUrl` | OpenAI-совместимый API (агрегатор: ProxyAPI, AITunnel, Polza, или провайдер напрямую) |
 | `Llm:ApiKey` | ключ; пусто — LLM выключен, бот работает кнопками и коротким текстом |
 | `Llm:Model` | модель, например `deepseek-chat`, `qwen-flash`, `claude-haiku-5-5` |

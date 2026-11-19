@@ -18,7 +18,10 @@ Two tracks, order in `docs/ROADMAP.md`:
   `/day [вчера|сб|13.11]` as text with ◀ ▶ and the parallel track, `/week` (◀ ▶ by week), `/add` (past entries without LLM), `/quiet`, `/undo`, `/facts`, `/categories`, short free text = new activity), `TrackingService`, `PingService`.
 - **Infrastructure:** EF Core with SQLite (dev) and Postgres (prod), two migration sets; segments, activities,
   undo journal, schedule blocks.
-- **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy and allow-list.
+- **Telegram:** long polling, inline keyboards, `TelegramNotifier` for pings; optional proxy. **Closed by default**
+  (#49): only chats in `Telegram:AllowedChatIds` are served, others get «Этот бот личный» and their chat id in the
+  log; `Telegram:AllowAnyone=true` opens it. A server without the list answers nobody until the owner adds their
+  chat id (`docs/deploy.md`, `TELEGRAM_ALLOWED_CHAT_ID` in `.env`).
 - **LLM in the dialog (`IntentApplier`, on when `Llm:ApiKey` is set):** free text → intents; periods are
   proposed with ✅/✏️ (⚪ after 10 min or on the next message), a missing route fact is asked once and remembered
   (`user_facts`), start/stop/quiet/facts/classify apply at once, parallel items go to the parallel track; every
@@ -129,10 +132,8 @@ Everything in the roadmap's numbered order now waits for the maintainer:
 
 What a coding session can take without waiting (outside the numbered order, `docs/ROADMAP.md` «Also»):
 
-- [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — the Telegram bot is open to everyone by default; the
-  issue says what to do (closed by default, `Telegram:AllowAnyone` for the open mode). After it a server without
-  `Telegram:AllowedChatIds` stops answering until the owner adds their chat id — say so in the PR and in
-  `docs/deploy.md`.
+- [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — closing the bot by default: built, PR open (not merged).
+  When #18 deploys, the owner's chat id goes into `TELEGRAM_ALLOWED_CHAT_ID`, or the bot answers nobody.
 - [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
   note while the PWA is the main client.
 - [#47](https://github.com/shoraLBRT/TimeShift/issues/47) and [#48](https://github.com/shoraLBRT/TimeShift/issues/48)
@@ -200,8 +201,8 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 407 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 407, 0 skipped (README)
+dotnet test           # all green: 415 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 415, 0 skipped (README)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone
