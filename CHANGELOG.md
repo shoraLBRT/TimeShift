@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0](https://github.com/shoraLBRT/TimeShift/compare/v0.1.0...v0.2.0) (2026-11-19)
+
+
+### Features
+
+* count unrecorded time as unknown instead of wasted ([#73](https://github.com/shoraLBRT/TimeShift/issues/73)) ([023bfcc](https://github.com/shoraLBRT/TimeShift/commit/023bfccee4cbcebc51499b671638ba0904a7d636))
+* make ping back-off, on/off and daily quiet hours settings ([#74](https://github.com/shoraLBRT/TimeShift/issues/74)) ([132a0ad](https://github.com/shoraLBRT/TimeShift/commit/132a0ad9277bcab4733e5758bf3dfd8fef4fab49))
+* **telegram:** step settings with -/+, undo block removal, replace a block by title ([#75](https://github.com/shoraLBRT/TimeShift/issues/75)) ([b78dd34](https://github.com/shoraLBRT/TimeShift/commit/b78dd342904eb30fdba256904faed95e2f572aa6))
+
+
+### Bug Fixes
+
+* make reads within one message see what the message has just recorded ([#66](https://github.com/shoraLBRT/TimeShift/issues/66)) ([1337499](https://github.com/shoraLBRT/TimeShift/commit/13374997d800d49a51b6213ad7ae614cd1448bf8))
+* put a category said among other intents on the running entry ([#68](https://github.com/shoraLBRT/TimeShift/issues/68)) ([fbe9d2f](https://github.com/shoraLBRT/TimeShift/commit/fbe9d2f53e03638f29d298cc0afa86de7c9e8871))
+* put the category answer on the running entry ([#63](https://github.com/shoraLBRT/TimeShift/issues/63)) ([f873145](https://github.com/shoraLBRT/TimeShift/commit/f8731453334d71a6f4bb8840e4029b57c7b083f6))
+* **telegram:** close the bot to unknown chats by default ([#72](https://github.com/shoraLBRT/TimeShift/issues/72)) ([022cbeb](https://github.com/shoraLBRT/TimeShift/commit/022cbeb02bb7fdf1efad53090d9ad65206cd3569))
+* **web:** report the running entry's own category in day.current ([#69](https://github.com/shoraLBRT/TimeShift/issues/69)) ([fe9330f](https://github.com/shoraLBRT/TimeShift/commit/fe9330f4c5f9903d60a441f8f84bdf5c333b9747))
+
 ## 0.1.0 (2026-11-18)
 
 
