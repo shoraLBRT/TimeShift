@@ -213,11 +213,13 @@ public sealed class EntryService(TrackingService tracking, ITimelineRepository t
             !p.IsFuture && (p.Status == SegmentStatus.Assumed || (includeQuestionable && p.Status == SegmentStatus.Questionable));
 
         var openStart = current?.Segment.StartUtc;
+        // Неизвестное время, подтверждённое «как есть», становится тем, что бот предлагает первым, — «Залипание» (#47).
         var fresh = pieces
             .Where(m => m.Segment is null && !m.IsOpen && Eligible(m.Piece) && !(openStart is { } o && m.Piece.StartUtc >= o))
             .Select(m => new Segment(
-                m.Piece.StartUtc, m.Piece.EndUtc, m.Piece.Title, SegmentStatus.Confirmed, SegmentSource.User,
-                m.Piece.ActivityId, m.Piece.CategoryKey))
+                m.Piece.StartUtc, m.Piece.EndUtc,
+                m.Piece.IsUnknown ? TimelineBuilder.SuggestedTitle : m.Piece.Title, SegmentStatus.Confirmed, SegmentSource.User,
+                m.Piece.ActivityId, m.Piece.IsUnknown ? TimelineBuilder.SuggestedCategory : m.Piece.CategoryKey))
             .ToList();
 
         var extension = pieces.Where(m => m.IsOpen && !m.Piece.IsFuture).Select(m => m.Piece).ToList();

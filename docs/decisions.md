@@ -639,3 +639,27 @@ corrected in the issues before the work starts.
   pings (option 3). The defaults were not named; the session's suggestion is back-off, pings on, no quiet hours.
   Option 4 (one ping per typical duration during an activity) is not part of the decision. Changes spec §5.2,
   to be edited in the PR that builds it.
+
+## Unknown time as built (#47, 2026-11-19)
+
+Built on the reading above (the issue's option 1, «Залипание» offered first). Choices the decision left open:
+
+- **What is unknown.** A main-track piece whose source is the background (`TimelinePiece.IsUnknown`): title
+  «Не записано», no category, still 🟡. Template blocks and the running activity's overrun are not unknown — they
+  are what the user said or planned, only unconfirmed. A future background piece is free time, shown as
+  «Свободно» (the `/day` text, the PWA).
+- **Not «Без категории».** An entry without a category is something the user recorded; unknown time is not.
+  So unknown time is never folded into the `null` category: the bot shows a separate line «Не записано», `WeekStats`
+  a last row with `IsUnknown`, REST a separate number.
+- **REST shape.** `unknownMin` next to `status` in the day, in each summary day and in the range; `totals` no longer
+  include it (`totals` + `unknownMin` = the past part). A field of its own rather than a `totals` row with a flag,
+  so a client that reads only `totals` cannot mistake it for «not classified». `status.questionableMin` still
+  includes it.
+- **Last line, whatever its size.** In `/week`, the PNG and the PWA totals «Не записано» goes after the categories
+  (and after the groups), so the categories read as what is known.
+- **Confirming «as it is».** `POST /api/confirm` with `includeQuestionable` (the PWA's «Ничего особенного», whose
+  hint already said «запишет это время как залипание») records a background piece as «Залипание» / `wasted` — what
+  the bot offers first. The evening «⚪ Остальное верно» confirms only ⚪ and never touches unknown time.
+- **Bot question.** «Пока тебя не было…» puts «Залипание» first (it was last, as «Залипание, так и было»; «так и
+  было» no longer fits, since the bot did not say it was).
+- **Colour.** Unknown time is a neutral light grey in the `/day` and `/week` pictures, not the orange of «Потерянное».

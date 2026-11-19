@@ -38,7 +38,7 @@ public sealed class DayService(TrackingService tracking, IClock clock)
         var window = new TimeRange(dayStart, dayEnd);
         var pieces = DayBuilder.Build(user, timeline, current, window, nowMinute);
         var parallel = ParallelPieces(window, timeline, nowMinute);
-        var (totals, status, parallelMin) = Analyze(pieces.Select(p => p.Piece), parallel, nowMinute);
+        var (totals, status, unknownMin, parallelMin) = Analyze(pieces.Select(p => p.Piece), parallel, nowMinute);
 
         var isToday = day == today;
         return new DayModel(
@@ -55,6 +55,7 @@ public sealed class DayService(TrackingService tracking, IClock clock)
             current is null ? null : ToCurrent(current, now, tz),
             totals,
             status,
+            unknownMin,
             parallelMin,
             new AttentionModel(user.UnansweredPings > 0, user.QuietUntilUtc > now ? user.QuietUntilUtc : null));
     }
@@ -90,15 +91,15 @@ public sealed class DayService(TrackingService tracking, IClock clock)
             var (dayStart, dayEnd) = Bounds(day, tz);
             if (dayStart >= nowMinute)
             {
-                days.Add(new SummaryDay(day, [], new StatusMinutes(0, 0, 0), 0));
+                days.Add(new SummaryDay(day, [], new StatusMinutes(0, 0, 0), 0, 0));
                 continue;
             }
 
             var window = new TimeRange(dayStart, dayEnd);
             var pieces = DayBuilder.Build(user, timeline, current, window, nowMinute);
-            var (totals, status, parallelMin) = Analyze(
+            var (totals, status, unknownMin, parallelMin) = Analyze(
                 pieces.Select(p => p.Piece), ParallelPieces(window, timeline, nowMinute), nowMinute);
-            days.Add(new SummaryDay(day, totals, status, parallelMin));
+            days.Add(new SummaryDay(day, totals, status, unknownMin, parallelMin));
         }
 
         var all = days
@@ -113,7 +114,8 @@ public sealed class DayService(TrackingService tracking, IClock clock)
             to,
             days,
             all,
-            new StatusMinutes(days.Sum(d => d.Status.ConfirmedMin), days.Sum(d => d.Status.AssumedMin), days.Sum(d => d.Status.QuestionableMin)));
+            new StatusMinutes(days.Sum(d => d.Status.ConfirmedMin), days.Sum(d => d.Status.AssumedMin), days.Sum(d => d.Status.QuestionableMin)),
+            days.Sum(d => d.UnknownMin));
     }
 
     internal static (DateTime Start, DateTime End) Bounds(DateOnly day, TimeZoneInfo tz) =>
@@ -134,12 +136,16 @@ public sealed class DayService(TrackingService tracking, IClock clock)
             })
             .ToList();
 
-    /// <summary>Итоги прошедшей части основной дорожки: по категориям (по убыванию), по статусам и минуты параллельных.</summary>
-    private static (IReadOnlyList<CategoryMinutes> Totals, StatusMinutes Status, int ParallelMin) Analyze(
+    /// <summary>
+    /// Итоги прошедшей части основной дорожки: по категориям (по убыванию), по статусам, неизвестное время (фон — не
+    /// категория, в итоги по категориям не входит, #47) и минуты параллельных.
+    /// </summary>
+    private static (IReadOnlyList<CategoryMinutes> Totals, StatusMinutes Status, int UnknownMin, int ParallelMin) Analyze(
         IEnumerable<TimelinePiece> main, IEnumerable<(TimelinePiece Piece, Segment Segment)> parallel, DateTime nowMinute)
     {
         var past = main.Where(p => !p.IsFuture).ToList();
         var totals = past
+            .Where(p => !p.IsUnknown)
             .GroupBy(p => p.CategoryKey)
             .Select(g => new CategoryMinutes(g.Key, g.Sum(p => Minutes(p.Duration))))
             .OrderByDescending(t => t.Minutes)
@@ -149,7 +155,8 @@ public sealed class DayService(TrackingService tracking, IClock clock)
         var parallelMin = parallel
             .Where(p => p.Piece.StartUtc < nowMinute)
             .Sum(p => Minutes((p.Piece.EndUtc < nowMinute ? p.Piece.EndUtc : nowMinute) - p.Piece.StartUtc));
-        return (totals, new StatusMinutes(Sum(SegmentStatus.Confirmed), Sum(SegmentStatus.Assumed), Sum(SegmentStatus.Questionable)), parallelMin);
+        var unknownMin = past.Where(p => p.IsUnknown).Sum(p => Minutes(p.Duration));
+        return (totals, new StatusMinutes(Sum(SegmentStatus.Confirmed), Sum(SegmentStatus.Assumed), Sum(SegmentStatus.Questionable)), unknownMin, parallelMin);
     }
 
     private static DayPiece ToDayPiece(MappedPiece mapped, DateTime dayStart, TimeZoneInfo tz)

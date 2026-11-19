@@ -58,6 +58,13 @@ internal sealed class SkiaDayRenderer : IDayRenderer
 
     private static readonly Lazy<SKTypeface> Font = new(FindFont);
 
+    /// <summary>Неизвестное время (фон, #47): нейтральный светло-серый — не категория и не «Потерянное».</summary>
+    public static readonly SKColor UnknownColor = new(0xBD, 0xBD, 0xBD);
+
+    /// <summary>Цвет куска ленты: фон — <see cref="UnknownColor"/>, остальное — по категории.</summary>
+    public static SKColor ColorOf(TimelinePiece piece, CategorySet? categories = null) =>
+        piece.IsUnknown ? UnknownColor : ColorOf(piece.CategoryKey, categories);
+
     /// <summary>Цвет категории (по ключу, а не только группе — сон и дорога различаются).</summary>
     public static SKColor ColorOf(string? categoryKey, CategorySet? categories = null) => categoryKey switch
     {
@@ -181,7 +188,7 @@ internal sealed class SkiaDayRenderer : IDayRenderer
             {
                 if (X(piece.EndUtc) - X(piece.StartUtc) >= 0.5f)
                 {
-                    Fill(canvas, ColorOf(piece.CategoryKey, week.Categories), piece.Status, piece.IsFuture, new SKRect(X(piece.StartUtc), y0, X(piece.EndUtc), y1));
+                    Fill(canvas, ColorOf(piece, week.Categories), piece.Status, piece.IsFuture, new SKRect(X(piece.StartUtc), y0, X(piece.EndUtc), y1));
                 }
             }
         }
@@ -203,7 +210,7 @@ internal sealed class SkiaDayRenderer : IDayRenderer
             if (category.Total > TimeSpan.Zero && longest > 0)
             {
                 var width = Math.Max(3f, (WeekRight - WeekLeft) * (float)category.Total.Ticks / longest);
-                using var bar = new SKPaint { Color = ColorOf(category.Key, week.Categories) };
+                using var bar = new SKPaint { Color = category.IsUnknown ? UnknownColor : ColorOf(category.Key, week.Categories) };
                 canvas.DrawRect(new SKRect(WeekLeft, y + 34, WeekLeft + width, y + 48), bar);
             }
         }
@@ -256,7 +263,7 @@ internal sealed class SkiaDayRenderer : IDayRenderer
         }
 
         var rect = new SKRect(left, top, right, bottom);
-        Fill(canvas, ColorOf(piece.CategoryKey, categories), piece.Status, piece.IsFuture, rect);
+        Fill(canvas, ColorOf(piece, categories), piece.Status, piece.IsFuture, rect);
         if (!label || bottom - top < 24 || piece.IsFuture)
         {
             return;

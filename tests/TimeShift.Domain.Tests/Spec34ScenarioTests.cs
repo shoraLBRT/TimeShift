@@ -46,7 +46,7 @@ public class Spec34ScenarioTests
             [
                 "14:00-15:30 Тренировка Assumed",
                 "15:30-16:00 Тренировка Questionable",
-                "16:00-17:00 Залипание Questionable",
+                "16:00-17:00 Не записано Questionable",
             ],
             before.Select(p => Describe(p, Moscow)));
 

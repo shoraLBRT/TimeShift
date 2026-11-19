@@ -43,7 +43,7 @@ public class InterruptionAndParallelTests
                 "14:30-15:00 Звонок Confirmed",
                 "15:00-16:00 Тренировка Assumed",
                 "16:00-16:30 Тренировка Questionable",
-                "16:30-17:00 Залипание Questionable",
+                "16:30-17:00 Не записано Questionable",
             ],
             BuildDay(timeline, new TimeRange(Msk(14), Msk(17)), Msk(17), TimeSpan.FromMinutes(60)));
     }
@@ -61,7 +61,7 @@ public class InterruptionAndParallelTests
             OpenActivity = open,
         });
 
-        Assert.Equal(["16:00-17:00 Залипание Questionable"], pieces.Select(p => Describe(p, Moscow)));
+        Assert.Equal(["16:00-17:00 Не записано Questionable"], pieces.Select(p => Describe(p, Moscow)));
     }
 
     [Fact]

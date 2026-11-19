@@ -3,8 +3,12 @@ using TimeShift.Domain.Timelines;
 
 namespace TimeShift.Application.Tracking;
 
-/// <summary>Сумма по категории верхнего уровня. <paramref name="Change"/> — разница с прошлой неделей; <c>null</c> — сравнивать не с чем.</summary>
-public sealed record CategoryTotal(string? Key, string Name, TimeSpan Total, TimeSpan? Change);
+/// <summary>
+/// Сумма по категории верхнего уровня. <paramref name="Change"/> — разница с прошлой неделей; <c>null</c> — сравнивать
+/// не с чем. <paramref name="IsUnknown"/> — не категория, а неизвестное время «Не записано» (фон, #47): у него нет
+/// ключа, и оно идёт последней строкой.
+/// </summary>
+public sealed record CategoryTotal(string? Key, string Name, TimeSpan Total, TimeSpan? Change, bool IsUnknown = false);
 
 /// <summary>Сумма параллельных занятий с одним названием.</summary>
 public sealed record ParallelTotal(string Title, TimeSpan Total);
@@ -28,7 +32,8 @@ public sealed record WeekStats(
     public TimeSpan ParallelSum => TimeSpan.FromTicks(Parallel.Sum(p => p.Total.Ticks));
 
     /// <summary>
-    /// Считает прошедшую часть лент. Категории — как в «Итого» дня: подвиды сложены в свою категорию («Залипание»);
+    /// Считает прошедшую часть лент. Категории — как в «Итого» дня: подвиды сложены в свою категорию («Залипание»),
+    /// неизвестное время (фон) — не категория, а последняя строка «Не записано» (#47);
     /// <paramref name="categories"/> — набор пользователя (без него — только системные).
     /// <paramref name="previous"/> — основная дорожка того же окна неделей раньше; категория, которая была только
     /// там, остаётся в списке с нулём.
@@ -55,6 +60,12 @@ public sealed record WeekStats(
             .OrderByDescending(c => c.Total)
             .ThenBy(c => c.Name, StringComparer.Ordinal)
             .ToList();
+        var unknown = Ticks(past.Where(p => p.IsUnknown));
+        var unknownBefore = previous is null ? (TimeSpan?)null : Ticks(previous.Where(p => !p.IsFuture && p.IsUnknown));
+        if (unknown > TimeSpan.Zero || unknownBefore > TimeSpan.Zero)
+        {
+            totals.Add(new CategoryTotal(null, TrackingReplies.UnknownTotalsName, unknown, unknown - unknownBefore, IsUnknown: true));
+        }
 
         TimeSpan Sum(SegmentStatus status) => Ticks(past.Where(p => p.Status == status));
         var parallelTotals = parallel
@@ -92,6 +103,7 @@ public sealed record WeekStats(
     }
 
     private static Dictionary<string, TimeSpan> ByCategory(IEnumerable<TimelinePiece> pieces, CategorySet set) => pieces
+        .Where(p => !p.IsUnknown)
         .GroupBy(p => set.TotalsKey(p.CategoryKey) ?? string.Empty)
         .ToDictionary(g => g.Key, Ticks, StringComparer.Ordinal);
 

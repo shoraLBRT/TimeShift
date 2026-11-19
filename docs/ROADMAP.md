@@ -47,13 +47,12 @@ server be hosted there. The REST contract is `docs/web-api.md`; the client is `s
 | 9 | [#51](https://github.com/shoraLBRT/TimeShift/issues/51) Drag the edges of an entry | built; stays open only for the check with a finger on an iPhone and Android |
 | 10 | [#52](https://github.com/shoraLBRT/TimeShift/issues/52) User-defined categories | built: own categories (table, REST, PWA settings, `/categories`) and classification rules by time of day as user facts (`/facts`, the activity page in the PWA) |
 
-Found while reviewing the current behaviour, decided by the maintainer on 2026-11-19 (`docs/decisions.md`), not
-built yet:
+Found while reviewing the current behaviour, decided by the maintainer on 2026-11-19 (`docs/decisions.md`):
 [#47](https://github.com/shoraLBRT/TimeShift/issues/47) (unknown time is shown as unknown, «Залипание» is what
-the bot offers first),
+the bot offers first; built, PR open),
 [#48](https://github.com/shoraLBRT/TimeShift/issues/48) (what pings do after unanswered ones, on/off and quiet
-hours become settings).
-Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default; PR open) and
+hours become settings; not built yet).
+Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default; merged, PR #72) and
 [#53](https://github.com/shoraLBRT/TimeShift/issues/53) (Telegram settings UX).
 
 After the MVP: iteration 2 (iPhone Shortcuts for app usage, Telegram Mini App, per-user LLM provider) and

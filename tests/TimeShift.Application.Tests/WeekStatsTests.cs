@@ -38,6 +38,33 @@ public class WeekStatsTests
     }
 
     [Fact]
+    public void Unknown_time_is_a_last_line_of_its_own_and_not_lost_time()
+    {
+        TimelinePiece Background(double from, double to) =>
+            new(Day.AddHours(from), Day.AddHours(to), TimelineBuilder.BackgroundTitle, null, null, SegmentStatus.Questionable, SegmentSource.Background, false);
+        var previous = new[] { Background(0, 10), Piece(10, 12, "Без названия", null, SegmentStatus.Confirmed) };
+
+        var stats = WeekStats.Of(
+            [
+                Background(0, 6),
+                Piece(6, 7, "YouTube", DefaultCategories.WastedYouTube, SegmentStatus.Confirmed),
+                Piece(7, 8, "Что-то", null, SegmentStatus.Confirmed),
+                Piece(8, 12, "Работа", DefaultCategories.Work, SegmentStatus.Confirmed),
+            ],
+            [],
+            previous);
+
+        // Фон (#47) — не «Залипание» и не «Без категории»: отдельная последняя строка, хотя она и самая большая.
+        Assert.Equal(
+            ["Работа 4 (+4)", "Без категории 1 (-1)", "Залипание 1 (+1)", "Не записано 6 (-4)"],
+            stats.Categories.Select(c => $"{c.Name} {c.Total.TotalHours} ({(c.Change!.Value.TotalHours > 0 ? "+" : string.Empty)}{c.Change.Value.TotalHours})").ToList());
+        var unknown = stats.Categories[^1];
+        Assert.True(unknown.IsUnknown);
+        Assert.Null(unknown.Key);
+        Assert.Equal(stats.Total, TimeSpan.FromTicks(stats.Categories.Sum(c => c.Total.Ticks)));
+    }
+
+    [Fact]
     public void Shares_are_whole_percents_that_sum_to_100()
     {
         var stats = WeekStats.Of(

@@ -229,10 +229,42 @@ public class TimelineTests
         Assert.NotNull(sleep["segment"]);
 
         // 🟡-фон подтверждается только по просьбе.
-        var background = PieceTitled(day, "Залипание")!;
+        var background = PieceTitled(day, "Не записано")!;
         Assert.Equal("questionable", background["status"]!.GetValue<string>());
+        Assert.Equal("background", background["source"]!.GetValue<string>());
+        Assert.Null(background["category"]);
         var more = await app.PostAsync("/api/confirm", new { start = app.Local(0, 0), end = app.Local(0, 30), includeQuestionable = true });
         Assert.Equal(510, more.Json["day"]!["status"]!["confirmedMin"]!.GetValue<int>());
+
+        // Неизвестное время, подтверждённое «как есть», становится тем, что предлагалось первым, — залипанием (#47).
+        var wasted = PieceTitled(more.Json["day"]!, "Залипание")!;
+        Assert.Equal("wasted", wasted["category"]!.GetValue<string>());
+        Assert.Equal("confirmed", wasted["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Unknown_time_is_counted_apart_from_the_categories()
+    {
+        await using var app = new TestApp();
+        await app.OnboardAsync();
+        var day = (await app.GetAsync($"/api/day/{app.Local(0, 0)[..10]}")).Json;
+
+        // Фон — не «Залипание» и не «Без категории»: отдельное поле unknownMin, в totals не входит (#47).
+        var unknown = day["pieces"]!.AsArray()
+            .Where(p => p!["source"]!.GetValue<string>() == "background" && !p["future"]!.GetValue<bool>())
+            .Sum(p => Math.Min(p!["endMin"]!.GetValue<int>(), day["nowMin"]!.GetValue<int>()) - p["startMin"]!.GetValue<int>());
+        Assert.True(unknown > 0);
+        Assert.Equal(unknown, day["unknownMin"]!.GetValue<int>());
+        var totals = day["totals"]!.AsArray();
+        Assert.DoesNotContain(totals, t => t!["category"]?.GetValue<string>() == "wasted");
+        Assert.DoesNotContain(totals, t => t!["category"] is null);
+        Assert.Equal(day["nowMin"]!.GetValue<int>(), totals.Sum(t => t!["minutes"]!.GetValue<int>()) + unknown);
+
+        var summary = (await app.GetAsync("/api/summary")).Json;
+        var days = summary["days"]!.AsArray();
+        Assert.Equal(unknown, days[^1]!["unknownMin"]!.GetValue<int>());
+        Assert.Equal(days.Sum(d => d!["unknownMin"]!.GetValue<int>()), summary["unknownMin"]!.GetValue<int>());
+        Assert.DoesNotContain(summary["totals"]!.AsArray(), t => t!["category"]?.GetValue<string>() == "wasted");
     }
 
     [Fact]

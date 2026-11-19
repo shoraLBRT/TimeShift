@@ -55,14 +55,17 @@ public sealed record DayModel(
     CurrentModel? Current,
     IReadOnlyList<CategoryMinutes> Totals,
     StatusMinutes Status,
+    int UnknownMin,
     int ParallelMin,
     AttentionModel Attention);
 
-public sealed record SummaryDay(DateOnly Date, IReadOnlyList<CategoryMinutes> Totals, StatusMinutes Status, int ParallelMin);
+/// <summary>Итоги дня в периоде. <paramref name="UnknownMin"/> — неизвестное время (фон), в <paramref name="Totals"/> не входит (#47).</summary>
+public sealed record SummaryDay(DateOnly Date, IReadOnlyList<CategoryMinutes> Totals, StatusMinutes Status, int UnknownMin, int ParallelMin);
 
 public sealed record SummaryModel(
     DateOnly From,
     DateOnly To,
     IReadOnlyList<SummaryDay> Days,
     IReadOnlyList<CategoryMinutes> Totals,
-    StatusMinutes Status);
+    StatusMinutes Status,
+    int UnknownMin);

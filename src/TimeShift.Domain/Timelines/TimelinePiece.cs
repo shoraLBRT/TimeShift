@@ -16,6 +16,12 @@ public sealed record TimelinePiece(
 {
     public TimeSpan Duration => EndUtc - StartUtc;
 
+    /// <summary>
+    /// Фон: о времени ничего не известно (spec §3.2, #47). Категории нет; в итогах — отдельной строкой «Не записано»,
+    /// не в «Потерянном». В будущем — просто свободное время по шаблону.
+    /// </summary>
+    public bool IsUnknown => Source == SegmentSource.Background;
+
     /// <summary>Совпадает всё, кроме границ, — такие соседние куски сливаются.</summary>
     public bool HasSameContent(TimelinePiece other) =>
         Title == other.Title

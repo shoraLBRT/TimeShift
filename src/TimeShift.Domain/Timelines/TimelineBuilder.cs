@@ -10,7 +10,17 @@ namespace TimeShift.Domain.Timelines;
 /// </summary>
 public static class TimelineBuilder
 {
-    public const string BackgroundTitle = "Залипание";
+    /// <summary>Название фона: время, о котором ничего не известно (#47). Категории у фона нет.</summary>
+    public const string BackgroundTitle = "Не записано";
+
+    /// <summary>
+    /// Что бот предлагает первым, когда спрашивает про неизвестное время, и чем становится фон, подтверждённый «как
+    /// есть» (spec §5.4, #47): «Залипание». Пока ответа нет, время остаётся неизвестным.
+    /// </summary>
+    public const string SuggestedTitle = "Залипание";
+
+    /// <inheritdoc cref="SuggestedTitle"/>
+    public const string SuggestedCategory = DefaultCategories.Wasted;
 
     public static readonly TimeSpan DefaultUnknownDurationFallback = TimeSpan.FromMinutes(60);
 
@@ -122,7 +132,7 @@ public static class TimelineBuilder
         }
 
         return new TimelinePiece(
-            start, end, BackgroundTitle, null, DefaultCategories.Wasted, SegmentStatus.Questionable, SegmentSource.Background, isFuture);
+            start, end, BackgroundTitle, null, null, SegmentStatus.Questionable, SegmentSource.Background, isFuture);
     }
 
     /// <summary>Куски продления: <c>[S, S+T·norm)</c> ⚪, <c>[S+T·norm, S+T·max)</c> 🟡; никогда не позже «сейчас».</summary>
