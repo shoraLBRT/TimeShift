@@ -1,6 +1,7 @@
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Parsing;
 using TimeShift.Domain.Categories;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Users;
 
@@ -25,7 +26,17 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock, Trackin
             user.IsOnboarded,
             user.TelegramChatId is not null,
             user.QuietUntilUtc > clock.UtcNow ? user.QuietUntilUtc : null,
-            new SettingsModel(s.PingIntervalMin, s.NormFactor, s.MaxFactor, s.MaxUnansweredPings, s.PingDuringBlocks, s.EveningReviewOffsetMin, s.RoundingMin),
+            new SettingsModel(
+                s.PingIntervalMin,
+                s.NormFactor,
+                s.MaxFactor,
+                s.MaxUnansweredPings,
+                s.PingDuringBlocks,
+                s.EveningReviewOffsetMin,
+                s.RoundingMin,
+                s.PingsEnabled,
+                s.AfterUnansweredPings,
+                s.QuietHours is { } quiet ? new QuietHoursModel(quiet.Start, quiet.End) : null),
             new LimitsModel(
                 new IntRange(UserSettings.MinPingIntervalMin, UserSettings.MaxPingIntervalMin),
                 new IntRange(UserSettings.MinUnansweredPingsLimit, UserSettings.MaxUnansweredPingsLimit),
@@ -161,6 +172,16 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock, Trackin
             throw ClientException.Invalid("roundingMin", $"Округление — одно из: {string.Join(", ", UserSettings.RoundingOptionsMin)} минут.");
         }
 
+        if (patch.QuietHours is { IsSet: true, Value: { } quietHours } && quietHours.Start == quietHours.End)
+        {
+            throw ClientException.Invalid("quietHours", "Начало и конец часов тишины не могут совпадать.");
+        }
+
+        if (patch.AfterUnansweredPings is { } policy && !Enum.IsDefined(policy))
+        {
+            throw ClientException.Invalid("afterUnansweredPings", "Нужно backOff или stop.");
+        }
+
         var norm = patch.NormFactor.IsSet ? patch.NormFactor.Value : s.NormFactor;
         var max = patch.MaxFactor.IsSet ? patch.MaxFactor.Value : s.MaxFactor;
         if (patch.NormFactor.IsSet || patch.MaxFactor.IsSet)
@@ -185,6 +206,13 @@ public sealed class ProfileService(IUnitOfWork unitOfWork, IClock clock, Trackin
         s.PingDuringBlocks = patch.PingDuringBlocks ?? s.PingDuringBlocks;
         s.EveningReviewOffsetMin = patch.EveningReviewOffsetMin ?? s.EveningReviewOffsetMin;
         s.RoundingMin = patch.RoundingMin ?? s.RoundingMin;
+        s.PingsEnabled = patch.PingsEnabled ?? s.PingsEnabled;
+        s.AfterUnansweredPings = patch.AfterUnansweredPings ?? s.AfterUnansweredPings;
+        if (patch.QuietHours.IsSet)
+        {
+            s.QuietHours = patch.QuietHours.Value is { } q ? new QuietHours(q.Start, q.End) : null;
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return Me(user);
     }

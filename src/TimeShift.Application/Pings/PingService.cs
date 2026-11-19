@@ -50,7 +50,7 @@ public sealed class PingService(
         return new PingRunResult(sent, failures);
     }
 
-    /// <summary>Когда пользователю следующий пинг (<c>null</c> — пауза до его сообщения).</summary>
+    /// <summary>Когда пользователю следующий пинг (<c>null</c> — пинги выключены или на паузе до его сообщения).</summary>
     public static DateTime? NextDue(User user, CurrentActivity? current, DateTime nowUtc) => PingSchedule.NextDue(new PingContext
     {
         NowUtc = nowUtc,
@@ -59,6 +59,9 @@ public sealed class PingService(
         LastSeenAtUtc = user.LastSeenAtUtc,
         UnansweredPings = user.UnansweredPings,
         MaxUnansweredPings = user.Settings.MaxUnansweredPings,
+        AfterLimit = user.Settings.AfterUnansweredPings,
+        Enabled = user.Settings.PingsEnabled,
+        QuietHours = user.Settings.QuietHours,
         OpenActivity = current?.ToOpenActivity(),
         Template = user.Template(),
         PingDuringBlocks = user.Settings.PingDuringBlocks,

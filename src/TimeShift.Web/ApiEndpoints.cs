@@ -9,6 +9,7 @@ using TimeShift.Application.Clients;
 using TimeShift.Application.Conversations;
 using TimeShift.Application.Push;
 using TimeShift.Application.Tracking;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Users;
 
 namespace TimeShift.Web;
@@ -47,6 +48,18 @@ public static class ApiEndpoints
     private const string OwnerKey = "ts.owner";
 
     /// <summary>Подключает <c>/api/*</c>. Нужны <c>UseRateLimiter</c> и <see cref="WebExtensions.AddTimeShiftWeb"/>.</summary>
+    private static Optional<QuietHoursModel?> QuietHoursField(Fields f)
+    {
+        if (!f.Has("quietHours"))
+        {
+            return Optional<QuietHoursModel?>.Unset;
+        }
+
+        var quiet = f.Object("quietHours");
+        return Optional<QuietHoursModel?>.Of(
+            quiet is null ? null : new QuietHoursModel(quiet.Require<TimeOnly>("start"), quiet.Require<TimeOnly>("end")));
+    }
+
     public static RouteGroupBuilder MapTimeShiftApi(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -73,6 +86,9 @@ public static class ApiEndpoints
                 PingDuringBlocks = f.Get<bool>("pingDuringBlocks"),
                 EveningReviewOffsetMin = f.Get<int>("eveningReviewOffsetMin"),
                 RoundingMin = f.Get<int>("roundingMin"),
+                PingsEnabled = f.Get<bool>("pingsEnabled"),
+                AfterUnansweredPings = f.Get<UnansweredPingsPolicy>("afterUnansweredPings"),
+                QuietHours = QuietHoursField(f),
             };
             return Json(await profile.UpdateSettingsAsync(Owner(http), patch, ct));
         });

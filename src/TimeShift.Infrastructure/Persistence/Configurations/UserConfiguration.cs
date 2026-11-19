@@ -42,7 +42,12 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
             settings.Property(s => s.PingDuringBlocks).HasColumnName("ping_during_blocks");
             settings.Property(s => s.EveningReviewOffsetMin).HasColumnName("evening_review_offset_min");
             settings.Property(s => s.RoundingMin).HasColumnName("rounding_min");
+            settings.Property(s => s.AfterUnansweredPings).HasColumnName("after_unanswered_pings").HasConversion<string>().HasMaxLength(16);
+            settings.Property(s => s.PingsEnabled).HasColumnName("pings_enabled");
+            settings.Property(s => s.QuietStart).HasColumnName("quiet_start");
+            settings.Property(s => s.QuietEnd).HasColumnName("quiet_end");
             settings.Ignore(s => s.Extension);
+            settings.Ignore(s => s.QuietHours);
         });
         builder.Navigation(u => u.Settings).IsRequired();
 

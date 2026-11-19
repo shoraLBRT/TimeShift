@@ -635,6 +635,12 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                                 .HasColumnType("uuid")
                                 .HasColumnName("user_id");
 
+                            b1.Property<string>("AfterUnansweredPings")
+                                .IsRequired()
+                                .HasMaxLength(16)
+                                .HasColumnType("character varying(16)")
+                                .HasColumnName("after_unanswered_pings");
+
                             b1.Property<int>("EveningReviewOffsetMin")
                                 .HasColumnType("integer")
                                 .HasColumnName("evening_review_offset_min");
@@ -658,6 +664,18 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Postgres
                             b1.Property<int>("PingIntervalMin")
                                 .HasColumnType("integer")
                                 .HasColumnName("ping_interval_min");
+
+                            b1.Property<bool>("PingsEnabled")
+                                .HasColumnType("boolean")
+                                .HasColumnName("pings_enabled");
+
+                            b1.Property<TimeOnly?>("QuietEnd")
+                                .HasColumnType("time without time zone")
+                                .HasColumnName("quiet_end");
+
+                            b1.Property<TimeOnly?>("QuietStart")
+                                .HasColumnType("time without time zone")
+                                .HasColumnName("quiet_start");
 
                             b1.Property<int>("RoundingMin")
                                 .HasColumnType("integer")

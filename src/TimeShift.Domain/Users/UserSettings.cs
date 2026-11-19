@@ -1,3 +1,4 @@
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Timelines;
 
 namespace TimeShift.Domain.Users;
@@ -17,7 +18,6 @@ public class UserSettings
 
     public const int MaxPingIntervalMin = 240;
 
-    /// <summary>Интервал пингов в допустимых пределах?</summary>
     /// <summary>Сколько неотвеченных пингов подряд можно задать до паузы.</summary>
     public const int MinUnansweredPingsLimit = 1;
 
@@ -31,6 +31,7 @@ public class UserSettings
     /// <summary>Допустимое округление границ, минут.</summary>
     public static IReadOnlyList<int> RoundingOptionsMin { get; } = [1, 5, 10, 15];
 
+    /// <summary>Интервал пингов в допустимых пределах?</summary>
     public static bool IsValidPingInterval(int minutes) => minutes is >= MinPingIntervalMin and <= MaxPingIntervalMin;
 
     public Guid UserId { get; private set; }
@@ -44,6 +45,28 @@ public class UserSettings
     public double? MaxFactor { get; set; } = DefaultMaxFactor;
 
     public int MaxUnansweredPings { get; set; } = DefaultMaxUnansweredPings;
+
+    /// <summary>После предела неотвеченных пингов: затухание (по умолчанию) или пауза до сообщения (spec §5.2).</summary>
+    public UnansweredPingsPolicy AfterUnansweredPings { get; set; } = UnansweredPingsPolicy.BackOff;
+
+    /// <summary>Пинги включены; выключенные не приходят совсем, вечерний разбор — по-прежнему.</summary>
+    public bool PingsEnabled { get; set; } = true;
+
+    /// <summary>Начало ежедневных часов тишины (местное время); <c>null</c> вместе с концом — их нет.</summary>
+    public TimeOnly? QuietStart { get; private set; }
+
+    public TimeOnly? QuietEnd { get; private set; }
+
+    /// <summary>Ежедневные часы без пингов или <c>null</c>.</summary>
+    public QuietHours? QuietHours
+    {
+        get => QuietStart is { } start && QuietEnd is { } end && start != end ? new QuietHours(start, end) : null;
+        set
+        {
+            QuietStart = value?.Start;
+            QuietEnd = value?.End;
+        }
+    }
 
     public bool PingDuringBlocks { get; set; }
 
