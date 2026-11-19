@@ -712,5 +712,7 @@ Built on the reading above (the issue's option 1, «Залипание» offered
   itself suggests two blocks of one name («Учёба пн, ср, пт 9:30-15», «Учёба по субботам 10-13»). Moving a block
   to hours that do not overlap the old ones therefore adds a second one; the user removes the old one with 🗑. A
   replacement has no «Вернуть» (onboarding's «↩️ Убрать» removes the new block only).
+  The overlap rule was confirmed by the maintainer on 2026-11-19 (over «always replace every block of that name»
+  and «ask "Заменить или добавить?"»).
 - **Left out** (named in the issue, not in «Что сделать»): time zones beyond the eight buttons (any IANA name can
   still be typed) and a finer sleep step (any time can be typed: «23:30-7:30»).

@@ -156,8 +156,9 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 - [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — closing the bot by default: merged (PR #72).
   When #18 deploys, the owner's chat id goes into `TELEGRAM_ALLOWED_CHAT_ID`, or the bot answers nobody.
-- [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings and blocks UX: built, PR open (not
-  merged); see «What exists». After it no open issue is left to a coding session: #2, #18 (then #19) and the
+- [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings and blocks UX: merged (PR #75);
+  see «What exists». The rule that a same-titled block replaces only the blocks it overlaps was confirmed by the
+  maintainer on 2026-11-19. No open issue is left to a coding session: #2, #18 (then #19) and the
   device checks #16 / #50 / #51 wait for the maintainer.
 - [#47](https://github.com/shoraLBRT/TimeShift/issues/47) — unknown time shown and counted as unknown: merged
   (PR #73); see «What exists».
