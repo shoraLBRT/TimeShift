@@ -271,7 +271,7 @@ export function patchDay(day, op) {
   let pieces = day.pieces.map((p) => ({ ...p }));
   let parallel = day.parallel.map((p) => ({ ...p }));
   let current = day.current;
-  const unknown = (a, b) => ({ startMin: a, endMin: b, startUtc: isoAt(day, a), endUtc: isoAt(day, b), title: 'Залипание', category: 'wasted', status: 'questionable', source: 'background', future: false, open: false, activityId: null, segment: null });
+  const unknown = (a, b) => ({ startMin: a, endMin: b, startUtc: isoAt(day, a), endUtc: isoAt(day, b), title: UNKNOWN_TITLE, category: null, status: 'questionable', source: 'background', future: false, open: false, activityId: null, segment: null });
   const cut = (list, a, b, insert) => {
     const out = [];
     for (const p of list) {
@@ -294,7 +294,9 @@ export function patchDay(day, op) {
     }
     case 'confirm':
       pieces = pieces.map((p) => (p.future || p.endMin <= op.startMin || p.startMin >= op.endMin || p.open ? p
-        : p.status === 'assumed' || (op.includeQuestionable && p.status === 'questionable') ? { ...p, status: 'confirmed' } : p));
+        : p.status === 'assumed' ? { ...p, status: 'confirmed' }
+        // Unknown time confirmed as it is becomes «Залипание» (the server does the same, #47).
+        : op.includeQuestionable && p.status === 'questionable' ? (p.source === 'background' ? { ...p, status: 'confirmed', source: 'user', title: 'Залипание', category: 'wasted' } : { ...p, status: 'confirmed' }) : p));
       break;
     case 'free': {
       const hit = pieces.filter((p) => p.segment?.id === op.segmentId);
@@ -329,37 +331,31 @@ export function patchDay(day, op) {
 // ---------- summaries ----------
 
 /** Totals [{category, minutes}] → per category and per group with shares (0..1) of `base` (sum by default).
- *  opts: { unknownMin } moves that much of 'wasted' to a «Не записано» row; { wastedLabel } relabels 'wasted' and 'lost'. */
-export function summarizeTotals(totals, me, base, opts = {}) {
-  const sum = totals.reduce((s, t) => s + t.minutes, 0);
+ *  `unknownMin` — unknown time (background), which the server counts apart from the categories (`unknownMin` of a
+ *  day / summary): it becomes its own neutral row «Не записано» (group 'none', unknown: true), never part of 'lost'. */
+export function summarizeTotals(totals, me, base, unknownMin = 0) {
+  const unknown = Math.max(0, unknownMin ?? 0);
+  const sum = totals.reduce((s, t) => s + t.minutes, 0) + unknown;
   const denom = base ?? sum;
-  // Unknown (background) time is counted by the server under 'wasted'; when the caller knows how much of it is
-  // unknown (from the pieces), move it to its own neutral row «Не записано» (group 'none', unknown: true).
-  const unknownMin = Math.max(0, Math.min(opts.unknownMin ?? 0, totals.find((t) => t.category === BACKGROUND_CATEGORY)?.minutes ?? 0));
-  const rows = totals
-    .map((t) => (t.category === BACKGROUND_CATEGORY ? { ...t, minutes: t.minutes - unknownMin } : t))
-    .filter((t) => t.minutes > 0);
   const row = (info, minutes, extra) => ({ ...info, label: info.name, unknown: false, minutes, share: denom ? minutes / denom : 0, durationText: fmtDuration(minutes), ...extra });
-  const categories = rows.map((t) => row(categoryInfo(t.category, me), t.minutes, opts.wastedLabel && t.category === BACKGROUND_CATEGORY ? { label: opts.wastedLabel, includesUnknown: true } : null));
-  if (unknownMin) categories.push(row({ key: null, name: UNKNOWN_TITLE, group: 'none', parent: null, parentName: null }, unknownMin, { unknown: true }));
+  const categories = totals.filter((t) => t.minutes > 0).map((t) => row(categoryInfo(t.category, me), t.minutes));
   categories.sort((a, b) => b.minutes - a.minutes);
+  // «Не записано» is not a category: it goes last whatever its size.
+  if (unknown) categories.push(row({ key: null, name: UNKNOWN_TITLE, group: 'none', parent: null, parentName: null }, unknown, { unknown: true }));
   const byGroup = new Map();
   for (const c of categories) if (!c.unknown) byGroup.set(c.group, (byGroup.get(c.group) ?? 0) + c.minutes);
   const group = (key, name, minutes, extra) => ({ group: key, name, label: name, unknown: false, minutes, share: denom ? minutes / denom : 0, durationText: fmtDuration(minutes), ...extra });
-  const groups = GROUPS.filter((g) => byGroup.has(g.key)).map((g) => group(g.key, g.name, byGroup.get(g.key),
-    opts.wastedLabel && g.key === 'lost' ? { label: `${g.name} (вкл. не записанное)`, includesUnknown: true } : null));
-  if (unknownMin) groups.push(group('none', UNKNOWN_TITLE, unknownMin, { unknown: true }));
+  const groups = GROUPS.filter((g) => byGroup.has(g.key)).map((g) => group(g.key, g.name, byGroup.get(g.key)));
   groups.sort((a, b) => b.minutes - a.minutes);
-  return { minutes: sum, categories, groups, unknownMin };
+  if (unknown) groups.push(group('none', UNKNOWN_TITLE, unknown, { unknown: true }));
+  return { minutes: sum, categories, groups, unknownMin: unknown };
 }
 
-const BACKGROUND_CATEGORY = 'wasted';
-
-/** Minutes of unknown time (questionable background pieces) in the past part of a day. */
+/** Minutes of unknown time (background pieces) in the past part of a day, counted from the pieces. */
 export function unknownMinutes(day) {
   if (!day) return 0;
   const end = day.nowMin ?? day.dayMinutes;
-  return day.pieces.reduce((s, p) => (!p.future && p.source === 'background' && p.status === 'questionable'
+  return day.pieces.reduce((s, p) => (!p.future && p.source === 'background'
     ? s + Math.max(0, Math.min(p.endMin, end) - p.startMin) : s), 0);
 }
 
@@ -378,20 +374,18 @@ export function summarizeStatus(status) {
 /** Summary model of one day (from GET /api/day). */
 export function daySummary(day, me) {
   if (!day) return null;
-  const unknownMin = unknownMinutes(day);
+  const unknownMin = day.unknownMin ?? unknownMinutes(day);
   const status = summarizeStatus(day.status);
   const q = status.parts.find((p) => p.status === 'questionable');
   q.unknownMin = Math.min(unknownMin, q.minutes);
-  return { date: day.date, isToday: day.isToday, totals: summarizeTotals(day.totals, me, undefined, { unknownMin }), status, parallelMin: day.parallelMin, unknownMin };
+  return { date: day.date, isToday: day.isToday, totals: summarizeTotals(day.totals, me, undefined, unknownMin), status, parallelMin: day.parallelMin, unknownMin };
 }
-
-export const RANGE_UNKNOWN_NOTE = 'Не записанное время входит в «Под вопросом»; в итогах по категориям сервер пока считает его как «Залипание».';
 
 /** Summary model of a range (from GET /api/summary): per-day stacked group data + totals. */
 export function rangeSummary(summary, me) {
   if (!summary) return null;
   const days = summary.days.map((d) => {
-    const t = summarizeTotals(d.totals, me, MINUTES_PER_DAY);
+    const t = summarizeTotals(d.totals, me, MINUTES_PER_DAY, d.unknownMin ?? 0);
     const status = summarizeStatus(d.status);
     const confirmedShare = status.minutes ? (d.status?.confirmedMin ?? 0) / status.minutes : 0;
     // confirmedShare / confirmedText: how much of the day's past is confirmed — the meaningful per-day figure.
@@ -400,12 +394,12 @@ export function rangeSummary(summary, me) {
   });
   const maxMinutes = Math.max(1, ...days.map((d) => d.minutes));
   const status = summarizeStatus(summary.status);
+  const unknownMin = summary.unknownMin ?? 0;
   const q = status.parts.find((p) => p.status === 'questionable');
-  q.label = 'Под вопросом (вкл. не записанное)';
+  q.unknownMin = Math.min(unknownMin, q.minutes);
   return {
-    from: summary.from, to: summary.to, days, maxMinutes, status, note: RANGE_UNKNOWN_NOTE,
-    // Server totals cannot separate unknown time: keep the numbers, label the 'wasted' row and the 'lost' group.
-    totals: summarizeTotals(summary.totals, me, undefined, { wastedLabel: 'Залипание и не записанное' }),
+    from: summary.from, to: summary.to, days, maxMinutes, status, unknownMin,
+    totals: summarizeTotals(summary.totals, me, undefined, unknownMin),
   };
 }
 

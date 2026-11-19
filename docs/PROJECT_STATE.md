@@ -106,6 +106,14 @@ Two tracks, order in `docs/ROADMAP.md`:
   reverse order. No schema change. Covered on a real database at repository level (`PersistenceTests`) and at
   dialog level (`tests/TimeShift.Web.Tests/DialogTests.cs`, the whole host with a scripted LLM). Decisions:
   `docs/decisions.md`, «Reads inside one unit of work».
+- **Unknown time (#47):** the background is «Не записано» with no category (`TimelinePiece.IsUnknown`), not
+  «Залипание». It is counted apart from the categories everywhere: `/day` text («Итого: …» plus a line «Не
+  записано: N»), `/day` and `/week` pictures (neutral grey), `/week` and `WeekStats` (a last line «Не записано»,
+  `CategoryTotal.IsUnknown`, with the change against last week), REST (`unknownMin` in the day, each summary day
+  and the range; not in `totals`) and the PWA (`summarizeTotals(..., unknownMin)` — the last row «Не записано» in
+  the categories and the groups, never in «Потерянное»; the old «Залипание и не записанное» labels and the note
+  are gone). The bot's question «Пока тебя не было…» offers «Залипание» first; onboarding explains the new
+  meaning. Spec §2, §3.2, §3.4, §5.1 item 3 and §5.4 edited. No schema change.
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -132,16 +140,16 @@ Everything in the roadmap's numbered order now waits for the maintainer:
 
 What a coding session can take without waiting (outside the numbered order, `docs/ROADMAP.md` «Also»):
 
-- [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — closing the bot by default: built, PR open (not merged).
+- [#49](https://github.com/shoraLBRT/TimeShift/issues/49) — closing the bot by default: merged (PR #72).
   When #18 deploys, the owner's chat id goes into `TELEGRAM_ALLOWED_CHAT_ID`, or the bot answers nobody.
 - [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
   note while the PWA is the main client.
-- [#47](https://github.com/shoraLBRT/TimeShift/issues/47) and [#48](https://github.com/shoraLBRT/TimeShift/issues/48)
-  — decided by the maintainer on 2026-11-19, not built: unknown time is shown and counted as unknown, with
-  «Залипание» as the answer the bot offers first (#47); the ping behaviour after unanswered pings, pings on/off
-  and quiet hours become settings (#48). The maintainer's words and how they were read are in each issue and in
-  `docs/decisions.md` («Maintainer's decisions on #47 and #48»); both change the spec, which is edited in the PR
-  that builds them.
+- [#47](https://github.com/shoraLBRT/TimeShift/issues/47) — unknown time shown and counted as unknown: built, PR
+  open (not merged); see «What exists».
+- [#48](https://github.com/shoraLBRT/TimeShift/issues/48) — decided by the maintainer on 2026-11-19, not built: the
+  ping behaviour after unanswered pings, pings on/off and quiet hours become settings. The maintainer's words and
+  how they were read are in the issue and in `docs/decisions.md` («Maintainer's decisions on #47 and #48»); it
+  changes spec §5.2, which is edited in the PR that builds it.
 
 ## Open questions
 
@@ -149,11 +157,14 @@ What a coding session can take without waiting (outside the numbered order, `doc
   recorded responses.
 - VPS choice for deploy (#18). With the PWA the server can be in Russia; check from the VPS that the push
   hosts and the LLM aggregator are reachable (`docs/deploy.md`).
-- #47 and #48 are decided (see «Next»), but the decisions were short and were read by the session: for #47,
-  whether «базово предлагается "залипание"» means the first offered answer (as read) or a setting with that
-  default; for #48, the default values of the new settings (suggested: back-off, pings on, no quiet hours).
-  Until they are built, unknown time is still counted as «Залипание» and pings still stop for good after two
-  unanswered.
+- #48 is decided (see «Next»), but the decision was short and was read by the session: the default values of
+  the new settings (suggested: back-off, pings on, no quiet hours). Until it is built, pings stop for good after
+  two unanswered.
+- #47 was built on the session's reading of «базово предлагается "залипание"» — «Залипание» is the first answer
+  offered, not a setting «чем считать неизвестное время» with that default (the issue's option 3). If the
+  maintainer meant the setting, it is an addition on top of what is built. Confirming unknown time «as it is»
+  (REST `POST /api/confirm` with `includeQuestionable`, the PWA's «Ничего особенного») records it as «Залипание»
+  — the same reading, kept from before.
 - `/day` and `/week` pictures were checked as rendered PNGs at 720 px, not in Telegram on an iPhone (#16's
   «читается на iPhone» is still to be confirmed by the maintainer). The PWA has no week picture; it has
   `GET /api/summary`.
@@ -201,8 +212,8 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 415 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
-TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 415, 0 skipped (README)
+dotnet test           # all green: 417 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 417, 0 skipped (README; CI runs it)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)
 # http://localhost:5138/a/?demo=1&at=15:40   — a design on demo data, no login (also /b/, /c/); &speech=0 — without the microphone

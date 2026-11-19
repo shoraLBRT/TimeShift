@@ -157,6 +157,7 @@ Own categories:
                "startUtc": "…", "startLocal": "2026-11-17T09:00", "elapsedMin": 152, "typicalMin": 240 },
   "totals": [ { "category": "work", "minutes": 152 } ],
   "status": { "confirmedMin": 0, "assumedMin": 662, "questionableMin": 210 },
+  "unknownMin": 60,
   "parallelMin": 0,
   "attention": { "pingPending": false, "quietUntilUtc": null }
 }
@@ -175,8 +176,12 @@ Own categories:
 - `current` — the running activity, whatever day is shown; `null` when nothing runs. Its `category` is the
   category of the running entry itself, the same value as in its piece and in `totals` (`null` when the entry has
   none) — not the activity's default category, which is in `GET /api/activities`.
-- `totals`, `status`, `parallelMin` count the past part of the main track only (up to "now"); `totals` is ordered
-  by minutes, descending. `category` may be `null` (not classified yet).
+- Background pieces (`source: "background"`) are unknown time: `title` «Не записано», `category: null`, status
+  `questionable` (#47). They are not «Залипание» and not part of the `lost` group.
+- `totals`, `status`, `unknownMin`, `parallelMin` count the past part of the main track only (up to "now"); `totals`
+  is ordered by minutes, descending. `category` may be `null` (not classified yet). Unknown time is **not** in
+  `totals`: it is `unknownMin`, so `totals` + `unknownMin` = the past part of the day. It is in `status`
+  (`questionableMin`).
 - A day in the future is allowed (all pieces `future`); it shows the week template.
 - `attention.pingPending` is `true` while the last ping is unanswered. A malformed date → `422` with `field: "date"`
   (`view` for the `?view=` parameter).
@@ -187,11 +192,14 @@ Own categories:
 {
   "from": "2026-11-11", "to": "2026-11-17",
   "days": [ { "date": "2026-11-11", "totals": [ { "category": "work", "minutes": 430 } ],
-              "status": { "confirmedMin": 900, "assumedMin": 480, "questionableMin": 60 }, "parallelMin": 30 } ],
+              "status": { "confirmedMin": 900, "assumedMin": 480, "questionableMin": 60 }, "unknownMin": 30, "parallelMin": 30 } ],
   "totals": [ { "category": "sleep", "minutes": 3300 } ],
-  "status": { "confirmedMin": 6200, "assumedMin": 3300, "questionableMin": 580 }
+  "status": { "confirmedMin": 6200, "assumedMin": 3300, "questionableMin": 580 },
+  "unknownMin": 410
 }
 ```
+
+`unknownMin` (per day and for the range) is unknown time, counted apart from `totals` as in the day.
 
 ## Changing the timeline
 
@@ -206,7 +214,7 @@ Every request below returns `{ "day": Day }` — the refreshed day. Which day: q
 | `POST /api/entries` | `{ "start", "end", "title" \| "activityId", "category"?, "parallel"? }` | Records a past period as confirmed; it cuts and displaces what was there (parallel entries displace nothing). |
 | `PATCH /api/entries/{segmentId}` | any of `start`, `end`, `title`, `category` | Edits a stored segment. Freed time falls back to the template / background. |
 | `DELETE /api/entries/{segmentId}` | — | Removes a stored segment. |
-| `POST /api/confirm` | `{ "start", "end", "includeQuestionable"? }` | Confirms computed pieces in the range as they are shown (assumed → confirmed; questionable only when `includeQuestionable`). Stored segments are left alone. The running activity is confirmed as a whole up to now (like `continue`), and only together with `includeQuestionable` when part of it is questionable; other time inside the running activity is not touched. |
+| `POST /api/confirm` | `{ "start", "end", "includeQuestionable"? }` | Confirms computed pieces in the range as they are shown (assumed → confirmed; questionable only when `includeQuestionable`). Stored segments are left alone. Unknown time (background) confirmed this way is recorded as «Залипание» (`wasted`) — what the bot offers first for such a span (#47). The running activity is confirmed as a whole up to now (like `continue`), and only together with `includeQuestionable` when part of it is questionable; other time inside the running activity is not touched. |
 | `POST /api/undo` | — | Reverts the last change. Adds `"result": "undone" \| "nothing" \| "stale"`. |
 | `POST /api/quiet` | `{ "minutes": 120 }` (`0` — off; 5…1440) | Manual quiet hours. |
 

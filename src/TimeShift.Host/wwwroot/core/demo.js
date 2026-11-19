@@ -37,7 +37,8 @@ const SEED_ACTIVITIES = [
 
 const MIN = 60000;
 const DEMO_PHRASE = 'Прогулка';
-const BACKGROUND = 'Залипание';
+const BACKGROUND = 'Не записано';
+const SUGGESTED_TITLE = 'Залипание';
 const err = (status, code, message, field = null) => new ApiError(status, code, message, field);
 const clone = (v) => (v == null ? v : structuredClone(v));
 const iso = (ms) => new Date(ms).toISOString().replace('.000Z', 'Z');
@@ -190,7 +191,7 @@ export function createDemoApi(opts = {}) {
       }
       const o = occ.find((x) => x.s <= t && t < x.e);
       if (o) return { key: `o${o.s}`, title: o.title, category: o.category, status: 'assumed', source: 'schedule', seg: null, open: false, activityId: null, future };
-      return { key: 'bg', title: BACKGROUND, category: 'wasted', status: 'questionable', source: 'background', seg: null, open: false, activityId: null, future };
+      return { key: 'bg', title: BACKGROUND, category: null, status: 'questionable', source: 'background', seg: null, open: false, activityId: null, future };
     };
 
     const pieces = [];
@@ -219,10 +220,13 @@ export function createDemoApi(opts = {}) {
 
     const totalsMap = new Map();
     const status = { confirmedMin: 0, assumedMin: 0, questionableMin: 0 };
+    let unknownMin = 0;
     for (const p of out) {
       const len = Math.min(p.endMin, pastEnd) - p.startMin;
       if (len <= 0) continue;
-      totalsMap.set(p.category, (totalsMap.get(p.category) ?? 0) + len);
+      // Background is unknown time: not a category, counted apart (as the server does, #47).
+      if (p.source === 'background') unknownMin += len;
+      else totalsMap.set(p.category, (totalsMap.get(p.category) ?? 0) + len);
       status[`${p.status}Min`] += len;
     }
     const parallelMin = parallel.reduce((s, p) => s + Math.max(0, Math.min(p.endMin, pastEnd) - p.startMin), 0);
@@ -232,7 +236,7 @@ export function createDemoApi(opts = {}) {
       pieces: out, parallel,
       current: run ? { segmentId: run.id, activityId: run.activityId, title: run.title, category: run.category, startUtc: iso(run.start), startLocal: toLocal(run.start), elapsedMin: Math.round((nowMs - run.start) / MIN), typicalMin: T0 } : null,
       totals: [...totalsMap].map(([category, minutes]) => ({ category, minutes })).sort((a, b) => b.minutes - a.minutes),
-      status, parallelMin,
+      status, unknownMin, parallelMin,
       attention: { pingPending: false, quietUntilUtc: db.me.quietUntilUtc },
     };
   }
@@ -314,7 +318,9 @@ export function createDemoApi(opts = {}) {
         if (!ok) continue;
         if (p.open) { const r = running(); if (r) r.confirmedUntil = Math.max(r.confirmedUntil, pe); continue; }
         if (p.segment) continue;
-        db.segs.push({ id: id('s'), start: ps, end: pe, title: p.title, activityId: p.activityId, category: p.category, status: 'confirmed', source: 'user', parallel: false, confirmedUntil: pe });
+        // Unknown time confirmed as it is becomes what the bot offers first — «Залипание» (as the server does, #47).
+        const bg = p.source === 'background';
+        db.segs.push({ id: id('s'), start: ps, end: pe, title: bg ? SUGGESTED_TITLE : p.title, activityId: p.activityId, category: bg ? 'wasted' : p.category, status: 'confirmed', source: 'user', parallel: false, confirmedUntil: pe });
       }
     }
   }
@@ -616,13 +622,15 @@ export function createDemoApi(opts = {}) {
       const days = [];
       const totals = new Map();
       const status = { confirmedMin: 0, assumedMin: 0, questionableMin: 0 };
+      let unknownMin = 0;
       for (let i = 0; i < n; i++) {
         const day = buildDay(T.addDays(from, i));
-        days.push({ date: day.date, totals: day.totals, status: day.status, parallelMin: day.parallelMin });
+        days.push({ date: day.date, totals: day.totals, status: day.status, unknownMin: day.unknownMin, parallelMin: day.parallelMin });
+        unknownMin += day.unknownMin;
         for (const t of day.totals) totals.set(t.category, (totals.get(t.category) ?? 0) + t.minutes);
         for (const k of Object.keys(status)) status[k] += day.status[k];
       }
-      return { from, to, days, totals: [...totals].map(([category, minutes]) => ({ category, minutes })).sort((a, b) => b.minutes - a.minutes), status };
+      return { from, to, days, totals: [...totals].map(([category, minutes]) => ({ category, minutes })).sort((a, b) => b.minutes - a.minutes), status, unknownMin };
     }),
 
     start: (body, view) => mutate(() => startActivity(body ?? {}), view),

@@ -446,13 +446,13 @@ Panels:
   e.g. «73%»; `confirmedShare` 0…1, also `data-confirmed-share`) — not the tracked time, which is 24 h for every past day.
   `--share` / `--fill` are 0…1: e.g. `width: calc(var(--share) * 100%)` or `flex: var(--share)`.
   To draw your own chart, use the panel's `data` (`{ day: daySummary, range: rangeSummary }`) or the two functions.
-  Unknown time: in the day model the questionable background minutes (`daySummary(...).unknownMin`, also
-  `unknownMinutes(day)`) are taken out of `wasted` and shown as their own neutral row «Не записано»
-  (`unknown: true`, group `none`, `li.ts-total[data-unknown=true]`); the questionable status part carries
-  `unknownMin`. The range model keeps the server numbers (they cannot be separated) and labels them instead: the
-  `wasted` row and the `lost` group get `includesUnknown: true` and a `label` («Залипание и не записанное»), the
-  questionable part is labelled «Под вопросом (вкл. не записанное)», and `note` explains it (`p.ts-summary-note`).
-  Render `label` (falls back to `name`); every row now has `label` and `unknown`.
+  Unknown time (#47): the server counts background minutes apart from the categories (`unknownMin` of a day, of each
+  summary day and of the range; `totals` do not include them). `summarizeTotals(totals, me, base, unknownMin)` adds
+  them as the last, neutral row «Не записано» (`unknown: true`, group `none`, `li.ts-total[data-unknown=true]`) in
+  both the categories and the groups — never in `lost`. `daySummary(...).unknownMin` and `rangeSummary(...).unknownMin`
+  carry the number (`unknownMinutes(day)` counts it from the pieces when a day has no `unknownMin`); the
+  questionable status part carries `unknownMin` too. Render `label` (falls back to `name`); every row has `label` and
+  `unknown`.
 - **Assistant** `section.ts-assistant[data-busy]` > `.ts-thread-empty` (`.ts-hint`, `ul.ts-examples > li >
   button.ts-example`), `ol.ts-thread[aria-live] > li.ts-msg[data-from=user|bot][data-pending][data-error]` >
   `p.ts-msg-text` (pre-wrap), `p.ts-msg-error`, `.ts-msg-buttons > .ts-msg-row > button.ts-msg-button[aria-pressed]`;
