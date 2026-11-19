@@ -114,6 +114,14 @@ Two tracks, order in `docs/ROADMAP.md`:
   the categories and the groups, never in «Потерянное»; the old «Залипание и не записанное» labels and the note
   are gone). The bot's question «Пока тебя не было…» offers «Залипание» first; onboarding explains the new
   meaning. Spec §2, §3.2, §3.4, §5.1 item 3 and §5.4 edited. No schema change.
+- **Ping settings (#48):** what happens after `max_unanswered` unanswered pings is a setting — back-off
+  (default: the interval doubles, at most 4 h, the first answer restores it) or stop (as before); pings can be
+  switched off; daily quiet hours «не пинговать с … до …» in local time (may cross midnight). Domain
+  `PingSchedule` (`UnansweredPingsPolicy`, `QuietHours`), `user_settings` columns `after_unanswered_pings`,
+  `pings_enabled`, `quiet_start`, `quiet_end` (migration `PingSettings` for both providers; existing users get
+  back-off and pings on), REST `pingsEnabled` / `afterUnansweredPings` / `quietHours`, Telegram `/settings`
+  (two toggles and «🤫 Тихие часы»), PWA «Напоминания». Spec §5.2, §6, §7 and the `/settings` line of the commands table edited; decisions in
+  `docs/decisions.md`, «Ping settings as built».
 - **Deploy:** `docker compose --profile web` adds Caddy with automatic HTTPS; guide in `docs/deploy.md`.
 - **Host:** `PingWorker` once a minute (when any notification channel exists), `/health` with version, static
   files, `/api`.
@@ -144,12 +152,10 @@ What a coding session can take without waiting (outside the numbered order, `doc
   When #18 deploys, the owner's chat id goes into `TELEGRAM_ALLOWED_CHAT_ID`, or the bot answers nobody.
 - [#53](https://github.com/shoraLBRT/TimeShift/issues/53) — Telegram settings UX; low priority by the issue's own
   note while the PWA is the main client.
-- [#47](https://github.com/shoraLBRT/TimeShift/issues/47) — unknown time shown and counted as unknown: built, PR
-  open (not merged); see «What exists».
-- [#48](https://github.com/shoraLBRT/TimeShift/issues/48) — decided by the maintainer on 2026-11-19, not built: the
-  ping behaviour after unanswered pings, pings on/off and quiet hours become settings. The maintainer's words and
-  how they were read are in the issue and in `docs/decisions.md` («Maintainer's decisions on #47 and #48»); it
-  changes spec §5.2, which is edited in the PR that builds it.
+- [#47](https://github.com/shoraLBRT/TimeShift/issues/47) — unknown time shown and counted as unknown: merged
+  (PR #73); see «What exists».
+- [#48](https://github.com/shoraLBRT/TimeShift/issues/48) — ping settings (back-off or stop, on/off, daily quiet
+  hours): built, PR open (not merged); see «What exists».
 
 ## Open questions
 
@@ -157,9 +163,11 @@ What a coding session can take without waiting (outside the numbered order, `doc
   recorded responses.
 - VPS choice for deploy (#18). With the PWA the server can be in Russia; check from the VPS that the push
   hosts and the LLM aggregator are reachable (`docs/deploy.md`).
-- #48 is decided (see «Next»), but the decision was short and was read by the session: the default values of
-  the new settings (suggested: back-off, pings on, no quiet hours). Until it is built, pings stop for good after
-  two unanswered.
+- #48: the defaults of the new ping settings are the session's choice, not the maintainer's — back-off, pings
+  on, no quiet hours, and existing users get the same through the migration (so pings no longer stop for good
+  after two unanswered). If the maintainer wants «stop» kept as the default, it is the constant in
+  `UserSettings` and the migration default. Option 4 of the issue (one ping per typical duration) is not built,
+  as decided.
 - #47 was built on the session's reading of «базово предлагается "залипание"» — «Залипание» is the first answer
   offered, not a setting «чем считать неизвестное время» with that default (the issue's option 3). If the
   maintainer meant the setting, it is an addition on top of what is built. Confirming unknown time «as it is»
@@ -212,7 +220,7 @@ What a coding session can take without waiting (outside the numbered order, `doc
 
 ```sh
 dotnet build          # 0 warnings
-dotnet test           # all green: 417 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
+dotnet test           # all green: 429 tests, 1 skipped (the Postgres-only migration test); databases are SQLite files
 TIMESHIFT_TEST_POSTGRES="Host=...;Username=...;Password=..." dotnet test -- --fail-skips on   # same on Postgres: 417, 0 skipped (README; CI runs it)
 dotnet run --project src/TimeShift.Host
 # http://localhost:5138/            — the app (access key for development: appsettings.Development.json)

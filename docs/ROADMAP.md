@@ -49,9 +49,9 @@ server be hosted there. The REST contract is `docs/web-api.md`; the client is `s
 
 Found while reviewing the current behaviour, decided by the maintainer on 2026-11-19 (`docs/decisions.md`):
 [#47](https://github.com/shoraLBRT/TimeShift/issues/47) (unknown time is shown as unknown, «Залипание» is what
-the bot offers first; built, PR open),
+the bot offers first; merged, PR #73),
 [#48](https://github.com/shoraLBRT/TimeShift/issues/48) (what pings do after unanswered ones, on/off and quiet
-hours become settings; not built yet).
+hours become settings; built, PR open).
 Also [#49](https://github.com/shoraLBRT/TimeShift/issues/49) (the bot is open to everyone by default; merged, PR #72) and
 [#53](https://github.com/shoraLBRT/TimeShift/issues/53) (Telegram settings UX).
 
