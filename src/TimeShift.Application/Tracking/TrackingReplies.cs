@@ -67,7 +67,7 @@ public static class TrackingReplies
         {
             builder
                 .Append(Clock(piece.StartUtc, timeZone)).Append('–').Append(Clock(piece.EndUtc, timeZone)).Append(' ')
-                .Append(Icon(piece.Status)).Append(' ').Append(piece.Title)
+                .Append(Icon(piece.Status)).Append(' ').Append(Title(piece))
                 .Append(" (").Append(Duration(piece.Duration)).AppendLine(")");
         }
 
@@ -91,18 +91,35 @@ public static class TrackingReplies
     public static string CurrentEntryCategorized(Segment entry, Domain.Categories.CategorySet categories) =>
         $"Текущая запись теперь — {categories.Name(entry.CategoryKey!)} (отменить — /undo).";
 
-    /// <summary>Итоги по категориям (spec §5.7): основная дорожка — сумма = длина окна; параллельные — отдельно.</summary>
+    /// <summary>Название куска в ленте: фон в прошлом — «Не записано», в будущем — «Свободно» (#47).</summary>
+    public static string Title(TimelinePiece piece) =>
+        piece.IsUnknown && piece.IsFuture ? FreeTitle : piece.Title;
+
+    /// <summary>Строка итогов для неизвестного времени (#47): не категория и не «Потерянное».</summary>
+    public const string UnknownTotalsName = TimelineBuilder.BackgroundTitle;
+
+    private const string FreeTitle = "Свободно";
+
+    /// <summary>
+    /// Итоги по категориям (spec §5.7): основная дорожка — сумма = длина окна; неизвестное время (фон) — отдельной
+    /// строкой «Не записано», не в категориях (#47); параллельные — отдельно.
+    /// </summary>
     public static string Totals(
         IReadOnlyList<TimelinePiece> pieces, IReadOnlyList<TimelinePiece> parallel, Domain.Categories.CategorySet? categories = null)
     {
         var set = categories ?? Domain.Categories.CategorySet.System;
         string Name(string? key) => key is null ? "Без категории" : set.Name(key);
-        var main = pieces.Where(p => !p.IsFuture)
+        var past = pieces.Where(p => !p.IsFuture).ToList();
+        var main = past.Where(p => !p.IsUnknown)
             .GroupBy(p => set.TotalsKey(p.CategoryKey))
             .Select(g => (Name: Name(g.Key), Total: TimeSpan.FromTicks(g.Sum(p => p.Duration.Ticks))))
             .OrderByDescending(x => x.Total)
-            .Select(x => $"{x.Name} {Duration(x.Total)}");
-        var text = "Итого: " + string.Join(" · ", main);
+            .Select(x => $"{x.Name} {Duration(x.Total)}")
+            .ToList();
+        var unknown = TimeSpan.FromTicks(past.Where(p => p.IsUnknown).Sum(p => p.Duration.Ticks));
+        var text = main.Count == 0 && unknown > TimeSpan.Zero
+            ? $"Итого: {UnknownTotalsName} {Duration(unknown)}"
+            : "Итого: " + string.Join(" · ", main) + (unknown > TimeSpan.Zero ? $"\n{UnknownTotalsName}: {Duration(unknown)}" : string.Empty);
         if (parallel.Count > 0)
         {
             text += "\nПараллельно: " + string.Join(" · ", parallel

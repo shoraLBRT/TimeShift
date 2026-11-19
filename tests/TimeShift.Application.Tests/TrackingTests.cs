@@ -130,10 +130,10 @@ public class TrackingTests
 
         var day = Assert.Single(await Text("/day")).Text;
 
-        Assert.Contains("00:00–01:00 🟡 Залипание", day);
+        Assert.Contains("00:00–01:00 🟡 Не записано", day);
         Assert.Contains("01:00–09:00 ⚪ Сон", day);
         Assert.Contains("13:00–13:30 ✅ Работа (30 мин)", day);
-        Assert.Contains("13:30–14:30 🟡 Залипание (1 ч)", day);
+        Assert.Contains("13:30–14:30 🟡 Не записано (1 ч)", day);
     }
 
     [Fact]
@@ -229,12 +229,13 @@ public class TrackingTests
 
         Assert.StartsWith("Вчера, 13 ноября", day.Text, StringComparison.Ordinal);
         Assert.NotNull(day.Image);
-        Assert.Contains("Итого: Залипание 15 ч · Сон 8 ч · Работа 1 ч", day.Text, StringComparison.Ordinal);
+        Assert.Contains("Итого: Сон 8 ч · Работа 1 ч\nНе записано: 15 ч", day.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Залипание", day.Text, StringComparison.Ordinal); // неизвестное время — не залипание (#47)
         var drawn = _store.Renderer.Days[^1];
         Assert.Equal("Вчера, 13 ноября", drawn.Title);
         Assert.Equal(TimeSpan.FromHours(24), drawn.DayEndUtc - drawn.DayStartUtc);
         Assert.Contains("12:00–13:00 ✅ Работа (1 ч)", day.Text);
-        Assert.Contains("13:00–00:00 🟡 Залипание", day.Text);
+        Assert.Contains("13:00–00:00 🟡 Не записано", day.Text);
         Assert.Equal(["day:2026-11-12", "day:2026-11-14", "dayadd:2026-11-13"], Data([day]));
 
         var today = Assert.Single(await Press("day:2026-11-14"));
@@ -258,9 +259,9 @@ public class TrackingTests
         _clock.UtcNow = new DateTime(2026, 11, 14, 7, 0, 0, DateTimeKind.Utc); // суббота 10:00
         var week = Assert.Single(await Text("/week"));
 
-        // Пятница целиком (как в /day: Залипание 15 ч · Сон 8 ч · Работа 1 ч) + суббота до 10:00 (сон 8 ч, фон 2 ч).
+        // Пятница целиком (как в /day: Сон 8 ч · Работа 1 ч, не записано 15 ч) + суббота до 10:00 (сон 8 ч, фон 2 ч).
         Assert.StartsWith("Эта неделя, 9–15 ноября:", week.Text, StringComparison.Ordinal);
-        Assert.Contains("Залипание 17 ч\nСон 16 ч\nРабота 1 ч\nВсего: 34 ч", week.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("Сон 16 ч\nРабота 1 ч\nНе записано 17 ч\nВсего: 34 ч", week.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("✅ 3% · ⚪ 47% · 🟡 50%", week.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("разница", week.Text, StringComparison.Ordinal);
         Assert.NotNull(week.Image);
@@ -297,7 +298,7 @@ public class TrackingTests
         var compared = (await Text("/week"))[0];
 
         Assert.StartsWith("Эта неделя, 23–29 ноября:", compared.Text, StringComparison.Ordinal);
-        Assert.Contains("Залипание 32 ч (−2 ч)\nСон 24 ч (=)\nРабота 2 ч (+2 ч)\nВсего: 58 ч", compared.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("Сон 24 ч (=)\nРабота 2 ч (+2 ч)\nНе записано 32 ч (−2 ч)\nВсего: 58 ч", compared.Text.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("разница с теми же днями прошлой недели", compared.Text, StringComparison.Ordinal);
         Assert.Equal(["week:2026-11-16"], Data([compared]));
 
@@ -318,7 +319,7 @@ public class TrackingTests
 
         Assert.StartsWith("Вчера, 29 марта", day, StringComparison.Ordinal);
         Assert.Contains("01:00–09:00 ⚪ Сон (7 ч)", day);
-        Assert.Contains("09:00–00:00 🟡 Залипание (15 ч)", day);
+        Assert.Contains("09:00–00:00 🟡 Не записано (15 ч)", day);
     }
 
     [Fact]
@@ -557,7 +558,7 @@ public class TrackingTests
         Assert.Contains("12:30–14:30 (2 ч)", question.Text, StringComparison.Ordinal);
         var labels = question.Buttons.SelectMany(r => r).Select(b => b.Label).ToList();
         Assert.Contains("Работа", labels);
-        Assert.Contains("Залипание, так и было", labels);
+        Assert.Equal("Залипание", labels[0]); // первым бот предлагает залипание (#47)
         Assert.Contains("✏️ Опишу", labels);
 
         var work = question.Buttons.SelectMany(r => r).Single(b => b.Label == "Работа").Data;
@@ -577,7 +578,7 @@ public class TrackingTests
         var question = Yellow(await GapAsync());
         var buttons = question.Buttons.SelectMany(r => r).ToDictionary(b => b.Label, b => b.Data);
 
-        await Press(buttons["Залипание, так и было"]);
+        await Press(buttons["Залипание"]);
         Assert.Equal("wasted", _store.Activities.Single(a => a.Name == "Залипание").CategoryKey);
         await Text("/undo");
 

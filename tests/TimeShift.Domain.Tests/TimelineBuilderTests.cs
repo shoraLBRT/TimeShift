@@ -42,7 +42,7 @@ public class TimelineBuilderTests
             [
                 "14:00-15:30 Тренировка Assumed",
                 "15:30-16:00 Тренировка Questionable",
-                "16:00-17:00 Залипание Questionable",
+                "16:00-17:00 Не записано Questionable",
             ],
             result);
     }
@@ -52,7 +52,7 @@ public class TimelineBuilderTests
     {
         var result = Build(new TimeRange(Msk(14), Msk(17)), Msk(17), Training(), ExtensionPolicy.UpToTypical);
 
-        Assert.Equal(["14:00-15:00 Тренировка Assumed", "15:00-17:00 Залипание Questionable"], result);
+        Assert.Equal(["14:00-15:00 Тренировка Assumed", "15:00-17:00 Не записано Questionable"], result);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class TimelineBuilderTests
     {
         var result = Build(new TimeRange(Msk(14), Msk(18)), Msk(17), Training(), ExtensionPolicy.Infinite);
 
-        Assert.Equal(["14:00-17:00 Тренировка Assumed", "17:00-18:00 Залипание Questionable"], result);
+        Assert.Equal(["14:00-17:00 Тренировка Assumed", "17:00-18:00 Не записано Questionable"], result);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class TimelineBuilderTests
         var result = Build(new TimeRange(Msk(14), Msk(17)), Msk(17), Training(minutes: 0));
 
         // Запасные 60 мин × max 2.0 = 2 часа, всё 🟡.
-        Assert.Equal(["14:00-16:00 Тренировка Questionable", "16:00-17:00 Залипание Questionable"], result);
+        Assert.Equal(["14:00-16:00 Тренировка Questionable", "16:00-17:00 Не записано Questionable"], result);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class TimelineBuilderTests
         AssertCovers(pieces, window);
         Assert.Equal(2, pieces.Count);
         Assert.Equal(("Тренировка", Msk(15), false), (pieces[0].Title, pieces[0].EndUtc, pieces[0].IsFuture));
-        Assert.Equal(("Залипание", Msk(15), true), (pieces[1].Title, pieces[1].StartUtc, pieces[1].IsFuture));
+        Assert.Equal(("Не записано", Msk(15), true), (pieces[1].Title, pieces[1].StartUtc, pieces[1].IsFuture));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class TimelineBuilderTests
         AssertCovers(pieces, window);
         Assert.Equal(
             [
-                "20:00-21:00 Залипание Questionable",
+                "20:00-21:00 Не записано Questionable",
                 "21:00-23:00 Dota 2 Assumed",
                 "23:00-01:00 Dota 2 Questionable", // норма до 00:00 попала в сон → 🟡, плюс превышение до 01:00
                 "01:00-02:00 Сон Assumed",
@@ -137,11 +137,11 @@ public class TimelineBuilderTests
 
         Assert.Equal(
             [
-                "07:00-08:00 Залипание Questionable",
+                "07:00-08:00 Не записано Questionable",
                 "08:00-09:00 Дорога Assumed",
                 "09:00-10:00 Дорога Questionable",
                 "10:00-15:00 Учёба Assumed",
-                "15:00-16:00 Залипание Questionable",
+                "15:00-16:00 Не записано Questionable",
             ],
             result);
     }
@@ -163,9 +163,9 @@ public class TimelineBuilderTests
                 "14:30-15:00 Звонок маме Confirmed",
                 "15:00-15:30 Тренировка Assumed",
                 "15:30-16:00 Тренировка Questionable",
-                "16:00-16:30 Залипание Questionable",
+                "16:00-16:30 Не записано Questionable",
                 "16:30-17:30 Ужин Assumed",
-                "17:30-18:00 Залипание Questionable",
+                "17:30-18:00 Не записано Questionable",
             ],
             result);
     }
@@ -216,7 +216,7 @@ public class TimelineBuilderTests
         Assert.Equal(
             [
                 "00:00-07:30 Сон Assumed",
-                "07:30-23:30 Залипание Questionable",
+                "07:30-23:30 Не записано Questionable",
                 "23:30-00:00 Сон Assumed",
             ],
             result);
@@ -241,9 +241,9 @@ public class TimelineBuilderTests
         Assert.Equal(
             [
                 "00:00-01:30 Сон Assumed",
-                "01:30-03:00 Залипание Questionable",
+                "01:30-03:00 Не записано Questionable",
                 "03:00-04:00 Пробежка Assumed", // 02:50 не существует → начало сдвинуто на момент перехода
-                "04:00-23:30 Залипание Questionable",
+                "04:00-23:30 Не записано Questionable",
                 "23:30-00:00 Сон Assumed",
             ],
             pieces.Select(p => Describe(p, Berlin)));

@@ -20,7 +20,7 @@ public sealed class YellowReview(TrackingService tracking)
     /// <summary>Короче — не стоит вопроса.</summary>
     public static readonly TimeSpan MinimumGap = TimeSpan.FromMinutes(15);
 
-    private const string WastedTitle = "Залипание";
+    private const string WastedTitle = TimelineBuilder.SuggestedTitle;
 
     /// <summary>Вопрос о следующем неразобранном участке или <c>null</c>.</summary>
     /// <param name="after">Задан — искать после этого момента, не глядя на отметку «уже предлагали» (вечерний разбор и
@@ -39,10 +39,11 @@ public sealed class YellowReview(TrackingService tracking)
         var tz = user.TimeZoneInfo;
         var recent = await tracking.RecentAsync(user, TrackingReplies.RecentCount, ct);
         var code = $"{Minutes(gap.StartUtc)}:{Minutes(gap.EndUtc)}";
+        // «Залипание» — первым: так бот по умолчанию предлагает назвать неизвестное время (#47), но само оно им не считается.
         var buttons = recent
             .Where(a => a.Name != WastedTitle)
             .Select(a => new ReplyButton(a.Name, $"yl:{code}:a:{a.Id:N}"))
-            .Append(new ReplyButton("Залипание, так и было", $"yl:{code}:w"))
+            .Prepend(new ReplyButton(WastedTitle, $"yl:{code}:w"))
             .Chunk(2)
             .Select(c => (IReadOnlyList<ReplyButton>)c)
             .ToList();
