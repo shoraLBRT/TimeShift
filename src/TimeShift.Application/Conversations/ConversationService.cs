@@ -2,6 +2,7 @@ using System.Globalization;
 using TimeShift.Application.Abstractions;
 using TimeShift.Application.Parsing;
 using TimeShift.Application.Tracking;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -281,6 +282,9 @@ public sealed partial class ConversationService(
         Step.CustomExtension => BotReply.Plain(
             "Напиши два числа: множитель нормы и предела, например «1.2 2.5». «∞» — без ограничения."),
         Step.ActivityName => BotReply.Plain("Чем занят? Напиши коротко, например «Готовлю ужин»."),
+        Step.QuietHours => new BotReply(
+            "В какие часы каждый день не присылать пинги? Напиши, например, «22-8» или «13-14:30».",
+            [[new ReplyButton("Без тихих часов", "qhours:none")]]),
         _ => throw new ArgumentOutOfRangeException(nameof(step)),
     };
 
@@ -296,7 +300,7 @@ public sealed partial class ConversationService(
         if (mode == Mode.Edit)
         {
             user.DialogState = null;
-            replies.Add(done is Step.TimeZone or Step.CustomExtension ? SettingsMenu(user) : BlocksMenu(user));
+            replies.Add(done is Step.TimeZone or Step.CustomExtension or Step.QuietHours ? SettingsMenu(user) : BlocksMenu(user));
             return replies;
         }
 
@@ -347,6 +351,13 @@ public sealed partial class ConversationService(
                 return ScheduleText.TryParseTimeRange(text, out var start, out var end)
                     ? SetSleep(user, mode, step, start, end)
                     : [BotReply.Plain("Не понял время. Напиши, например, «1-9» или «23:30-7:30»."), Ask(step)];
+
+            case Step.QuietHours:
+                return ScheduleText.TryParseTimeRange(text, out var quietStart, out var quietEnd) && quietStart != quietEnd
+                    ? SetQuietHours(user, mode, new QuietHours(quietStart, quietEnd))
+                    : IsDone(text)
+                        ? SetQuietHours(user, mode, null)
+                        : [BotReply.Plain("Не понял время. Напиши, например, «22-8» или «23:30-7»."), Ask(step)];
 
             case Step.FixedBlocks or Step.CustomBlocks:
                 if (IsDone(text))
@@ -451,6 +462,13 @@ public sealed partial class ConversationService(
             case "edit" when value == "sleep":
                 user.DialogState = State(Mode.Edit, Step.Sleep);
                 return [Ask(Step.Sleep)];
+
+            case "edit" when value == "quiet":
+                user.DialogState = State(Mode.Edit, Step.QuietHours);
+                return [Ask(Step.QuietHours)];
+
+            case "qhours" when value == "none":
+                return SetQuietHours(user, Mode.Edit, null);
 
             case "edit" when value == "tz":
                 user.DialogState = State(Mode.Edit, Step.TimeZone);
@@ -613,10 +631,33 @@ public sealed partial class ConversationService(
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && double.IsFinite(value);
     }
 
+    private static IReadOnlyList<BotReply> SetQuietHours(User user, Mode mode, QuietHours? quiet)
+    {
+        user.Settings.QuietHours = quiet;
+        return Advance(user, mode, Step.QuietHours, BotReply.Plain($"Тихие часы: {QuietHoursText(user.Settings)}."));
+    }
+
+    private static string QuietHoursText(UserSettings s) =>
+        s.QuietHours is { } quiet ? ScheduleText.FormatTime(quiet.Start, quiet.End) : "нет";
+
+    private static string AfterLimitText(UserSettings s) => s.AfterUnansweredPings switch
+    {
+        UnansweredPingsPolicy.Stop => "пауза до ответа",
+        _ => "реже (×2, до 4 ч)",
+    };
+
     private static void ChangeSetting(UserSettings settings, string name)
     {
         switch (name)
         {
+            case "pings":
+                settings.PingsEnabled = !settings.PingsEnabled;
+                break;
+            case "afterlimit":
+                settings.AfterUnansweredPings = settings.AfterUnansweredPings == UnansweredPingsPolicy.Stop
+                    ? UnansweredPingsPolicy.BackOff
+                    : UnansweredPingsPolicy.Stop;
+                break;
             case "blockping":
                 settings.PingDuringBlocks = !settings.PingDuringBlocks;
                 break;
@@ -676,10 +717,12 @@ public sealed partial class ConversationService(
         var text =
             "Настройки:\n\n" +
             $"🌍 Часовой пояс: {user.TimeZone}\n" +
+            $"🔔 Пинги: {(s.PingsEnabled ? "включены" : "выключены")}\n" +
             $"⏰ Пинг: раз в {s.PingIntervalMin} мин\n" +
             $"⏳ Продление: {ExtensionText(s)}\n" +
             $"📌 Пинговать во время блоков: {(s.PingDuringBlocks ? "да" : "нет")}\n" +
-            $"🔕 Неотвеченных пингов до паузы: {s.MaxUnansweredPings}\n" +
+            $"🔕 После {s.MaxUnansweredPings} неотвеченных: {AfterLimitText(s)}\n" +
+            $"🤫 Тихие часы: {QuietHoursText(s)}\n" +
             $"🌙 Вечерний разбор: за {s.EveningReviewOffsetMin} мин до сна\n" +
             $"📏 Округление границ: {s.RoundingMin} мин\n" +
             "🤖 LLM: общий для сервера (настраивается позже)";
@@ -690,13 +733,17 @@ public sealed partial class ConversationService(
             .. ExtensionButtons(s.Extension, onboarding: false),
             [
                 new ReplyButton($"Пинг в блоках: {(s.PingDuringBlocks ? "да" : "нет")}", "set:blockping"),
-                new ReplyButton($"До паузы: {s.MaxUnansweredPings}", "set:unanswered"),
+                new ReplyButton($"Без ответа: {s.MaxUnansweredPings}", "set:unanswered"),
+            ],
+            [
+                new ReplyButton(s.PingsEnabled ? "🔔 Пинги: вкл" : "🔕 Пинги: выкл", "set:pings"),
+                new ReplyButton(s.AfterUnansweredPings == UnansweredPingsPolicy.Stop ? "Дальше: пауза" : "Дальше: реже", "set:afterlimit"),
             ],
             [
                 new ReplyButton($"Разбор: за {s.EveningReviewOffsetMin} мин", "set:review"),
                 new ReplyButton($"Округление: {s.RoundingMin} мин", "set:rounding"),
             ],
-            [new ReplyButton("🌍 Часовой пояс", "edit:tz")],
+            [new ReplyButton("🤫 Тихие часы", "edit:quiet"), new ReplyButton("🌍 Часовой пояс", "edit:tz")],
         ];
 
         return new BotReply(text, rows, replaces);
@@ -762,6 +809,7 @@ public sealed partial class ConversationService(
         SleepFix,
         CategoryName,
         CategoryRename,
+        QuietHours,
     }
 
     private static string State(Mode mode, Step step) => $"{(mode == Mode.Onboarding ? 'O' : 'E')}:{step}";

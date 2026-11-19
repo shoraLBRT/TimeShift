@@ -75,8 +75,73 @@ public class PingAndTrackingRulesTests
         var quiet = new PingContext { NowUtc = Msk(18, 30), Interval = TimeSpan.FromMinutes(30), LastSeenAtUtc = Msk(18, 30), Template = Template, QuietUntilUtc = Msk(21) };
         Assert.Equal(Msk(21), PingSchedule.NextDue(quiet));
 
-        var paused = new PingContext { NowUtc = Msk(19), Interval = TimeSpan.FromMinutes(30), LastPingAtUtc = Msk(19), UnansweredPings = 2, MaxUnansweredPings = 2, Template = Template };
+        var paused = new PingContext
+        {
+            NowUtc = Msk(19), Interval = TimeSpan.FromMinutes(30), LastPingAtUtc = Msk(19), UnansweredPings = 2, MaxUnansweredPings = 2,
+            AfterLimit = UnansweredPingsPolicy.Stop, Template = Template,
+        };
         Assert.Null(PingSchedule.NextDue(paused));
+    }
+
+    [Theory]
+    [InlineData(1, 30)]
+    [InlineData(2, 60)]
+    [InlineData(3, 120)]
+    [InlineData(4, 240)]
+    [InlineData(5, 240)]
+    [InlineData(9, 240)]
+    public void Unanswered_pings_back_off_by_doubling_up_to_four_hours(int unanswered, int expectedMin)
+    {
+        var context = new PingContext
+        {
+            NowUtc = Msk(19), Interval = TimeSpan.FromMinutes(30), LastPingAtUtc = Msk(19), LastSeenAtUtc = Msk(12),
+            UnansweredPings = unanswered, MaxUnansweredPings = 2, Template = new WeekTemplate([], Moscow),
+        };
+
+        Assert.Equal(Msk(19).AddMinutes(expectedMin), PingSchedule.NextDue(context));
+    }
+
+    [Fact]
+    public void Back_off_never_shortens_a_long_interval()
+    {
+        Assert.Equal(TimeSpan.FromHours(4), PingSchedule.BackOff(TimeSpan.FromMinutes(150), 1));
+        Assert.Equal(TimeSpan.FromMinutes(240), PingSchedule.BackOff(TimeSpan.FromMinutes(240), 3));
+        Assert.Equal(TimeSpan.FromMinutes(20), PingSchedule.BackOff(TimeSpan.FromMinutes(5), 2));
+    }
+
+    [Fact]
+    public void Disabled_pings_never_come()
+    {
+        var context = new PingContext { NowUtc = Msk(19), Interval = TimeSpan.FromMinutes(30), LastSeenAtUtc = Msk(12), Template = Template, Enabled = false };
+        Assert.Null(PingSchedule.NextDue(context));
+    }
+
+    [Fact]
+    public void Daily_quiet_hours_push_the_ping_to_their_end_in_local_time()
+    {
+        var empty = new WeekTemplate([], Moscow);
+        PingContext At(DateTime lastSeen, QuietHours quiet) => new()
+        {
+            NowUtc = lastSeen, Interval = TimeSpan.FromMinutes(30), LastSeenAtUtc = lastSeen, Template = empty, QuietHours = quiet,
+        };
+
+        // Через полночь: 22:00–08:00. 21:50 + 30 = 22:20 → 08:00 следующего дня; 01:00 + 30 → 08:00 того же.
+        var night = new QuietHours(new TimeOnly(22, 0), new TimeOnly(8, 0));
+        Assert.Equal(Msk(8).AddDays(1), PingSchedule.NextDue(At(Msk(21, 50), night)));
+        Assert.Equal(Msk(8), PingSchedule.NextDue(At(Msk(1), night)));
+        Assert.Equal(Msk(21, 50), PingSchedule.NextDue(At(Msk(21, 20), night)));
+
+        // Внутри дня: 13:00–14:30, конец не включён.
+        var lunch = new QuietHours(new TimeOnly(13, 0), new TimeOnly(14, 30));
+        Assert.Equal(Msk(14, 30), PingSchedule.NextDue(At(Msk(12, 40), lunch)));
+        Assert.Equal(Msk(15), PingSchedule.NextDue(At(Msk(14, 30), lunch)));
+        Assert.Equal(Msk(12, 50), PingSchedule.NextDue(At(Msk(12, 20), lunch)));
+    }
+
+    [Fact]
+    public void Quiet_hours_need_different_start_and_end()
+    {
+        Assert.Throws<ArgumentException>(() => new QuietHours(new TimeOnly(9, 0), new TimeOnly(9, 0)));
     }
 
     [Fact]

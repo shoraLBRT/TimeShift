@@ -75,7 +75,7 @@ public class User
     /// <summary>Ссылка клиента на сообщение последнего пинга — чтобы удалить его, если не ответили.</summary>
     public string? LastPingMessageRef { get; private set; }
 
-    /// <summary>Сколько пингов подряд остались без ответа; на <c>MaxUnansweredPings</c> пинги встают на паузу.</summary>
+    /// <summary>Сколько пингов подряд остались без ответа; с <c>MaxUnansweredPings</c> пинги затухают или встают на паузу (настройка).</summary>
     public int UnansweredPings { get; private set; }
 
     /// <summary>Ручные тихие часы (spec §5.7: /quiet): не пинговать до этого момента.</summary>

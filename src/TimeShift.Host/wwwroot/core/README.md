@@ -475,6 +475,8 @@ Panels:
   (`form.ts-block-form[data-mode=new|edit]`, `[data-action=add]`, `[data-action=delete]`), `reminders`
   (`.ts-reminders > .ts-section[data-section=push|interval|quiet|options]`: `.ts-push[data-state=unsupported|install|denied|off|on]`,
   `[data-action=test-push]`, `.ts-interval`, `.ts-quiet[data-active]` (`.ts-quiet-status`, `[data-action=quiet-off]`),
+  `.ts-quiet-daily[data-active]` (a switch, `.ts-quiet-daily-times` with two time fields), `.ts-options.ts-after-unanswered`
+  (`data-value=backOff|stop`),
   `.ts-stepper-field > .ts-stepper` (`.ts-stepper-dec`, `output.ts-stepper-value`, `.ts-stepper-inc`)), `tracking`
   (`.ts-options` with `data-value=typical|default|infinite|custom`, `.ts-extension-custom`), `activities`
   (`ul.ts-activity-list > li.ts-activity-item[data-activity-id][data-group] > button.ts-activity-open`

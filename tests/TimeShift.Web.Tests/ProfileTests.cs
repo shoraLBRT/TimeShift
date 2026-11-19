@@ -18,6 +18,9 @@ public class ProfileTests
         Assert.Equal(1.5, me["settings"]!["normFactor"]!.GetValue<double>());
         Assert.Equal(5, me["limits"]!["pingIntervalMin"]!["min"]!.GetValue<int>());
         Assert.Equal(240, me["limits"]!["pingIntervalMin"]!["max"]!.GetValue<int>());
+        Assert.True(me["settings"]!["pingsEnabled"]!.GetValue<bool>());
+        Assert.Equal("backOff", me["settings"]!["afterUnansweredPings"]!.GetValue<string>());
+        Assert.Null(me["settings"]!["quietHours"]);
         Assert.Equal([1, 5, 10, 15], me["limits"]!["roundingMin"]!.AsArray().Select(n => n!.GetValue<int>()));
         Assert.Null(me["sleep"]);
         Assert.Empty(me["blocks"]!.AsArray());
@@ -59,6 +62,21 @@ public class ProfileTests
 
         var factors = await app.PatchAsync("/api/settings", new { normFactor = 2.0, maxFactor = 1.5 });
         Assert.Equal("maxFactor", factors.Json["field"]!.GetValue<string>());
+
+        var pings = await app.PatchAsync("/api/settings", new { pingsEnabled = false, afterUnansweredPings = "stop", quietHours = new { start = "22:00", end = "08:00" } });
+        Assert.Equal(HttpStatusCode.OK, pings.Status);
+        Assert.False(pings.Json["settings"]!["pingsEnabled"]!.GetValue<bool>());
+        Assert.Equal("stop", pings.Json["settings"]!["afterUnansweredPings"]!.GetValue<string>());
+        Assert.Equal("22:00", pings.Json["settings"]!["quietHours"]!["start"]!.GetValue<string>());
+        Assert.Equal("08:00", pings.Json["settings"]!["quietHours"]!["end"]!.GetValue<string>());
+
+        var same = await app.PatchAsync("/api/settings", new { quietHours = new { start = "09:00", end = "09:00" } });
+        Assert.Equal("quietHours", same.Json["field"]!.GetValue<string>());
+
+        var cleared = await app.PatchAsync("/api/settings", new { quietHours = (object?)null, afterUnansweredPings = "backOff" });
+        Assert.Null(cleared.Json["settings"]!["quietHours"]);
+        Assert.Equal("backOff", cleared.Json["settings"]!["afterUnansweredPings"]!.GetValue<string>());
+        Assert.False(cleared.Json["settings"]!["pingsEnabled"]!.GetValue<bool>());
 
         var zone = await app.PatchAsync("/api/settings", new { timeZone = "Asia/Yekaterinburg", pingIntervalMin = 240 });
         Assert.Equal("Asia/Yekaterinburg", zone.Json["timeZone"]!.GetValue<string>());

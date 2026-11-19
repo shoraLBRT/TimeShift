@@ -1,3 +1,4 @@
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -19,6 +20,9 @@ public class UserTests
         Assert.False(s.PingDuringBlocks);
         Assert.Equal(30, s.EveningReviewOffsetMin);
         Assert.Equal(5, s.RoundingMin);
+        Assert.True(s.PingsEnabled);
+        Assert.Equal(UnansweredPingsPolicy.BackOff, s.AfterUnansweredPings);
+        Assert.Null(s.QuietHours);
     }
 
     [Fact]

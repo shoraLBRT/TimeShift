@@ -630,6 +630,12 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                                 .HasColumnType("TEXT")
                                 .HasColumnName("user_id");
 
+                            b1.Property<string>("AfterUnansweredPings")
+                                .IsRequired()
+                                .HasMaxLength(16)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("after_unanswered_pings");
+
                             b1.Property<int>("EveningReviewOffsetMin")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("evening_review_offset_min");
@@ -653,6 +659,18 @@ namespace TimeShift.Infrastructure.Persistence.Migrations.Sqlite
                             b1.Property<int>("PingIntervalMin")
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("ping_interval_min");
+
+                            b1.Property<bool>("PingsEnabled")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("pings_enabled");
+
+                            b1.Property<TimeOnly?>("QuietEnd")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("quiet_end");
+
+                            b1.Property<TimeOnly?>("QuietStart")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("quiet_start");
 
                             b1.Property<int>("RoundingMin")
                                 .HasColumnType("INTEGER")

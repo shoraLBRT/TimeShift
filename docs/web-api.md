@@ -71,7 +71,8 @@ only then. `speechMaxSec` — the longest recording it takes (`Speech:MaxSeconds
   "telegramLinked": false, "quietUntilUtc": null,
   "settings": {
     "pingIntervalMin": 30, "normFactor": 1.5, "maxFactor": 2.0, "maxUnansweredPings": 2,
-    "pingDuringBlocks": false, "eveningReviewOffsetMin": 30, "roundingMin": 5
+    "pingDuringBlocks": false, "eveningReviewOffsetMin": 30, "roundingMin": 5,
+    "pingsEnabled": true, "afterUnansweredPings": "backOff", "quietHours": { "start": "22:00", "end": "08:00" }
   },
   "limits": {
     "pingIntervalMin": { "min": 5, "max": 240 },
@@ -93,6 +94,12 @@ only then. `speechMaxSec` — the longest recording it takes (`Speech:MaxSeconds
 ```
 
 - `normFactor` / `maxFactor`: `null` means no limit (∞). `maxFactor >= normFactor > 0`.
+- Pings (spec §5.2): `pingsEnabled: false` — no pings at all (the evening review still comes).
+  `afterUnansweredPings` — what happens after `maxUnansweredPings` unanswered pings in a row: `backOff` (default;
+  each next interval is twice as long, at most 4 h, the first answer restores the interval) or `stop` (no pings
+  until the user writes). `quietHours` — daily hours without pings in the user's time zone, `end` not included,
+  `end < start` crosses midnight; `null` (default) — none. In `PATCH /api/settings` `quietHours: null` removes
+  them; `start == end` is a 422 on `quietHours`.
 - `sleep` is `null` until set; `weekend` is `null` when every night is the same.
 - `days`: ISO weekdays, 1 = Monday … 7 = Sunday — the days the block **starts** on. `end < start` crosses midnight.
 - `kind`: `fixed` (work, study) or `custom`. Sleep is not in `blocks`.

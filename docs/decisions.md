@@ -640,6 +640,33 @@ corrected in the issues before the work starts.
   Option 4 (one ping per typical duration during an activity) is not part of the decision. Changes spec §5.2,
   to be edited in the PR that builds it.
 
+## Ping settings as built (#48, 2026-11-19)
+
+Built on the reading above (stop or back off, pings on/off, daily quiet hours; option 4 left out). Choices the
+decision left open:
+
+- **Defaults are the session's choice**, not the maintainer's: back-off, pings on, no quiet hours. The migration
+  gives existing users the same (`after_unanswered_pings = 'BackOff'`, `pings_enabled = true`), so after the update
+  pings no longer stop for good after two unanswered. Changing a default is one constant and one migration default.
+- **Back-off.** After `max_unanswered` unanswered pings in a row each next interval doubles: the first ping
+  past the limit comes after 2×, then 4×, … (30 → 60 → 120 → 240 min with the defaults), capped at 4 h — or at the
+  interval itself when it is longer than 4 h, so back-off never makes pings more frequent. The count of
+  unanswered pings already resets on any message, so the first answer restores the interval. `max_unanswered`
+  keeps its meaning (how many before the change) and its 1–10 range.
+- **Quiet hours** are one daily window, the same every day, stored as two local times (`quiet_start`,
+  `quiet_end`, both null — none) and applied in the user's time zone like the week template; across midnight when
+  the end is before the start. A ping that falls into them comes at their end, the same as with sleep and blocks.
+  They are separate from `/quiet` (a one-off pause until a moment), which stays as it was.
+- **What they do not touch.** Pings off and quiet hours concern the «Чем занят?» pings only. The evening review
+  (spec §5.4) has its own setting and still comes; a user who wants silence there uses `/quiet` or a later
+  evening review offset.
+- **Telegram `/settings`** in the existing style: two toggle buttons («🔔 Пинги: вкл/выкл», «Дальше: реже/пауза»)
+  and «🤫 Тихие часы», which asks for a range like the sleep question («22-8», or «Без тихих часов»). The menu
+  text shows all three. Reworking the menu is #53.
+- **PWA** «Напоминания»: a switch «Спрашивать, чем я занят» in «Интервал», a daily quiet-hours switch with two
+  time fields under the `/quiet` presets in «Тишина», and a choice «Спрашивать реже / Замолчать до моего ответа»
+  next to the unanswered count. The menu shows «Выключены» when pings are off.
+
 ## Unknown time as built (#47, 2026-11-19)
 
 Built on the reading above (the issue's option 1, «Залипание» offered first). Choices the decision left open:

@@ -1,4 +1,5 @@
 using TimeShift.Application.Conversations;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Schedule;
 using TimeShift.Domain.Timelines;
 using TimeShift.Domain.Users;
@@ -264,6 +265,25 @@ public class ConversationTests
         await Text("1.2 ∞");
         Assert.Equal(1.2, Me.Settings.NormFactor);
         Assert.Null(Me.Settings.MaxFactor);
+        Assert.Null(Me.DialogState);
+
+        await Press("set:pings");
+        Assert.False(Me.Settings.PingsEnabled);
+        await Press("set:afterlimit");
+        Assert.Equal(UnansweredPingsPolicy.Stop, Me.Settings.AfterUnansweredPings);
+
+        await Press("edit:quiet");
+        var unclear = await Text("когда-нибудь");
+        Assert.Contains(unclear, r => r.Text.Contains("Не понял время"));
+        var quiet = await Text("22-8");
+        Assert.Equal(new QuietHours(new TimeOnly(22, 0), new TimeOnly(8, 0)), Me.Settings.QuietHours);
+        Assert.Contains(quiet, r => r.Text.Contains("🤫 Тихие часы: 22:00–08:00"));
+        Assert.Contains(quiet, r => r.Text.Contains("🔔 Пинги: выключены"));
+        Assert.Contains(quiet, r => r.Text.Contains("пауза до ответа"));
+        Assert.Null(Me.DialogState);
+        await Press("edit:quiet");
+        await Press("qhours:none");
+        Assert.Null(Me.Settings.QuietHours);
         Assert.Null(Me.DialogState);
 
         await Press("edit:tz");

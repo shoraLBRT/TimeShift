@@ -20,6 +20,15 @@ public sealed class PingContext
 
     public int MaxUnansweredPings { get; init; } = 2;
 
+    /// <summary>Что после <see cref="MaxUnansweredPings"/> неотвеченных: затухание или пауза.</summary>
+    public UnansweredPingsPolicy AfterLimit { get; init; } = UnansweredPingsPolicy.BackOff;
+
+    /// <summary>Пинги выключены совсем (настройка пользователя).</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Ежедневные часы без пингов, в часовом поясе шаблона.</summary>
+    public QuietHours? QuietHours { get; init; }
+
     /// <summary>Открытое занятие; с известной типичной длительностью первый пинг — по её достижении.</summary>
     public OpenActivity? OpenActivity { get; init; }
 
@@ -32,19 +41,24 @@ public sealed class PingContext
 }
 
 /// <summary>
-/// Когда пинговать (spec §5.2). Чистая функция: возвращает момент следующего пинга или <c>null</c> — пауза,
-/// пока пользователь не напишет.
+/// Когда пинговать (spec §5.2). Чистая функция: возвращает момент следующего пинга или <c>null</c> — пингов нет
+/// (выключены или пауза до сообщения пользователя).
 /// <list type="number">
-/// <item>Неотвеченных пингов ≥ предела → пауза.</item>
-/// <item>Иначе — через интервал после последнего пинга или сообщения пользователя (что позже).</item>
+/// <item>Пинги выключены → <c>null</c>.</item>
+/// <item>Через интервал после последнего пинга или сообщения пользователя (что позже).</item>
+/// <item>Неотвеченных пингов ≥ предела: при паузе → <c>null</c>, при затухании интервал удваивается за каждый
+/// пинг сверх предела без одного (30 → 60 → 120 → 240 мин), но не дольше 4 ч (или самого интервала, если он больше).</item>
 /// <item>Во время открытого занятия — не раньше, чем оно достигнет типичной длительности (с учётом уже прожитого
 /// до перерыва).</item>
-/// <item>Не во сне, не в тихие часы и (по настройке) не в блоках — тогда сразу после их конца.</item>
+/// <item>Не во сне, не в тихие часы (/quiet и ежедневные) и (по настройке) не в блоках — тогда сразу после их конца.</item>
 /// </list>
 /// </summary>
 public static class PingSchedule
 {
     private const int MaxShifts = 32;
+
+    /// <summary>Потолок затухания (spec §5.2).</summary>
+    public static readonly TimeSpan MaxBackOffInterval = TimeSpan.FromHours(4);
 
     public static DateTime? NextDue(PingContext context)
     {
@@ -55,9 +69,20 @@ public static class PingSchedule
             throw new ArgumentOutOfRangeException(nameof(context), "Интервал пингов должен быть > 0.");
         }
 
-        if (context.UnansweredPings >= context.MaxUnansweredPings)
+        if (!context.Enabled)
         {
             return null;
+        }
+
+        var interval = context.Interval;
+        if (context.UnansweredPings >= context.MaxUnansweredPings)
+        {
+            if (context.AfterLimit == UnansweredPingsPolicy.Stop)
+            {
+                return null;
+            }
+
+            interval = BackOff(context.Interval, context.UnansweredPings - context.MaxUnansweredPings + 1);
         }
 
         var anchor = Max(context.LastPingAtUtc, context.LastSeenAtUtc);
@@ -66,7 +91,7 @@ public static class PingSchedule
             return null;
         }
 
-        var due = anchor.Value + context.Interval;
+        var due = anchor.Value + interval;
         if (context.OpenActivity is { TypicalDuration: { } typical } open)
         {
             var reached = open.StartUtc + typical - open.ElapsedBefore;
@@ -91,6 +116,12 @@ public static class PingSchedule
                 continue;
             }
 
+            if (context.QuietHours?.EndIfInside(due, context.Template.TimeZone) is { } quietEnd)
+            {
+                due = quietEnd;
+                continue;
+            }
+
             var blocking = context.Template
                 .Occurrences(new TimeRange(due, due.AddTicks(1)))
                 .FirstOrDefault(o => o.Range.Contains(due) && Suppresses(o.Block, context.PingDuringBlocks));
@@ -103,6 +134,19 @@ public static class PingSchedule
         }
 
         return due;
+    }
+
+    /// <summary>Интервал, удвоенный <paramref name="doublings"/> раз, но не дольше потолка затухания.</summary>
+    public static TimeSpan BackOff(TimeSpan interval, int doublings)
+    {
+        var cap = interval > MaxBackOffInterval ? interval : MaxBackOffInterval;
+        var result = interval;
+        for (var i = 0; i < doublings && result < cap; i++)
+        {
+            result *= 2;
+        }
+
+        return result < cap ? result : cap;
     }
 
     private static bool Suppresses(ScheduleBlock block, bool pingDuringBlocks) =>

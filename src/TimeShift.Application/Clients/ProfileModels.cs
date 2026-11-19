@@ -1,4 +1,5 @@
 using TimeShift.Domain.Categories;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Schedule;
 
 namespace TimeShift.Application.Clients;
@@ -10,7 +11,13 @@ public sealed record SettingsModel(
     int MaxUnansweredPings,
     bool PingDuringBlocks,
     int EveningReviewOffsetMin,
-    int RoundingMin);
+    int RoundingMin,
+    bool PingsEnabled,
+    UnansweredPingsPolicy AfterUnansweredPings,
+    QuietHoursModel? QuietHours);
+
+/// <summary>Ежедневные часы без пингов, местное время; <c>End &lt; Start</c> — через полночь.</summary>
+public sealed record QuietHoursModel(TimeOnly Start, TimeOnly End);
 
 public sealed record IntRange(int Min, int Max);
 
@@ -78,6 +85,13 @@ public sealed record SettingsPatch
     public int? EveningReviewOffsetMin { get; init; }
 
     public int? RoundingMin { get; init; }
+
+    public bool? PingsEnabled { get; init; }
+
+    public UnansweredPingsPolicy? AfterUnansweredPings { get; init; }
+
+    /// <summary>Часы тишины; <c>null</c> — убрать.</summary>
+    public Optional<QuietHoursModel?> QuietHours { get; init; }
 }
 
 /// <summary>Блок из запроса клиента. <paramref name="Kind"/>: <c>fixed</c> или <c>custom</c>; <paramref name="Days"/> — дни ISO.</summary>
