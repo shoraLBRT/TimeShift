@@ -284,7 +284,7 @@ public sealed partial class ConversationService(
         Step.ActivityName => BotReply.Plain("Чем занят? Напиши коротко, например «Готовлю ужин»."),
         Step.QuietHours => new BotReply(
             "В какие часы каждый день не присылать пинги? Напиши, например, «22-8» или «13-14:30».",
-            [[new ReplyButton("Без тихих часов", "quiet:none")]]),
+            [[new ReplyButton("Без тихих часов", "qhours:none")]]),
         _ => throw new ArgumentOutOfRangeException(nameof(step)),
     };
 
@@ -467,7 +467,7 @@ public sealed partial class ConversationService(
                 user.DialogState = State(Mode.Edit, Step.QuietHours);
                 return [Ask(Step.QuietHours)];
 
-            case "quiet" when value == "none":
+            case "qhours" when value == "none":
                 return SetQuietHours(user, Mode.Edit, null);
 
             case "edit" when value == "tz":

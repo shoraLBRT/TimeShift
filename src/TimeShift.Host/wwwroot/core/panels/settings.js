@@ -103,7 +103,7 @@ export function settingsPanel(app, opts = {}) {
         if (!me) return;
         const v = {
           schedule: `${me.sleep ? `Сон ${me.sleep.start}–${me.sleep.end}` : 'Сон не указан'}, ${me.blocks.length} ${T.plural(me.blocks.length, 'блок', 'блока', 'блоков')}`,
-          reminders: me.quietUntilUtc && Date.parse(me.quietUntilUtc) > app.nowMs() ? `Тишина до ${T.fmtClock(T.nowMinIn(me.timeZone, Date.parse(me.quietUntilUtc)))}` : `Каждые ${T.fmtDuration(me.settings.pingIntervalMin)}`,
+          reminders: me.quietUntilUtc && Date.parse(me.quietUntilUtc) > app.nowMs() ? `Тишина до ${T.fmtClock(T.nowMinIn(me.timeZone, Date.parse(me.quietUntilUtc)))}` : me.settings.pingsEnabled === false ? 'Выключены' : `Каждые ${T.fmtDuration(me.settings.pingIntervalMin)}`,
           tracking: extensionPreset(me.settings).label,
           activities: `${s.activities.length}`,
           categories: ownCount(me) ? `${ownCount(me)} ${T.plural(ownCount(me), 'своя', 'свои', 'своих')}` : 'Стандартные',

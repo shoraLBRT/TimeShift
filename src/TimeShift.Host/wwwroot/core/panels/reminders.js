@@ -1,7 +1,7 @@
 // Reminders: push on this device, interval, quiet hours, ping options.
 import { h, setText } from '../dom.js';
 import * as T from '../time.js';
-import { button, chip, field, switchInput, note } from './common.js';
+import { button, chip, field, switchInput, radioGroup, timeInput, note } from './common.js';
 
 export const INTERVAL_PRESETS = [15, 30, 45, 60, 90, 120];
 
@@ -64,8 +64,39 @@ export function quietControls(app) {
     const active = until > app.nowMs();
     el.dataset.active = String(active);
     cancel.hidden = !active;
-    setText(status, active ? `Тишина до ${T.fmtClock(T.nowMinIn(s.me.timeZone, until))}` : 'Напоминания включены');
+    setText(status, active ? `Тишина до ${T.fmtClock(T.nowMinIn(s.me.timeZone, until))}` : s.me?.settings?.pingsEnabled === false ? 'Вопросы выключены' : 'Напоминания включены');
     for (const c of presets.children) c.disabled = !!s.busy;
+  };
+  return { el, destroy: app.subscribe(render) };
+}
+
+/** Daily quiet hours (local time, may cross midnight): <div class="ts-quiet-daily" data-active> */
+export function dailyQuietControls(app) {
+  const start = timeInput('22:00');
+  const end = timeInput('08:00');
+  const from = field('С', start);
+  const to = field('До', end);
+  const times = h('div', { class: 'ts-quiet-daily-times' }, from.el, to.el);
+  const save = async (value) => {
+    if (value && value.start === value.end) { to.setError('Начало и конец не могут совпадать.'); return; }
+    to.setError(null);
+    const r = await app.actions.saveSettings({ quietHours: value }, { inlineErrors: true });
+    if (!r.ok) to.setError(r.error.message);
+  };
+  const sw = switchInput('Не спрашивать каждый день', false,
+    (on) => save(on ? { start: start.value || '22:00', end: end.value || '08:00' } : null),
+    { hint: 'В эти часы вопросов «Чем занят?» не будет, остальное время — как обычно.' });
+  const onTime = () => { if (sw.input.checked && start.value && end.value) save({ start: start.value, end: end.value }); };
+  start.addEventListener('change', onTime);
+  end.addEventListener('change', onTime);
+  const el = h('div', { class: 'ts-quiet-daily' }, sw.el, times);
+  const render = (s) => {
+    const q = s.me?.settings?.quietHours ?? null;
+    sw.set(!!q);
+    el.dataset.active = String(!!q);
+    times.hidden = !q;
+    if (q && document.activeElement !== start) start.value = q.start;
+    if (q && document.activeElement !== end) end.value = q.end;
   };
   return { el, destroy: app.subscribe(render) };
 }
@@ -116,13 +147,25 @@ export function remindersContent(app) {
   const during = switchInput('Спрашивать во время блоков', !!app.state.me?.settings?.pingDuringBlocks,
     (on) => app.actions.saveSettings({ pingDuringBlocks: on }), { hint: 'Работа и учёба по расписанию — обычно не нужно.' });
   const lim = app.state.me?.limits ?? {};
-  const unanswered = stepper(app, 'maxUnansweredPings', { label: 'Без ответа — пауза после', min: lim.maxUnansweredPings?.min ?? 1, max: lim.maxUnansweredPings?.max ?? 10, format: (v) => `${v} ${T.plural(v, 'вопроса', 'вопросов', 'вопросов')}` });
+  const enabled = switchInput('Спрашивать, чем я занят', app.state.me?.settings?.pingsEnabled !== false,
+    (on) => app.actions.saveSettings({ pingsEnabled: on }), { hint: 'Выключишь — вопросов не будет совсем; вечерний разбор останется.' });
+  const daily = dailyQuietControls(app);
+  const after = radioGroup('Если не отвечаю', [
+    { value: 'backOff', label: 'Спрашивать реже', hint: 'Интервал каждый раз вдвое длиннее, но не больше 4 ч. Первый ответ возвращает обычный.' },
+    { value: 'stop', label: 'Замолчать до моего ответа', hint: 'Вопросы вернутся, когда напишешь сам.' },
+  ], app.state.me?.settings?.afterUnansweredPings ?? 'backOff', (v) => app.actions.saveSettings({ afterUnansweredPings: v }), { className: 'ts-after-unanswered' });
+  const unanswered = stepper(app, 'maxUnansweredPings', { label: 'Без ответа подряд — после', min: lim.maxUnansweredPings?.min ?? 1, max: lim.maxUnansweredPings?.max ?? 10, format: (v) => `${v} ${T.plural(v, 'вопроса', 'вопросов', 'вопросов')}` });
   const evening = stepper(app, 'eveningReviewOffsetMin', { label: 'Вечерний разбор после начала сна', min: lim.eveningReviewOffsetMin?.min ?? 0, max: lim.eveningReviewOffsetMin?.max ?? 180, step: 15, format: (v) => (v ? `через ${T.fmtDuration(v)}` : 'сразу') });
-  const unsub = app.subscribe((s) => during.set(!!s.me?.settings?.pingDuringBlocks));
+  const unsub = app.subscribe((s) => {
+    const st = s.me?.settings;
+    during.set(!!st?.pingDuringBlocks);
+    enabled.set(st?.pingsEnabled !== false);
+    after.set(st?.afterUnansweredPings ?? 'backOff');
+  });
   const el = h('div', { class: 'ts-reminders' },
     h('section', { class: 'ts-section', dataset: { section: 'push' } }, h('h3', { class: 'ts-section-title' }, 'Это устройство'), push.el),
-    h('section', { class: 'ts-section', dataset: { section: 'interval' } }, h('h3', { class: 'ts-section-title' }, 'Интервал'), interval.el),
-    h('section', { class: 'ts-section', dataset: { section: 'quiet' } }, h('h3', { class: 'ts-section-title' }, 'Тишина'), quiet.el),
-    h('section', { class: 'ts-section', dataset: { section: 'options' } }, h('h3', { class: 'ts-section-title' }, 'Когда спрашивать'), during.el, unanswered.el, evening.el));
-  return { el, destroy() { push.destroy(); interval.destroy(); quiet.destroy(); unanswered.destroy(); evening.destroy(); unsub(); } };
+    h('section', { class: 'ts-section', dataset: { section: 'interval' } }, h('h3', { class: 'ts-section-title' }, 'Интервал'), enabled.el, interval.el),
+    h('section', { class: 'ts-section', dataset: { section: 'quiet' } }, h('h3', { class: 'ts-section-title' }, 'Тишина'), quiet.el, daily.el),
+    h('section', { class: 'ts-section', dataset: { section: 'options' } }, h('h3', { class: 'ts-section-title' }, 'Когда спрашивать'), during.el, unanswered.el, after.el, evening.el));
+  return { el, destroy() { push.destroy(); interval.destroy(); quiet.destroy(); daily.destroy(); unanswered.destroy(); evening.destroy(); unsub(); } };
 }

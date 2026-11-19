@@ -82,7 +82,7 @@ export function createDemoApi(opts = {}) {
     authed: !opts.login,
     me: {
       id: 'demo', displayName: 'Демо', timeZone: tz, onboarded: !opts.fresh, telegramLinked: false, quietUntilUtc: null,
-      settings: { pingIntervalMin: 30, normFactor: 1.5, maxFactor: 2.0, maxUnansweredPings: 2, pingDuringBlocks: false, eveningReviewOffsetMin: 30, roundingMin: 5 },
+      settings: { pingIntervalMin: 30, normFactor: 1.5, maxFactor: 2.0, maxUnansweredPings: 2, pingDuringBlocks: false, eveningReviewOffsetMin: 30, roundingMin: 5, pingsEnabled: true, afterUnansweredPings: 'backOff', quietHours: null },
       limits: { pingIntervalMin: { min: 5, max: 240 }, maxUnansweredPings: { min: 1, max: 10 }, eveningReviewOffsetMin: { min: 0, max: 180 }, roundingMin: [1, 5, 10, 15] },
       sleep: opts.fresh ? null : { start: '00:30', end: '08:30', weekend: null },
       blocks: opts.fresh ? [] : [{ id: 'b1', kind: 'fixed', title: 'Работа', category: 'work', days: [1, 2, 3, 4, 5], start: '10:00', end: '19:00' }],
@@ -539,6 +539,19 @@ export function createDemoApi(opts = {}) {
       range('pingIntervalMin', lim.pingIntervalMin); range('maxUnansweredPings', lim.maxUnansweredPings); range('eveningReviewOffsetMin', lim.eveningReviewOffsetMin);
       if ('roundingMin' in patch) { if (!lim.roundingMin.includes(patch.roundingMin)) throw err(422, 'validation', 'Округление: 1, 5, 10 или 15 минут.', 'roundingMin'); s.roundingMin = patch.roundingMin; }
       if ('pingDuringBlocks' in patch) s.pingDuringBlocks = !!patch.pingDuringBlocks;
+      if ('pingsEnabled' in patch) s.pingsEnabled = !!patch.pingsEnabled;
+      if ('afterUnansweredPings' in patch) {
+        if (!['backOff', 'stop'].includes(patch.afterUnansweredPings)) throw err(422, 'validation', 'Нужно backOff или stop.', 'afterUnansweredPings');
+        s.afterUnansweredPings = patch.afterUnansweredPings;
+      }
+      if ('quietHours' in patch) {
+        const q = patch.quietHours;
+        if (q) {
+          checkClock(q.start, 'quietHours'); checkClock(q.end, 'quietHours');
+          if (q.start === q.end) throw err(422, 'validation', 'Начало и конец часов тишины не могут совпадать.', 'quietHours');
+        }
+        s.quietHours = q ? { start: q.start, end: q.end } : null;
+      }
       if ('normFactor' in patch) s.normFactor = patch.normFactor;
       if ('maxFactor' in patch) s.maxFactor = patch.maxFactor;
       const nf = s.normFactor ?? Infinity; const mf = s.maxFactor ?? Infinity;

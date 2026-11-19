@@ -2,6 +2,7 @@ using TimeShift.Application.Abstractions;
 using TimeShift.Application.Conversations;
 using TimeShift.Application.Pings;
 using TimeShift.Application.Tracking;
+using TimeShift.Domain.Pings;
 using TimeShift.Domain.Users;
 
 namespace TimeShift.Application.Tests;
@@ -137,6 +138,45 @@ public class TrackingTests
     }
 
     [Fact]
+    public async Task Unanswered_pings_back_off_by_default_and_an_answer_restores_the_interval()
+    {
+        await OnboardAsync();
+        Assert.Equal(UnansweredPingsPolicy.BackOff, Me.Settings.AfterUnansweredPings);
+
+        Advance(30);
+        await Pings.RunAsync(Ct);
+        Advance(30);
+        await Pings.RunAsync(Ct);
+        Assert.Equal(2, Me.UnansweredPings);
+
+        // Два без ответа — дальше реже: через 60, потом через 120 минут.
+        Advance(59);
+        Assert.Equal(0, (await Pings.RunAsync(Ct)).Sent);
+        Advance(1);
+        Assert.Equal(1, (await Pings.RunAsync(Ct)).Sent);
+        Advance(119);
+        Assert.Equal(0, (await Pings.RunAsync(Ct)).Sent);
+        Advance(1);
+        Assert.Equal(1, (await Pings.RunAsync(Ct)).Sent);
+        Assert.Equal(4, Me.UnansweredPings);
+
+        await Text("Читаю");
+        Advance(30);
+        Assert.Equal(1, (await Pings.RunAsync(Ct)).Sent);
+        Assert.Equal(1, Me.UnansweredPings);
+    }
+
+    [Fact]
+    public async Task Switched_off_pings_do_not_come()
+    {
+        await OnboardAsync();
+        Me.Settings.PingsEnabled = false;
+
+        Advance(90);
+        Assert.Equal(0, (await Pings.RunAsync(Ct)).Sent);
+    }
+
+    [Fact]
     public async Task Long_free_text_is_not_taken_as_an_activity_name()
     {
         await OnboardAsync();
@@ -151,6 +191,7 @@ public class TrackingTests
     public async Task Pings_follow_the_interval_delete_the_unanswered_one_and_pause()
     {
         await OnboardAsync();
+        Me.Settings.AfterUnansweredPings = UnansweredPingsPolicy.Stop;
 
         Advance(29);
         Assert.Equal(0, (await Pings.RunAsync(Ct)).Sent);
